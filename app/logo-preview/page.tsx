@@ -3,16 +3,12 @@
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
-interface LogoProps {
-  className?: string
-}
-
 // ==============================================================================
-// MODIFIED LOGO SVGS (1 - 14) WITH STRICT TYPES
+// MODIFIED LOGO SVGS (1 - 14)
 // ==============================================================================
 
 // Option 1
-export function LogoFastTrackAmber({ className = "h-9 w-9" }: LogoProps) {
+export function LogoFastTrackAmber({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="10" className="fill-slate-900" />
@@ -24,7 +20,7 @@ export function LogoFastTrackAmber({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 2
-export function LogoFastTrack({ className = "h-9 w-9" }: LogoProps) {
+export function LogoFastTrack({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="10" className="fill-blue-600" />
@@ -36,7 +32,7 @@ export function LogoFastTrack({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 3
-export function LogoLayeredFolders({ className = "h-9 w-9" }: LogoProps) {
+export function LogoLayeredFolders({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="10" className="fill-slate-900" />
@@ -48,7 +44,7 @@ export function LogoLayeredFolders({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 4
-export function LogoBuildGrid({ className = "h-9 w-9" }: LogoProps) {
+export function LogoBuildGrid({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="10" className="fill-slate-900" />
@@ -60,7 +56,7 @@ export function LogoBuildGrid({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 5
-export function LogoDynamicStack({ className = "h-9 w-9" }: LogoProps) {
+export function LogoDynamicStack({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="10" className="fill-indigo-950" />
@@ -72,7 +68,7 @@ export function LogoDynamicStack({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 6
-export function LogoPillarsAscent({ className = "h-9 w-9" }: LogoProps) {
+export function LogoPillarsAscent({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#27272A" />
@@ -84,7 +80,7 @@ export function LogoPillarsAscent({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 7
-export function LogoBuildChevron({ className = "h-9 w-9" }: LogoProps) {
+export function LogoBuildChevron({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#18181B" />
@@ -95,7 +91,7 @@ export function LogoBuildChevron({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 8
-export function LogoLevelPrecision({ className = "h-9 w-9" }: LogoProps) {
+export function LogoLevelPrecision({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#18181B" />
@@ -108,7 +104,7 @@ export function LogoLevelPrecision({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 9
-export function LogoTapeMeasure({ className = "h-9 w-9" }: LogoProps) {
+export function LogoTapeMeasure({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#18181B" />
@@ -121,7 +117,7 @@ export function LogoTapeMeasure({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 10
-export function LogoShovelLine({ className = "h-9 w-9" }: LogoProps) {
+export function LogoShovelLine({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#27272A" />
@@ -134,7 +130,7 @@ export function LogoShovelLine({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 11
-export function LogoCBFastTrack({ className = "h-9 w-9" }: LogoProps) {
+export function LogoCBFastTrack({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#27272A" />
@@ -146,7 +142,7 @@ export function LogoCBFastTrack({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 12
-export function LogoCBMeasure({ className = "h-9 w-9" }: LogoProps) {
+export function LogoCBMeasure({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#18181B" />
@@ -158,7 +154,7 @@ export function LogoCBMeasure({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 13
-export function LogoCBBlock({ className = "h-9 w-9" }: LogoProps) {
+export function LogoCBBlock({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#18181B" />
@@ -183,7 +179,7 @@ export function LogoCBBlock({ className = "h-9 w-9" }: LogoProps) {
 }
 
 // Option 14
-export function LogoCBHammer({ className = "h-9 w-9" }: LogoProps) {
+export function LogoCBHammer({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="100" height="100" rx="22" fill="#18181B" />
@@ -199,18 +195,8 @@ export function LogoCBHammer({ className = "h-9 w-9" }: LogoProps) {
 // MAIN PAGE DISPLAY COMPONENT
 // ==============================================================================
 
-interface LogoItem {
-  id: number
-  originalId: number
-  name: string
-  prefix: string
-  suffix: string
-  component: React.ComponentType<LogoProps>
-  colorClass: string
-}
-
 export default function LogoPreviewPage() {
-  const selectedLogos: LogoItem[] = [
+  const selectedLogos = [
     { id: 1, originalId: 34, name: "Fast Track Chevrons (Orange/Slate)", prefix: "Clean", suffix: "Build", component: LogoFastTrackAmber, colorClass: "text-amber-400" },
     { id: 2, originalId: 16, name: "Fast Track Chevrons (Blue)", prefix: "Clean", suffix: "Build", component: LogoFastTrack, colorClass: "text-blue-300" },
     { id: 3, originalId: 12, name: "Layered Folders (Orange/Slate)", prefix: "Clean", suffix: "Build", component: LogoLayeredFolders, colorClass: "text-orange-400" },
