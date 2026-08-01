@@ -119,15 +119,19 @@ export default function DashboardPage() {
   const remainingBudget = totalBudget - totalSpent
   const percentBudgetUsed = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0
 
-  // Project Days Calculations
+  // Project Days Calculations (Dynamic to Current Date)
   const projStart = new Date("2026-06-29T00:00:00")
   const projEnd = new Date("2026-07-30T00:00:00")
-  const today = new Date("2026-07-24T00:00:00")
+  
+  // Dynamic current date (Midnight normalized)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   const totalTimeMs = projEnd.getTime() - projStart.getTime()
   const elapsedTimeMs = today.getTime() - projStart.getTime()
   const totalDays = Math.max(1, Math.round(totalTimeMs / (1000 * 60 * 60 * 24)) + 1)
   const currentDay = Math.min(totalDays, Math.max(1, Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1))
-  const percentTimeUsed = Math.min(100, Math.round((currentDay / totalDays) * 100))
+  const percentTimeUsed = Math.min(100, Math.max(0, Math.round((currentDay / totalDays) * 100)))
 
   // Photos List across all logs
   const allPhotos = logs.flatMap((log) => log.photos || [])

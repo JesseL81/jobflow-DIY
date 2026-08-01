@@ -23,6 +23,15 @@ interface CustomNonWorkday {
   title?: string
 }
 
+// Helper to format local YYYY-MM-DD string accurately without timezone shifting
+const getLocalTodayStr = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 // 16-Color Palette
 const COLOR_PALETTE = [
   { bg: "bg-amber-400", text: "text-slate-900", label: "Amber Yellow" },
@@ -60,11 +69,13 @@ const INITIAL_TASKS: CalendarTask[] = [
 ]
 
 export default function SchedulePage() {
-  // Navigation State (Anchored at July 2026)
-  const todayAnchor = useMemo(() => new Date(2026, 6, 1), []) // July 2026
-  const [currentDate, setCurrentDate] = useState<Date>(todayAnchor)
+  // Dynamic Month Navigation State
+  const [currentDate, setCurrentDate] = useState<Date>(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
 
-  const [selectedDate, setSelectedDate] = useState<string>("2026-07-01")
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalTodayStr())
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState("")
   const [taskDuration, setTaskDuration] = useState<string>("1")
@@ -284,7 +295,8 @@ export default function SchedulePage() {
   }
 
   const handleTodayClick = () => {
-    setCurrentDate(new Date(todayAnchor))
+    const now = new Date()
+    setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1))
   }
 
   const handleDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -293,7 +305,7 @@ export default function SchedulePage() {
   }
 
   const handleOpenAddEventModal = () => {
-    const defaultDateStr = "2026-07-01"
+    const defaultDateStr = getLocalTodayStr()
     setSelectedDate(defaultDateStr)
     setEditingTask(null)
     setNewTaskTitle("")
@@ -304,11 +316,12 @@ export default function SchedulePage() {
     setIsDialogOpen(true)
   }
 
-  // Group 42 calendar days into 6 weekly rows of 7 days
+  // Group calendar days into weeks
   const calendarWeeks = useMemo(() => {
     const weeks = []
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
+    const todayStr = getLocalTodayStr()
 
     const firstOfMonth = new Date(year, month, 1)
     const startingDayOfWeek = firstOfMonth.getDay()
@@ -322,12 +335,12 @@ export default function SchedulePage() {
         const current = new Date(startDate)
         current.setDate(startDate.getDate() + (w * 7 + d))
 
-        const dateStr = current.toISOString().split("T")[0]
+        const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`
         const dayNum = current.getDate()
         const dayOfWeek = current.getDay()
         
         const { isNonWorkday, title: nonWorkdayTitle } = getNonWorkdayInfo(dateStr)
-        const isToday = dateStr === "2026-07-23"
+        const isToday = dateStr === todayStr
 
         days.push({ dateStr, dayNum, dayOfWeek, isNonWorkday, nonWorkdayTitle, isToday })
       }
@@ -362,7 +375,7 @@ export default function SchedulePage() {
     setTasks(recalculatedTasks)
   }
 
-  // Task row slots calculation: allow non-overlapping tasks to share slot 0
+  // Task row slots calculation
   const taskRowSlots = useMemo(() => {
     const slots: { [taskId: number]: number } = {}
     
@@ -610,18 +623,16 @@ export default function SchedulePage() {
           ))}
         </div>
 
-        {/* Calendar Grid organized by Dynamic Scalable Week Rows */}
+        {/* Calendar Grid */}
         <div className="bg-slate-200 gap-[1px] grid flex-col">
           {calendarWeeks.map((week, wIndex) => {
             const weekStart = week[0].dateStr
             const weekEnd = week[6].dateStr
 
-            // Find tasks active during this week
             const weekTasks = tasks.filter((task) => {
               return !(task.endDate < weekStart || task.startDate > weekEnd)
             })
 
-            // Calculate active contiguous segments for tasks, skipping non-workday days
             const taskSegments = weekTasks.flatMap((task) => {
               const segments: {
                 task: CalendarTask
@@ -672,7 +683,6 @@ export default function SchedulePage() {
               return segments
             })
 
-            // Calculate maximum row slot used in this specific week to dynamically scale week row height
             const maxSlotInWeek = weekTasks.reduce(
               (max, task) => Math.max(max, taskRowSlots[task.id] ?? 0),
               -1
@@ -726,7 +736,7 @@ export default function SchedulePage() {
                   )
                 })}
 
-                {/* Scalable Task Overlay Grid for Continuous Spanning Task Bars (Splits at Non-Workdays) */}
+                {/* Scalable Task Overlay Grid */}
                 <div
                   className="absolute left-0 right-0 top-7 bottom-1 px-1 pointer-events-none grid grid-cols-7 gap-y-1 gap-x-0 z-10"
                   style={{ minHeight: `${dynamicWeekHeight - 32}px` }}
@@ -767,17 +777,18 @@ export default function SchedulePage() {
         </div>
       </Card>
 
-      {/* MODAL: TASK / DATE SETTINGS */}
+      {/* MODAL: TASK / DATE SETTINGS WITH DYNAMIC MAX HEIGHT & INTERNAL SCROLLING */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col p-6">
+          <DialogHeader className="pb-2 border-b shrink-0">
             <DialogTitle>
               {editingTask ? `Edit Task: ${editingTask.title}` : "Date Options"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
-            {/* Separate Saturday & Sunday Schedule Rule Toggles */}
+          {/* SCROLLABLE INNER BODY */}
+          <div className="flex-1 overflow-y-auto space-y-4 py-3 pr-1">
+            {/* Weekend Schedule Rules */}
             <div className="p-3 bg-slate-50 rounded-lg border space-y-2">
               <Label className="font-semibold text-slate-800 block text-xs uppercase tracking-wider">
                 Schedule Rules: Weekend Off Days
@@ -874,7 +885,7 @@ export default function SchedulePage() {
                 />
               </div>
 
-              {/* Directly Editable Duration Input with Helper Explanations */}
+              {/* Editable Duration Input */}
               <div className="grid gap-2">
                 <Label htmlFor="duration">Duration (Workdays)</Label>
                 <div className="flex items-center gap-2">
@@ -909,16 +920,14 @@ export default function SchedulePage() {
                   </div>
                 </div>
 
-                {/* Inline Helper Description */}
                 <p className="text-[11px] text-slate-500 leading-normal pt-0.5">
-                  💡 Enter the total active workdays required for yourself or the hired tradesperson/contractor to finish this phase.
+                  💡 Enter the total active workdays required to finish this phase.
                 </p>
 
-                {/* Helpful Callout Box */}
                 <div className="p-2.5 bg-blue-50/80 border border-blue-200/80 rounded-lg text-[11px] text-blue-900 leading-snug mt-1 flex items-start gap-2">
                   <span className="text-blue-600 text-xs shrink-0 mt-0.5">ℹ️</span>
                   <span>
-                    <strong>Automatic Calendar Calculation:</strong> Non-workdays and weekend off days automatically shift the finish date forward on your calendar without reducing active trade work time.
+                    <strong>Automatic Calendar Calculation:</strong> Non-workdays and weekend off days automatically shift the finish date forward without reducing active work time.
                   </span>
                 </div>
               </div>
@@ -947,7 +956,8 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between items-center sm:justify-between">
+          {/* FIXED ALWAYS-VISIBLE FOOTER */}
+          <DialogFooter className="pt-3 border-t shrink-0 flex justify-between items-center sm:justify-between">
             {editingTask ? (
               <Button variant="destructive" size="sm" onClick={handleDeleteTask}>
                 Delete Task
