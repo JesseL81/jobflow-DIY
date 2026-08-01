@@ -7,10 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 // MODIFIED LOGO SVGS (1 - 14)
 // ==============================================================================
 
-// Option 1
-export function LogoFastTrackAmber({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoFastTrackAmber({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="40" height="40" rx="10" className="fill-slate-900" />
       <path d="M10 12L18 20L10 28" stroke="#FF6B00" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M18 12L26 20L18 28" stroke="#FFFFFF" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -19,10 +18,9 @@ export function LogoFastTrackAmber({ className = "h-9 w-9" }: { className?: stri
   )
 }
 
-// Option 2
-export function LogoFastTrack({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoFastTrack({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="40" height="40" rx="10" className="fill-blue-600" />
       <path d="M10 12L18 20L10 28" stroke="#93C5FD" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M18 12L26 20L18 28" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -31,10 +29,9 @@ export function LogoFastTrack({ className = "h-9 w-9" }: { className?: string })
   )
 }
 
-// Option 3
-export function LogoLayeredFolders({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoLayeredFolders({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="40" height="40" rx="10" className="fill-slate-900" />
       <path d="M10 14H24L28 18H30V28H10V14Z" fill="#64748B" opacity="0.8" />
       <path d="M12 18H26L30 22H32V32H12V18Z" fill="#FF6B00" />
@@ -43,10 +40,9 @@ export function LogoLayeredFolders({ className = "h-9 w-9" }: { className?: stri
   )
 }
 
-// Option 4
-export function LogoBuildGrid({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoBuildGrid({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="40" height="40" rx="10" className="fill-slate-900" />
       <path d="M10 14H30M10 20H30M10 26H30" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" opacity="0.5" />
       <path d="M14 10V30M26 10V30" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" opacity="0.4" />
@@ -55,10 +51,9 @@ export function LogoBuildGrid({ className = "h-9 w-9" }: { className?: string })
   )
 }
 
-// Option 5
-export function LogoDynamicStack({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoDynamicStack({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="40" height="40" rx="10" className="fill-indigo-950" />
       <path d="M10 13L18 13L24 13" stroke="#6366F1" strokeWidth="3.5" strokeLinecap="round" />
       <path d="M14 20L24 20L30 20" stroke="#38BDF8" strokeWidth="3.5" strokeLinecap="round" />
@@ -67,10 +62,9 @@ export function LogoDynamicStack({ className = "h-9 w-9" }: { className?: string
   )
 }
 
-// Option 6
-export function LogoPillarsAscent({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoPillarsAscent({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#27272A" />
       <rect x="22" y="52" width="14" height="28" rx="2" fill="#52525B"/>
       <rect x="43" y="38" width="14" height="42" rx="2" fill="#EA580C"/>
@@ -79,10 +73,9 @@ export function LogoPillarsAscent({ className = "h-9 w-9" }: { className?: strin
   );
 }
 
-// Option 7
-export function LogoBuildChevron({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoBuildChevron({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#18181B" />
       <path d="M22 68L50 40L78 68" stroke="#C2410C" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M22 45L50 17L78 45" stroke="#F97316" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"/>
@@ -90,10 +83,9 @@ export function LogoBuildChevron({ className = "h-9 w-9" }: { className?: string
   );
 }
 
-// Option 8
-export function LogoLevelPrecision({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoLevelPrecision({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#18181B" />
       <rect x="15" y="38" width="70" height="24" rx="12" fill="#52525B" stroke="#FF6B00" strokeWidth="6"/>
       <circle cx="50" cy="50" r="8" fill="#FFA500"/>
@@ -103,10 +95,9 @@ export function LogoLevelPrecision({ className = "h-9 w-9" }: { className?: stri
   );
 }
 
-// Option 9
-export function LogoTapeMeasure({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoTapeMeasure({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#18181B" />
       <rect x="20" y="25" width="50" height="50" rx="12" fill="#FF6B00" stroke="#FFFFFF" strokeWidth="3"/>
       <circle cx="45" cy="50" r="14" fill="#FFFFFF"/>
@@ -116,10 +107,9 @@ export function LogoTapeMeasure({ className = "h-9 w-9" }: { className?: string 
   );
 }
 
-// Option 10
-export function LogoShovelLine({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoShovelLine({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#27272A" />
       <path d="M42 18H58V24C58 27 54 29 50 29C46 29 42 27 42 24V18Z" stroke="#FFFFFF" strokeWidth="4" fill="none" />
       <line x1="50" y1="29" x2="50" y2="52" stroke="#FF6B00" strokeWidth="6" strokeLinecap="round" />
@@ -129,10 +119,9 @@ export function LogoShovelLine({ className = "h-9 w-9" }: { className?: string }
   );
 }
 
-// Option 11
-export function LogoCBFastTrack({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoCBFastTrack({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#27272A" />
       <path d="M20 70L45 45L20 20" stroke="#C2410C" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M42 70L67 45L42 20" stroke="#FF6B00" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round"/>
@@ -141,10 +130,9 @@ export function LogoCBFastTrack({ className = "h-9 w-9" }: { className?: string 
   );
 }
 
-// Option 12
-export function LogoCBMeasure({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoCBMeasure({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#18181B" />
       <path d="M42 28H28C20 28 16 34 16 42V58C16 66 20 72 28 72H42" stroke="#FFFFFF" strokeWidth="8" strokeLinecap="round"/>
       <path d="M48 28H68C74 28 78 33 78 39C78 45 74 48 68 48H48V28Z" stroke="#FF6B00" strokeWidth="7"/>
@@ -153,10 +141,9 @@ export function LogoCBMeasure({ className = "h-9 w-9" }: { className?: string })
   );
 }
 
-// Option 13
-export function LogoCBBlock({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#18181B" />
       <path d="M20 38L50 20L80 38L50 56L20 38Z" fill="#FF8C00"/>
       <path d="M20 38V68L50 85V56L20 38Z" fill="#C2410C"/>
@@ -178,10 +165,9 @@ export function LogoCBBlock({ className = "h-9 w-9" }: { className?: string }) {
   );
 }
 
-// Option 14
-export function LogoCBHammer({ className = "h-9 w-9" }: { className?: string }) {
+export function LogoCBHammer({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <rect width="100" height="100" rx="22" fill="#18181B" />
       <path d="M42 26H28C21.3726 26 16 31.3726 16 38V62C16 68.6274 21.3726 74 28 74H42" stroke="#FF6B00" strokeWidth="8" strokeLinecap="round"/>
       <path d="M48 26H72C78.6274 26 84 31.3726 84 38C84 44.6274 78.6274 50 72 50H48V26Z" fill="#FF8C00"/>
