@@ -69,24 +69,29 @@ export default function TipsPage() {
   const activeTopic = TOPICS.find((t) => t.id === activeTopicId) || TOPICS[0]
 
   return (
-    <main className="p-8 max-w-6xl mx-auto space-y-6 bg-slate-100 min-h-screen text-slate-950">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border shadow-xs">
+    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+      
+      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-950">💡 Tips, Tricks & Best Practices</h1>
-            <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50 font-semibold px-3 py-1">
-              Contractor Guide
-            </Badge>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">💡 Tips, Tricks & Best Practices</h1>
           </div>
-          <p className="text-slate-600 text-sm mt-1.5 leading-relaxed max-w-2xl">
+          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
             Hover over or click a topic on the left to view strategies and site management tips.
           </p>
         </div>
-      </header>
+        
+        {/* Right side element to match the structural weight of the Templates header */}
+        <div className="flex items-center gap-3 shrink-0">
+          <Badge variant="outline" className="text-slate-300 border-slate-700 bg-slate-800/60 font-semibold px-4 py-2 text-xs rounded-lg uppercase tracking-wider">
+            Contractor Guide
+          </Badge>
+        </div>
+      </div>
 
       {/* Two-Column Interactive Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start flex-1">
         {/* Left Side: Topic Selector List (4 Columns) */}
         <div className="md:col-span-4 space-y-2">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1 mb-3">
@@ -171,6 +176,12 @@ export default function TipsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Version Tracker Footer */}
+      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
+        CleanBuild v1.03
+      </div>
+      
     </main>
   )
 }

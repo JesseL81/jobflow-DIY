@@ -6,7 +6,7 @@ import SidebarNav from "@/components/sidebar-nav"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "JobFlow Pro",
+  title: "CleanBuild",
   description: "Construction project management, daily logs, schedules, contacts, and expense tracking.",
 }
 
@@ -24,10 +24,6 @@ export default function RootLayout({
         {/* Left Sidebar Navigation */}
         <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 shrink-0">
           <SidebarNav />
-
-          <div className="px-3 py-2 text-xs text-slate-500 border-t border-slate-800">
-            JobFlow Pro v1.0
-          </div>
         </aside>
 
         {/* Main Content Area */}

@@ -1,7 +1,6 @@
 "use client"
 
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress"
-
 import { cn } from "@/lib/utils"
 
 function Progress({
@@ -10,16 +9,20 @@ function Progress({
   value,
   ...props
 }: ProgressPrimitive.Root.Props) {
+  // 1. Ensure the value stays safely between 0 and 100
+  const safeValue = Math.min(100, Math.max(0, value || 0))
+
   return (
     <ProgressPrimitive.Root
-      value={value}
+      value={safeValue}
       data-slot="progress"
       className={cn("flex flex-wrap gap-3", className)}
       {...props}
     >
       {children}
       <ProgressTrack>
-        <ProgressIndicator />
+        {/* 2. Added explicit inline style for width so the blue bar actually fills */}
+        <ProgressIndicator style={{ width: `${safeValue}%` }} />
       </ProgressTrack>
     </ProgressPrimitive.Root>
   )
@@ -29,7 +32,9 @@ function ProgressTrack({ className, ...props }: ProgressPrimitive.Track.Props) {
   return (
     <ProgressPrimitive.Track
       className={cn(
-        "relative flex h-1 w-full items-center overflow-x-hidden rounded-full bg-muted",
+        // 3. Changed h-1 to 'h-full min-h-[6px]' so it inherits the h-3 from your dashboard
+        // 4. Defaulted to bg-slate-100 for the empty track
+        "relative flex h-full min-h-[6px] w-full items-center overflow-x-hidden rounded-full bg-slate-100",
         className
       )}
       data-slot="progress-track"
@@ -45,7 +50,8 @@ function ProgressIndicator({
   return (
     <ProgressPrimitive.Indicator
       data-slot="progress-indicator"
-      className={cn("h-full bg-primary transition-all", className)}
+      // 5. Hardcoded bg-blue-600 and added a smooth transition animation
+      className={cn("h-full bg-blue-600 transition-all duration-500 ease-in-out", className)}
       {...props}
     />
   )

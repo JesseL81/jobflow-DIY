@@ -432,30 +432,35 @@ export default function DailyLogsPage() {
   }
 
   return (
-    <main className="p-8 bg-slate-100 min-h-screen max-w-6xl mx-auto space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-lg border shadow-xs">
+    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+      
+      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">📋 Daily Logs & Photos</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📷 Daily Logs & Photos</h1>
+          </div>
+          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
             Record daily job site progress, weather conditions, notes, and photos.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 shrink-0">
           {sortedLogs.length > 0 && (
             <Button
               variant="outline"
+              size="sm"
               disabled={isExporting}
               onClick={handleExportAllLogs}
-              className="border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-xs shadow-xs"
+              className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
             >
               📦 Download All
             </Button>
           )}
 
           <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-xs"
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
             onClick={() => handleOpenModal()}
           >
             + Add a Log
@@ -463,98 +468,103 @@ export default function DailyLogsPage() {
         </div>
       </div>
 
-      {/* Progress banner during batch export */}
-      {isExporting && exportProgress && (
-        <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs px-4 py-2.5 rounded-md flex items-center justify-between animate-pulse">
-          <span>⏳ {exportProgress}</span>
-          <span className="font-semibold text-[11px] uppercase tracking-wider">Exporting</span>
-        </div>
-      )}
-
-      {/* Logs Feed */}
-      <Card className="p-6 border shadow-xs bg-white">
-        {sortedLogs.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-sm border-2 border-dashed rounded-lg">
-            No daily logs found. Click <strong>"+ Add a Log"</strong> to create your first entry.
+      {/* Daily Logs Main Card Wrapper with Full Width Match */}
+      <Card className="overflow-hidden border shadow-sm bg-white flex-1">
+        
+        {/* Progress banner during batch export */}
+        {isExporting && exportProgress && (
+          <div className="bg-indigo-50 border-b border-indigo-200 text-indigo-900 text-xs px-6 py-2.5 flex items-center justify-between animate-pulse">
+            <span>⏳ {exportProgress}</span>
+            <span className="font-semibold text-[11px] uppercase tracking-wider">Exporting</span>
           </div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {sortedLogs.map((log) => (
-              <div
-                key={log.id}
-                className="py-5 first:pt-0 last:pb-0 flex flex-col sm:flex-row gap-4 justify-between items-start"
-              >
-                <div className="space-y-3 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="bg-slate-900 text-white text-xs font-semibold px-2.5 py-0.5 rounded-full">
-                      📅 {formatDisplayDate(log.date)}
-                    </span>
-                    {log.weather && (
-                      <span className="bg-amber-100 text-amber-800 border border-amber-200 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                        ☀️ {log.weather}
+        )}
+
+        {/* Logs Feed Container */}
+        <div className="p-6">
+          {sortedLogs.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-sm border-2 border-dashed rounded-lg">
+              No daily logs found. Click <strong>"+ Add a Log"</strong> to create your first entry.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-200">
+              {sortedLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="py-5 first:pt-0 last:pb-0 flex flex-col sm:flex-row gap-4 justify-between items-start"
+                >
+                  <div className="space-y-3 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="bg-slate-900 text-white text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        📅 {formatDisplayDate(log.date)}
                       </span>
-                    )}
-                    {log.isNonWorkday && (
-                      <span className="bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                        🚫 Non-Workday {log.nonWorkdayTitle ? `(${log.nonWorkdayTitle})` : ""}
-                      </span>
+                      {log.weather && (
+                        <span className="bg-amber-100 text-amber-800 border border-amber-200 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                          ☀️ {log.weather}
+                        </span>
+                      )}
+                      {log.isNonWorkday && (
+                        <span className="bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                          🚫 Non-Workday {log.nonWorkdayTitle ? `(${log.nonWorkdayTitle})` : ""}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {log.notes}
+                    </p>
+
+                    {log.photos.length > 0 && (
+                      <div className="flex flex-wrap gap-3 pt-1">
+                        {log.photos.map((photoUrl, idx) => (
+                          <div
+                            key={idx}
+                            className="relative group rounded-md overflow-hidden border bg-slate-100 cursor-pointer"
+                            onClick={() => setLightboxPhoto(photoUrl)}
+                          >
+                            <img
+                              src={photoUrl}
+                              alt={`Attachment ${idx + 1}`}
+                              className="h-20 w-24 object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
 
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                    {log.notes}
-                  </p>
-
-                  {log.photos.length > 0 && (
-                    <div className="flex flex-wrap gap-3 pt-1">
-                      {log.photos.map((photoUrl, idx) => (
-                        <div
-                          key={idx}
-                          className="relative group rounded-md overflow-hidden border bg-slate-100 cursor-pointer"
-                          onClick={() => setLightboxPhoto(photoUrl)}
-                        >
-                          <img
-                            src={photoUrl}
-                            alt={`Attachment ${idx + 1}`}
-                            className="h-20 w-24 object-cover"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                      disabled={isExporting}
+                      onClick={() => handleExportLogAndPhotos(log)}
+                    >
+                      📦 Download (PDF + JPGs)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      onClick={() => handleOpenModal(log)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-rose-600 hover:bg-rose-50"
+                      onClick={() => handleDeleteLog(log.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs text-indigo-700 border-indigo-200 hover:bg-indigo-50"
-                    disabled={isExporting}
-                    onClick={() => handleExportLogAndPhotos(log)}
-                  >
-                    📦 Download (PDF + JPGs)
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs text-slate-700"
-                    onClick={() => handleOpenModal(log)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs text-rose-600 hover:bg-rose-50"
-                    onClick={() => handleDeleteLog(log.id)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </Card>
 
       {/* Add / Edit Log Modal */}
@@ -692,7 +702,7 @@ export default function DailyLogsPage() {
           >
             <div className="border-b pb-3">
               <h2 className="text-lg font-bold">Daily Log Entry</h2>
-              <p className="text-xs text-slate-500">BuilderLite Site Documentation</p>
+              <p className="text-xs text-slate-500">Site Documentation</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -752,6 +762,12 @@ export default function DailyLogsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Version Tracker Footer */}
+      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
+        CleanBuild v1.02
+      </div>
+      
     </main>
   )
 }

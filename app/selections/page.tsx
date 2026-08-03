@@ -322,220 +322,230 @@ export default function SelectionsPage() {
   const allowanceDiff = currentCategoryAllowance - activeCategoryCost
 
   return (
-    <main className="p-8 max-w-6xl mx-auto space-y-6 bg-slate-100 min-h-screen text-slate-950">
-      {/* Header Banner */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border shadow-sm">
+    <main className="p-6 bg-slate-100 min-h-screen space-y-6 text-slate-950 flex flex-col">
+      
+      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-950">🛍️ Material Selections & Links</h1>
-            <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50 font-semibold px-3 py-1">
-              {checkedCount} of {items.length} Items Totaled
-            </Badge>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">🛍️ Material Selections & Links</h1>
           </div>
-          <p className="text-slate-600 text-xs mt-1.5 leading-relaxed max-w-2xl">
+          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
             Select items using checkboxes to calculate active project totals and track budget targets per category.
           </p>
         </div>
 
-        {/* Dynamic Checked Total Box & Add Control */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="bg-slate-50 border p-2.5 rounded-lg text-right">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Checked Items Total</span>
-            <span className="text-xl font-extrabold text-indigo-600">
+          <div className="bg-slate-800/80 border border-slate-700 py-1.5 px-3 rounded-lg text-right">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Checked Total</span>
+            <span className="text-base font-extrabold text-emerald-400">
               ${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
-          <Button onClick={handleOpenAdd} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold h-12 px-5 shadow-sm">
+          <Button
+            size="sm"
+            onClick={handleOpenAdd}
+            className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+          >
             + Add Item
           </Button>
         </div>
-      </header>
+      </div>
 
-      {/* Split Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        
-        {/* Left Category Sidebar */}
-        <div className="md:col-span-1 space-y-2">
-          <div className="bg-white p-3 rounded-xl border shadow-sm space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
-              Categories
-            </span>
-            {CATEGORIES.map((cat) => {
-              const catCount = cat === "All Categories" ? items.length : items.filter((i) => i.category === cat).length
-              const isActive = selectedCategory === cat
+      <Card className="overflow-hidden border shadow-sm bg-white flex-1">
+        {/* Inner Content Spacing Container */}
+        <div className="p-6 space-y-6">
 
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                    isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="truncate">{cat}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-500"}`}>
-                    {catCount}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Right Content Area */}
-        <div className="md:col-span-3 space-y-4">
-          
-          {/* Category Budget Allowance Bar */}
-          {selectedCategory !== "All Categories" && (
-            <div className="bg-white p-4 rounded-xl border shadow-sm flex items-center justify-between gap-4">
-              <div>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                  {selectedCategory} Budget Target
+          {/* Split Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            
+            {/* Left Category Sidebar */}
+            <div className="md:col-span-1 space-y-2">
+              <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
+                  Categories
                 </span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-lg font-bold text-slate-900">
-                    Spent: ${activeCategoryCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  {currentCategoryAllowance > 0 && (
-                    <span className="text-xs text-slate-500 font-medium">
-                      / Target: ${currentCategoryAllowance.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-              </div>
+                {CATEGORIES.map((cat) => {
+                  const catCount = cat === "All Categories" ? items.length : items.filter((i) => i.category === cat).length
+                  const isActive = selectedCategory === cat
 
-              <div className="flex items-center gap-2">
-                {currentCategoryAllowance > 0 && (
-                  <Badge className={`text-xs px-2.5 py-1 ${allowanceDiff < 0 ? "bg-rose-100 text-rose-800 border-rose-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"}`}>
-                    {allowanceDiff < 0
-                      ? `Over Budget by $${Math.abs(allowanceDiff).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                      : `$${allowanceDiff.toLocaleString(undefined, { minimumFractionDigits: 2 })} Remaining Target`}
-                  </Badge>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setTempBudgetVal(currentCategoryAllowance ? currentCategoryAllowance.toString() : "")
-                    setIsBudgetModalOpen(true)
-                  }}
-                  className="h-8 text-xs border-slate-300"
-                >
-                  🎯 Set Category Budget Target
-                </Button>
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span className="truncate">{cat}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-500"}`}>
+                        {catCount}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
-          )}
 
-          {/* Search Toolbar */}
-          <div className="bg-white p-3 rounded-xl border shadow-sm">
-            <Input
-              placeholder="Search items, model specs, notes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 text-xs bg-slate-50"
-            />
-          </div>
-
-          {/* Cards */}
-          <div className="space-y-3">
-            {filteredItems.map((item) => {
-              let cardStyle = "border-slate-200 hover:border-slate-300 shadow-sm bg-white"
-              if (item.syncToExpenses) {
-                cardStyle = "bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-500 shadow-sm"
-              } else if (item.checked) {
-                cardStyle = "bg-indigo-50/80 border-indigo-500 ring-1 ring-indigo-500 shadow-sm"
-              }
-
-              return (
-                <Card key={item.id} className={`transition-all ${cardStyle}`}>
-                  <CardHeader className="p-4 pb-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={item.checked}
-                          onChange={() => handleToggleCheck(item.id)}
-                          className="mt-1 h-4 w-4 rounded accent-indigo-600 cursor-pointer"
-                        />
-                        <div>
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${item.syncToExpenses ? "bg-white text-emerald-800 border-emerald-300" : item.checked ? "bg-white text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-500"}`}>
-                              {item.category}
-                            </Badge>
-                            {getStatusBadge(item.status)}
-                            {item.syncToExpenses && (
-                              <Badge className="bg-emerald-600 text-white border-emerald-700 text-[10px] font-bold">
-                                Synced to Expenses 💰
-                              </Badge>
-                            )}
-                          </div>
-                          <CardTitle className="text-base font-bold text-slate-900 leading-tight">
-                            {item.title}
-                          </CardTitle>
-                        </div>
-                      </div>
-
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(item)} className="h-7 text-xs text-slate-500 hover:bg-slate-100">
-                        Edit
-                      </Button>
+            {/* Right Content Area */}
+            <div className="md:col-span-3 space-y-4">
+              
+              {/* Category Budget Allowance Bar */}
+              {selectedCategory !== "All Categories" && (
+                <div className="bg-white p-4 rounded-xl border shadow-xs flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      {selectedCategory} Budget Target
+                    </span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-lg font-bold text-slate-900">
+                        Spent: ${activeCategoryCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                      {currentCategoryAllowance > 0 && (
+                        <span className="text-xs text-slate-500 font-medium">
+                          / Target: ${currentCategoryAllowance.toLocaleString()}
+                        </span>
+                      )}
                     </div>
-                  </CardHeader>
+                  </div>
 
-                  <CardContent className="p-4 pt-1 space-y-3 text-xs text-slate-600">
-                    <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-lg border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : item.checked ? "bg-white/80 border-indigo-100" : "bg-slate-50 border-slate-100"}`}>
-                      <div>
-                        <span className="text-slate-400 font-medium block text-[10px] uppercase">Price</span>
-                        <span className="font-bold text-slate-900">{item.price || "N/A"}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 font-medium block text-[10px] uppercase">Model / SKU</span>
-                        <span className="font-semibold text-slate-800 truncate block">{item.modelNumber || "N/A"}</span>
-                      </div>
-                    </div>
-
-                    {item.notes && (
-                      <p className={`leading-relaxed text-slate-600 p-2 rounded text-[11px] border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : item.checked ? "bg-white/80 border-indigo-100" : "bg-amber-50/60 border-amber-100"}`}>
-                        {item.notes}
-                      </p>
+                  <div className="flex items-center gap-2">
+                    {currentCategoryAllowance > 0 && (
+                      <Badge className={`text-xs px-2.5 py-1 ${allowanceDiff < 0 ? "bg-rose-100 text-rose-800 border-rose-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"}`}>
+                        {allowanceDiff < 0
+                          ? `Over Budget by $${Math.abs(allowanceDiff).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                          : `$${allowanceDiff.toLocaleString(undefined, { minimumFractionDigits: 2 })} Remaining Target`}
+                      </Badge>
                     )}
 
-                    <div className="flex items-center justify-between border-t pt-2.5 border-slate-200/60">
-                      {item.vendorUrl ? (
-                        <a
-                          href={item.vendorUrl.startsWith("http") ? item.vendorUrl : `https://${item.vendorUrl}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 text-xs"
-                        >
-                          🔗 Open Vendor Link ↗
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 italic text-[11px]">No link attached</span>
-                      )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTempBudgetVal(currentCategoryAllowance ? currentCategoryAllowance.toString() : "")
+                        setIsBudgetModalOpen(true)
+                      }}
+                      className="h-8 text-xs border-slate-300"
+                    >
+                      🎯 Set Budget Target
+                    </Button>
+                  </div>
+                </div>
+              )}
 
-                      <span className={`text-[11px] font-bold ${item.syncToExpenses ? "text-emerald-700" : item.checked ? "text-indigo-700" : "text-slate-400"}`}>
-                        {item.syncToExpenses ? "Synced & Checked ✓" : item.checked ? "Added to Total ✓" : "Unchecked"}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-
-            {filteredItems.length === 0 && (
-              <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-300">
-                <p className="text-slate-500 text-sm font-medium">No items found in {selectedCategory}.</p>
-                <Button variant="outline" size="sm" onClick={handleOpenAdd} className="mt-3 text-xs">
-                  + Add First Item
-                </Button>
+              {/* Search Toolbar */}
+              <div className="bg-white p-3 rounded-xl border shadow-xs">
+                <Input
+                  placeholder="Search items, model specs, notes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 text-xs bg-slate-50"
+                />
               </div>
-            )}
+
+              {/* Cards */}
+              <div className="space-y-3">
+                {filteredItems.map((item) => {
+                  let cardStyle = "border-slate-200 hover:border-slate-300 shadow-xs bg-white"
+                  if (item.syncToExpenses) {
+                    cardStyle = "bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-500 shadow-xs"
+                  } else if (item.checked) {
+                    cardStyle = "bg-indigo-50/80 border-indigo-500 ring-1 ring-indigo-500 shadow-xs"
+                  }
+
+                  return (
+                    <Card key={item.id} className={`transition-all ${cardStyle}`}>
+                      <CardHeader className="p-4 pb-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={item.checked}
+                              onChange={() => handleToggleCheck(item.id)}
+                              className="mt-1 h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <Badge variant="outline" className={`text-[10px] font-semibold ${item.syncToExpenses ? "bg-white text-emerald-800 border-emerald-300" : item.checked ? "bg-white text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-500"}`}>
+                                  {item.category}
+                                </Badge>
+                                {getStatusBadge(item.status)}
+                                {item.syncToExpenses && (
+                                  <Badge className="bg-emerald-600 text-white border-emerald-700 text-[10px] font-bold">
+                                    Synced to Expenses 💰
+                                  </Badge>
+                                )}
+                              </div>
+                              <CardTitle className="text-base font-bold text-slate-900 leading-tight">
+                                {item.title}
+                              </CardTitle>
+                            </div>
+                          </div>
+
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(item)} className="h-7 text-xs text-slate-500 hover:bg-slate-100">
+                            Edit
+                          </Button>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="p-4 pt-1 space-y-3 text-xs text-slate-600">
+                        <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-lg border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : item.checked ? "bg-white/80 border-indigo-100" : "bg-slate-50 border-slate-100"}`}>
+                          <div>
+                            <span className="text-slate-400 font-medium block text-[10px] uppercase">Price</span>
+                            <span className="font-bold text-slate-900">{item.price || "N/A"}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-medium block text-[10px] uppercase">Model / SKU</span>
+                            <span className="font-semibold text-slate-800 truncate block">{item.modelNumber || "N/A"}</span>
+                          </div>
+                        </div>
+
+                        {item.notes && (
+                          <p className={`leading-relaxed text-slate-600 p-2 rounded text-[11px] border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : item.checked ? "bg-white/80 border-indigo-100" : "bg-amber-50/60 border-amber-100"}`}>
+                            {item.notes}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between border-t pt-2.5 border-slate-200/60">
+                          {item.vendorUrl ? (
+                            <a
+                              href={item.vendorUrl.startsWith("http") ? item.vendorUrl : `https://${item.vendorUrl}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 text-xs"
+                            >
+                              🔗 Open Vendor Link ↗
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">No link attached</span>
+                          )}
+
+                          <span className={`text-[11px] font-bold ${item.syncToExpenses ? "text-emerald-700" : item.checked ? "text-indigo-700" : "text-slate-400"}`}>
+                            {item.syncToExpenses ? "Synced & Checked ✓" : item.checked ? "Added to Total ✓" : "Unchecked"}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+
+                {filteredItems.length === 0 && (
+                  <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-300">
+                    <p className="text-slate-500 text-sm font-medium">No items found in {selectedCategory}.</p>
+                    <Button variant="outline" size="sm" onClick={handleOpenAdd} className="mt-3 text-xs">
+                      + Add First Item
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
           </div>
+
         </div>
-      </div>
+      </Card>
 
       {/* Target Allowance Modal */}
       <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
@@ -669,6 +679,11 @@ export default function SelectionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Version Tracker Footer */}
+      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
+        CleanBuild v1.01
+      </div>
     </main>
   )
 }

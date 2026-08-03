@@ -5,7 +5,6 @@ import { get, set } from "idb-keyval"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,11 +44,11 @@ export default function ExpenseTracker() {
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
 
-  // Form Fields
+  // Form Fields (Initialized as empty strings so they act as placeholders)
   const [date, setDate] = useState("")
   const [description, setDescription] = useState("")
-  const [materials, setMaterials] = useState<string>("0")
-  const [labor, setLabor] = useState<string>("0")
+  const [materials, setMaterials] = useState<string>("")
+  const [labor, setLabor] = useState<string>("")
   const [receiptPhoto, setReceiptPhoto] = useState<string>("")
   const [tempBudget, setTempBudget] = useState<string>("23402")
 
@@ -113,7 +112,15 @@ export default function ExpenseTracker() {
   const totalMaterials = expenses.reduce((sum, item) => sum + (item.materials || 0), 0)
   const totalLabor = expenses.reduce((sum, item) => sum + (item.labor || 0), 0)
   const totalSpent = totalMaterials + totalLabor
-  const percentUsed = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0
+  
+  // Percent Used (No longer capped at 100)
+  const percentUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0
+
+  // Circular Progress Math
+  const radius = 24; // Increased radius for a larger circle
+  const circumference = 2 * Math.PI * radius;
+  // Cap the visual ring stroke at 100% so it doesn't wrap backwards, even if text shows > 100%
+  const strokeDashoffset = circumference - (Math.min(percentUsed, 100) / 100) * circumference;
 
   // Open Modal for Add/Edit
   const handleOpenModal = (expense?: Expense) => {
@@ -129,8 +136,8 @@ export default function ExpenseTracker() {
       const todayStr = new Date().toISOString().split("T")[0]
       setDate(todayStr)
       setDescription("")
-      setMaterials("0")
-      setLabor("0")
+      setMaterials("") // Empty placeholder
+      setLabor("")     // Empty placeholder
       setReceiptPhoto("")
     }
     setIsDialogOpen(true)
@@ -224,198 +231,207 @@ export default function ExpenseTracker() {
   }
 
   return (
-    <main className="p-8 max-w-6xl mx-auto space-y-6 bg-slate-100 min-h-screen text-slate-950">
-      {/* Header Banner */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+      
+      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-slate-900">Project Expense Tracker</h2>
-            <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50 font-semibold px-3 py-1">
-              JobFlow
-            </Badge>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">💰 Project Expense Tracker</h1>
           </div>
-          <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
             Track materials vs. labor costs and store receipt documentation.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 shrink-0">
           <Button
             variant="outline"
+            size="sm"
             onClick={handleExportCSV}
-            className="bg-white hover:bg-slate-50 border-slate-300 text-slate-700 text-xs h-9 font-semibold shadow-xs"
+            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
           >
             📊 Export CSV
           </Button>
           <Button
+            size="sm"
             onClick={() => handleOpenModal()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 font-semibold shadow-xs"
+            className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
           >
             + Log Expense
           </Button>
         </div>
-      </header>
-
-      {/* Overview Metric Cards (Styled identically to Header Banner) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="bg-white border border-slate-200 shadow-sm rounded-xl relative group">
-          <CardHeader className="pb-2 p-5">
-            <div className="flex justify-between items-center">
-              <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Total Budget
-              </CardDescription>
-              <button
-                onClick={() => {
-                  setTempBudget(totalBudget.toString())
-                  setIsBudgetDialogOpen(true)
-                }}
-                className="text-xs text-indigo-600 hover:underline font-bold"
-              >
-                Edit
-              </button>
-            </div>
-            <CardTitle className="text-2xl font-extrabold text-slate-900 mt-1">${totalBudget.toLocaleString()}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="bg-white border border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="pb-2 p-5">
-            <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Materials Spend
-            </CardDescription>
-            <CardTitle className="text-2xl font-extrabold text-blue-600 mt-1">${totalMaterials.toLocaleString()}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="bg-white border border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="pb-2 p-5">
-            <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Labor Spend
-            </CardDescription>
-            <CardTitle className="text-2xl font-extrabold text-purple-600 mt-1">${totalLabor.toLocaleString()}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="bg-white border border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="pb-2 p-5">
-            <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Total Spent
-            </CardDescription>
-            <CardTitle className="text-2xl font-extrabold text-indigo-600 mt-1">${totalSpent.toLocaleString()}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="bg-white border border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="pb-2 p-5">
-            <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Remaining Budget
-            </CardDescription>
-            <CardTitle className={`text-2xl font-extrabold mt-1 ${totalBudget - totalSpent < 0 ? "text-rose-600" : "text-emerald-600"}`}>
-              ${(totalBudget - totalSpent).toLocaleString()}
-            </CardTitle>
-          </CardHeader>
-        </Card>
       </div>
 
-      {/* Spend Progress Bar Container */}
-      <Card className="bg-white border border-slate-200 shadow-sm rounded-xl">
-        <CardHeader className="pb-3 p-6">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-sm font-bold text-slate-900">Overall Spend Progress</CardTitle>
-            <span className="text-xs font-bold text-slate-600">
-              {percentUsed}% of ${totalBudget.toLocaleString()}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 pt-0">
-          <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden p-0.5 border border-slate-200">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                percentUsed > 90
-                  ? "bg-rose-500"
-                  : percentUsed > 75
-                  ? "bg-amber-500"
-                  : "bg-emerald-500"
-              }`}
-              style={{ width: `${percentUsed}%` }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Main Container Card Wrapper */}
+      <Card className="overflow-hidden border shadow-sm bg-white flex-1">
+        
+        {/* Inner Content Spacing Container */}
+        <div className="p-6 space-y-6">
 
-      {/* Expense Ledger Table Container */}
-      <Card className="bg-white border border-slate-200 shadow-sm rounded-xl">
-        <CardHeader className="p-6 pb-2">
-          <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 pt-2">
-          {expenses.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-sm border-2 border-dashed rounded-lg">
-              No expenses recorded yet. Click <strong>"+ Log Expense"</strong> to add one.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b border-slate-200 bg-slate-50">
-                    <TableHead className="font-bold text-slate-600 text-xs">Receipt</TableHead>
-                    <TableHead className="font-bold text-slate-600 text-xs">Date</TableHead>
-                    <TableHead className="font-bold text-slate-600 text-xs">Description</TableHead>
-                    <TableHead className="text-right font-bold text-slate-600 text-xs">Materials ($)</TableHead>
-                    <TableHead className="text-right font-bold text-slate-600 text-xs">Labor ($)</TableHead>
-                    <TableHead className="text-right font-bold text-slate-600 text-xs">Line Total</TableHead>
-                    <TableHead className="text-right font-bold text-slate-600 text-xs">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expenses.map((expense) => {
-                    const lineTotal = (expense.materials || 0) + (expense.labor || 0)
-                    return (
-                      <TableRow key={expense.id} className="hover:bg-slate-50/80 border-b border-slate-100">
-                        <TableCell className="w-16">
-                          {expense.receiptPhoto ? (
-                            <img
-                              src={expense.receiptPhoto}
-                              alt="Receipt"
-                              className="h-10 w-10 object-cover rounded border border-slate-200 cursor-pointer hover:opacity-80"
-                              onClick={() => setLightboxPhoto(expense.receiptPhoto || null)}
-                              title="Click to expand receipt"
-                            />
-                          ) : (
-                            <span className="text-xs text-slate-300 italic">None</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-medium text-slate-600 text-xs whitespace-nowrap">
-                          {formatDisplayDate(expense.date)}
-                        </TableCell>
-                        <TableCell className="font-semibold text-slate-900 text-xs">{expense.description}</TableCell>
-                        <TableCell className="text-right text-blue-600 font-semibold text-xs">
-                          {expense.materials ? `$${expense.materials.toLocaleString()}` : "-"}
-                        </TableCell>
-                        <TableCell className="text-right text-purple-600 font-semibold text-xs">
-                          {expense.labor ? `$${expense.labor.toLocaleString()}` : "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-slate-900 text-xs">
-                          ${lineTotal.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                            onClick={() => handleOpenModal(expense)}
-                          >
-                            Edit
-                          </Button>
-                        </TableCell>
+          {/* Overview Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+              <CardHeader className="pb-2 p-5">
+                <div className="flex justify-between items-center">
+                  <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Total Budget
+                  </CardDescription>
+                  <button
+                    onClick={() => {
+                      setTempBudget(totalBudget.toString())
+                      setIsBudgetDialogOpen(true)
+                    }}
+                    className="text-xs text-indigo-600 hover:underline font-bold"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <CardTitle className="text-2xl font-extrabold text-slate-900 mt-1">${totalBudget.toLocaleString()}</CardTitle>
+              </CardHeader>
+            </Card>
+
+            <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+              <CardHeader className="pb-2 p-5">
+                <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Materials Spent
+                </CardDescription>
+                <CardTitle className="text-2xl font-extrabold text-blue-600 mt-1">${totalMaterials.toLocaleString()}</CardTitle>
+              </CardHeader>
+            </Card>
+
+            <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+              <CardHeader className="pb-2 p-5">
+                <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Labor Spent
+                </CardDescription>
+                <CardTitle className="text-2xl font-extrabold text-purple-600 mt-1">${totalLabor.toLocaleString()}</CardTitle>
+              </CardHeader>
+            </Card>
+
+            <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+              <CardHeader className="pb-2 p-5">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Total Spent
+                    </CardDescription>
+                    <CardTitle className="text-2xl font-extrabold text-indigo-600 mt-1">${totalSpent.toLocaleString()}</CardTitle>
+                  </div>
+                  {/* Larger Circular Progress inside Total Spent Box */}
+                  <div className="relative flex items-center justify-center w-14 h-14 shrink-0">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="28" cy="28" r={radius} stroke="currentColor" strokeWidth="4.5" fill="transparent" className="text-slate-100" />
+                      <circle
+                        cx="28"
+                        cy="28"
+                        r={radius}
+                        stroke="currentColor"
+                        strokeWidth="4.5"
+                        fill="transparent"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={strokeDashoffset}
+                        strokeLinecap="round"
+                        className={`${percentUsed > 90 ? "text-rose-500" : percentUsed > 75 ? "text-amber-500" : "text-emerald-500"} transition-all duration-500`}
+                      />
+                    </svg>
+                    <span className={`absolute text-xs font-bold ${percentUsed > 100 ? "text-rose-600" : "text-slate-700"}`}>
+                      {percentUsed}%
+                    </span>
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+
+            <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+              <CardHeader className="pb-2 p-5">
+                <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Remaining Budget
+                </CardDescription>
+                <CardTitle className={`text-2xl font-extrabold mt-1 ${totalBudget - totalSpent < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                  ${(totalBudget - totalSpent).toLocaleString()}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+
+          {/* Expense Ledger Table Container */}
+          <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+            <CardHeader className="p-6 pb-2">
+              <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-2">
+              {expenses.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 text-sm border-2 border-dashed rounded-lg">
+                  No expenses recorded yet. Click <strong>"+ Log Expense"</strong> to add one.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-slate-200 bg-slate-50">
+                        <TableHead className="font-bold text-slate-600 text-xs">Receipt</TableHead>
+                        <TableHead className="font-bold text-slate-600 text-xs">Date</TableHead>
+                        <TableHead className="font-bold text-slate-600 text-xs">Description</TableHead>
+                        <TableHead className="text-right font-bold text-slate-600 text-xs">Materials ($)</TableHead>
+                        <TableHead className="text-right font-bold text-slate-600 text-xs">Labor ($)</TableHead>
+                        <TableHead className="text-right font-bold text-slate-600 text-xs">Line Total</TableHead>
+                        <TableHead className="text-right font-bold text-slate-600 text-xs">Actions</TableHead>
                       </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
+                    </TableHeader>
+                    <TableBody>
+                      {expenses.map((expense) => {
+                        const lineTotal = (expense.materials || 0) + (expense.labor || 0)
+                        return (
+                          <TableRow key={expense.id} className="hover:bg-slate-50/80 border-b border-slate-100">
+                            <TableCell className="w-16">
+                              {expense.receiptPhoto ? (
+                                <img
+                                  src={expense.receiptPhoto}
+                                  alt="Receipt"
+                                  className="h-10 w-10 object-cover rounded border border-slate-200 cursor-pointer hover:opacity-80"
+                                  onClick={() => setLightboxPhoto(expense.receiptPhoto || null)}
+                                  title="Click to expand receipt"
+                                />
+                              ) : (
+                                <span className="text-xs text-slate-300 italic">None</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium text-slate-600 text-xs whitespace-nowrap">
+                              {formatDisplayDate(expense.date)}
+                            </TableCell>
+                            <TableCell className="font-semibold text-slate-900 text-xs">{expense.description}</TableCell>
+                            <TableCell className="text-right text-blue-600 font-semibold text-xs">
+                              {expense.materials ? `$${expense.materials.toLocaleString()}` : "-"}
+                            </TableCell>
+                            <TableCell className="text-right text-purple-600 font-semibold text-xs">
+                              {expense.labor ? `$${expense.labor.toLocaleString()}` : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-slate-900 text-xs">
+                              ${lineTotal.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right whitespace-nowrap">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                                onClick={() => handleOpenModal(expense)}
+                              >
+                                Edit
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+        </div>
+
       </Card>
 
       {/* Add / Edit Expense Dialog */}
@@ -454,6 +470,7 @@ export default function ExpenseTracker() {
                   type="number"
                   min="0"
                   step="0.01"
+                  placeholder="0.00"
                   value={materials}
                   onChange={(e) => setMaterials(e.target.value)}
                 />
@@ -466,6 +483,7 @@ export default function ExpenseTracker() {
                   type="number"
                   min="0"
                   step="0.01"
+                  placeholder="0.00"
                   value={labor}
                   onChange={(e) => setLabor(e.target.value)}
                 />
@@ -564,6 +582,11 @@ export default function ExpenseTracker() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Version Tracker Footer */}
+      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
+        CleanBuild v1.04
+      </div>
     </main>
   )
 }

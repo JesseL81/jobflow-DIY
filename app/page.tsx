@@ -5,7 +5,6 @@ import { get, set } from "idb-keyval"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import Link from "next/link"
@@ -123,7 +122,6 @@ export default function DashboardPage() {
   const projStart = new Date("2026-06-29T00:00:00")
   const projEnd = new Date("2026-07-30T00:00:00")
   
-  // Dynamic current date (Midnight normalized)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -133,11 +131,9 @@ export default function DashboardPage() {
   const currentDay = Math.min(totalDays, Math.max(1, Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1))
   const percentTimeUsed = Math.min(100, Math.max(0, Math.round((currentDay / totalDays) * 100)))
 
-  // Photos List across all logs
   const allPhotos = logs.flatMap((log) => log.photos || [])
   const recentLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3)
 
-  // Lightbox Navigation Handlers
   const handleNextPhoto = () => {
     if (selectedPhotoIndex === null || allPhotos.length === 0) return
     setSelectedPhotoIndex((prev) => (prev !== null && prev < allPhotos.length - 1 ? prev + 1 : 0))
@@ -148,7 +144,6 @@ export default function DashboardPage() {
     setSelectedPhotoIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : allPhotos.length - 1))
   }
 
-  // Keyboard Left / Right Navigation Support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedPhotoIndex === null) return
@@ -161,236 +156,246 @@ export default function DashboardPage() {
   }, [selectedPhotoIndex, allPhotos.length])
 
   return (
-    <main className="p-8 max-w-6xl mx-auto space-y-6 bg-slate-100 min-h-screen text-slate-950">
-      {/* Header Banner */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border shadow-xs">
-        <div className="flex items-center gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-slate-950">JobFlow Dashboard</h1>
-              <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50 font-semibold px-3 py-1">
-                Project Overview
-              </Badge>
-            </div>
-            <p className="text-slate-600 text-xs mt-1 leading-relaxed">
-              Real-time site overview, active budget tracking, and job site management.
-            </p>
+    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+      
+      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📊 Dashboard</h1>
           </div>
+          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
+            Real-time site overview, active budget tracking, and job site management.
+          </p>
         </div>
 
         {/* Header Action Controls */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           {allPhotos.length > 0 && (
-            <Button size="sm" variant="outline" className="text-xs border-slate-300" onClick={() => setIsGalleryOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              onClick={() => setIsGalleryOpen(true)}
+            >
               🖼️ Photo Gallery ({allPhotos.length})
             </Button>
           )}
         </div>
-      </header>
-
-      {/* Financial Overview Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-white border shadow-xs">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs">Total Budget</CardDescription>
-            <CardTitle className="text-xl font-bold">${totalBudget.toLocaleString()}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="bg-white border shadow-xs">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs">Total Spent</CardDescription>
-            <CardTitle className="text-xl font-bold text-blue-600">${totalSpent.toLocaleString()}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="bg-white border shadow-xs">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs">Remaining Funds</CardDescription>
-            <CardTitle className={`text-xl font-bold ${remainingBudget < 0 ? "text-rose-600" : "text-emerald-600"}`}>
-              ${remainingBudget.toLocaleString()}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="bg-white border shadow-xs">
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs">Active Delays</CardDescription>
-            <CardTitle className="text-xl font-bold text-rose-600">
-              {Object.keys(nonWorkdaysMap).length} {Object.keys(nonWorkdaysMap).length === 1 ? "Day" : "Days"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
       </div>
 
-      {/* Progress Bars Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="bg-white border shadow-xs">
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-sm font-semibold">Budget Utilization</CardTitle>
-              <span className="text-xs font-bold text-slate-600">
-                {percentBudgetUsed}% Used (${totalSpent.toLocaleString()} / ${totalBudget.toLocaleString()})
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Progress value={percentBudgetUsed} className="h-3" />
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border shadow-xs">
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-sm font-semibold">Project Timeline Progress</CardTitle>
-              <span className="text-xs font-bold text-slate-600">
-                Day {currentDay} of {totalDays} Calendar Days ({percentTimeUsed}%)
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Progress value={percentTimeUsed} className="h-3 bg-slate-100" />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* PUNCH LIST WIDGET & LOGGED DELAYS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Dashboard Main Card */}
+      <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         
-        {/* Punch List / Site To-Do List */}
-        <Card className="bg-white border shadow-xs md:col-span-2">
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-sm font-bold text-slate-900">✅ Site Punch List / To-Do's</CardTitle>
-              
-              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-semibold px-2.5 py-0.5">
-                {completedPunchItems} of {totalPunchItems} Completed ({percentPunchCompleted}%)
-              </Badge>
-            </div>
-            <CardDescription className="text-xs">Track quick daily tasks and micro-to-do items.</CardDescription>
+        {/* Dashboard Content Body */}
+        <div className="p-6 space-y-6">
+          
+          {/* Quick Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-white border shadow-2xs">
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">Total Budget</CardDescription>
+                <CardTitle className="text-xl font-bold">${totalBudget.toLocaleString()}</CardTitle>
+              </CardHeader>
+            </Card>
 
-            {totalPunchItems > 0 && (
-              <div className="pt-1">
-                <Progress value={percentPunchCompleted} className="h-1.5 bg-slate-100" />
+            <Card className="bg-white border shadow-2xs">
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">Total Spent</CardDescription>
+                <CardTitle className="text-xl font-bold text-blue-600">${totalSpent.toLocaleString()}</CardTitle>
+              </CardHeader>
+            </Card>
+
+            <Card className="bg-white border shadow-2xs">
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">Remaining Funds</CardDescription>
+                <CardTitle className={`text-xl font-bold ${remainingBudget < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                  ${remainingBudget.toLocaleString()}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+
+            <Card className="bg-white border shadow-2xs">
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">Active Delays</CardDescription>
+                <CardTitle className="text-xl font-bold text-rose-600">
+                  {Object.keys(nonWorkdaysMap).length} {Object.keys(nonWorkdaysMap).length === 1 ? "Day" : "Days"}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+
+          {/* Progress Bars Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-white border shadow-2xs">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-sm font-semibold">Budget Utilization</CardTitle>
+                  <span className="text-xs font-bold text-slate-600">
+                    {percentBudgetUsed}% Used (${totalSpent.toLocaleString()} / ${totalBudget.toLocaleString()})
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Progress value={percentBudgetUsed} className="h-3 bg-slate-100" />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border shadow-2xs">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-sm font-semibold">Project Timeline Progress</CardTitle>
+                  <span className="text-xs font-bold text-slate-600">
+                    Day {currentDay} of {totalDays} Calendar Days ({percentTimeUsed}%)
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Progress value={percentTimeUsed} className="h-3 bg-slate-100" />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* PUNCH LIST WIDGET & LOGGED DELAYS */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Punch List / Site To-Do List */}
+            <Card className="bg-white border shadow-2xs md:col-span-2">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-sm font-bold text-slate-900">✅ Site Punch List / To-Do's</CardTitle>
+                  
+                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2.5 py-0.5 rounded">
+                    {completedPunchItems} of {totalPunchItems} Completed ({percentPunchCompleted}%)
+                  </span>
+                </div>
+                <CardDescription className="text-xs">Track quick daily tasks and micro-to-do items.</CardDescription>
+
+                {totalPunchItems > 0 && (
+                  <div className="pt-1">
+                    <Progress value={percentPunchCompleted} className="h-1.5 bg-slate-100" />
+                  </div>
+                )}
+              </CardHeader>
+
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add to-do item (e.g. Return fittings, Call inspector)..."
+                    value={newPunchText}
+                    onChange={(e) => setNewPunchText(e.target.value)}
+                    className="text-xs h-8"
+                    onKeyDown={(e) => e.key === "Enter" && handleAddPunchItem()}
+                  />
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 px-3" onClick={handleAddPunchItem}>
+                    Add
+                  </Button>
+                </div>
+
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pt-1">
+                  {punchList.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic py-3 text-center border border-dashed rounded">
+                      No punch list items yet.
+                    </p>
+                  ) : (
+                    punchList.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-2 bg-slate-50 border rounded text-xs">
+                        <label className="flex items-center gap-2 cursor-pointer flex-1">
+                          <input
+                            type="checkbox"
+                            checked={item.completed}
+                            onChange={() => handleTogglePunch(item.id)}
+                            className="h-4 w-4 accent-blue-600 rounded"
+                          />
+                          <span className={item.completed ? "line-through text-slate-400" : "text-slate-800 font-medium"}>
+                            {item.text}
+                          </span>
+                        </label>
+                        <button
+                          onClick={() => handleDeletePunch(item.id)}
+                          className="text-slate-400 hover:text-rose-600 text-xs px-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Flagged Delays */}
+            <Card className="bg-white border shadow-2xs md:col-span-1">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-sm font-bold text-slate-900">🚫 Logged Delays</CardTitle>
+                  <Link href="/schedule" className="text-xs text-blue-600 hover:underline">
+                    View Schedule →
+                  </Link>
+                </div>
+                <CardDescription className="text-xs">Days flagged as off from daily logs.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {Object.keys(nonWorkdaysMap).length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-4 text-center border-2 border-dashed rounded-md">
+                    No non-workdays recorded.
+                  </p>
+                ) : (
+                  Object.entries(nonWorkdaysMap).map(([date, reason]) => (
+                    <div key={date} className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs">
+                      <div className="font-bold text-rose-900">{formatDisplayDate(date)}</div>
+                      <div className="text-rose-700 truncate mt-0.5">{reason}</div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RECENT LOGS */}
+          <Card className="bg-white border shadow-2xs">
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-sm font-bold text-slate-900">📋 Recent Daily Logs</CardTitle>
+                <Link href="/logs" className="text-xs text-blue-600 hover:underline">
+                  All Logs →
+                </Link>
               </div>
-            )}
-          </CardHeader>
-
-          <CardContent className="space-y-3">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Add to-do item (e.g. Return fittings, Call inspector)..."
-                value={newPunchText}
-                onChange={(e) => setNewPunchText(e.target.value)}
-                className="text-xs h-8"
-                onKeyDown={(e) => e.key === "Enter" && handleAddPunchItem()}
-              />
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 px-3" onClick={handleAddPunchItem}>
-                Add
-              </Button>
-            </div>
-
-            <div className="space-y-1.5 max-h-48 overflow-y-auto pt-1">
-              {punchList.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-3 text-center border border-dashed rounded">
-                  No punch list items yet.
+              <CardDescription className="text-xs">Latest activity recorded on job site.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentLogs.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-8 text-center border-2 border-dashed rounded-md">
+                  No logs recorded yet.
                 </p>
               ) : (
-                punchList.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-2 bg-slate-50 border rounded text-xs">
-                    <label className="flex items-center gap-2 cursor-pointer flex-1">
-                      <input
-                        type="checkbox"
-                        checked={item.completed}
-                        onChange={() => handleTogglePunch(item.id)}
-                        className="h-4 w-4 accent-blue-600 rounded"
-                      />
-                      <span className={item.completed ? "line-through text-slate-400" : "text-slate-800 font-medium"}>
-                        {item.text}
-                      </span>
-                    </label>
-                    <button
-                      onClick={() => handleDeletePunch(item.id)}
-                      className="text-slate-400 hover:text-rose-600 text-xs px-1"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))
+                <div className="divide-y divide-slate-100">
+                  {recentLogs.map((log) => (
+                    <div key={log.id} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+                          {formatDisplayDate(log.date)}
+                        </span>
+                        {log.weather && (
+                          <span className="bg-amber-100 text-amber-800 text-[10px] font-medium px-2 py-0.5 rounded">
+                            ☀️ {log.weather}
+                          </span>
+                        )}
+                        {log.isNonWorkday && (
+                          <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded">
+                            🚫 Day Off
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">{log.notes}</p>
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Flagged Delays */}
-        <Card className="bg-white border shadow-xs md:col-span-1">
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-sm font-bold text-slate-900">🚫 Logged Delays</CardTitle>
-              <Link href="/schedule" className="text-xs text-blue-600 hover:underline">
-                View Schedule →
-              </Link>
-            </div>
-            <CardDescription className="text-xs">Days flagged as off from daily logs.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {Object.keys(nonWorkdaysMap).length === 0 ? (
-              <p className="text-xs text-slate-400 italic py-4 text-center border-2 border-dashed rounded-md">
-                No non-workdays recorded.
-              </p>
-            ) : (
-              Object.entries(nonWorkdaysMap).map(([date, reason]) => (
-                <div key={date} className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs">
-                  <div className="font-bold text-rose-900">{formatDisplayDate(date)}</div>
-                  <div className="text-rose-700 truncate mt-0.5">{reason}</div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* RECENT LOGS */}
-      <Card className="bg-white border shadow-xs">
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-sm font-bold text-slate-900">📋 Recent Daily Logs</CardTitle>
-            <Link href="/logs" className="text-xs text-blue-600 hover:underline">
-              All Logs →
-            </Link>
-          </div>
-          <CardDescription className="text-xs">Latest activity recorded on job site.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {recentLogs.length === 0 ? (
-            <p className="text-xs text-slate-400 italic py-8 text-center border-2 border-dashed rounded-md">
-              No logs recorded yet.
-            </p>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {recentLogs.map((log) => (
-                <div key={log.id} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-                      {formatDisplayDate(log.date)}
-                    </span>
-                    {log.weather && (
-                      <span className="bg-amber-100 text-amber-800 text-[10px] font-medium px-2 py-0.5 rounded">
-                        ☀️ {log.weather}
-                      </span>
-                    )}
-                    {log.isNonWorkday && (
-                      <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded">
-                        🚫 Day Off
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">{log.notes}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
+        </div>
       </Card>
 
       {/* MODAL: PHOTO GALLERY GRID */}
@@ -418,7 +423,6 @@ export default function DashboardPage() {
         <DialogContent className="max-w-[95vw] md:max-w-4xl h-[85vh] p-4 bg-slate-950 text-white border-slate-800 flex flex-col justify-between">
           {selectedPhotoIndex !== null && allPhotos[selectedPhotoIndex] && (
             <>
-              {/* Lightbox Header with Counter Badge */}
               <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
                 <span className="text-xs font-semibold text-slate-300">
                   🖼️ Site Photo {selectedPhotoIndex + 1} of {allPhotos.length}
@@ -428,7 +432,6 @@ export default function DashboardPage() {
                 </span>
               </div>
 
-              {/* Main Image View with Overlay Left / Right Buttons */}
               <div className="relative flex-1 flex items-center justify-center my-2 bg-black rounded-lg overflow-hidden">
                 <img
                   src={allPhotos[selectedPhotoIndex]}
@@ -436,7 +439,6 @@ export default function DashboardPage() {
                   className="max-h-[68vh] max-w-full object-contain"
                 />
 
-                {/* Left Previous Button Overlay */}
                 {allPhotos.length > 1 && (
                   <button
                     type="button"
@@ -448,7 +450,6 @@ export default function DashboardPage() {
                   </button>
                 )}
 
-                {/* Right Next Button Overlay */}
                 {allPhotos.length > 1 && (
                   <button
                     type="button"
@@ -461,7 +462,6 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Lightbox Footer */}
               <div className="flex justify-between items-center text-xs text-slate-400 pt-1 border-t border-slate-800">
                 <span>Click outside or press ESC to close</span>
                 <Button
@@ -477,6 +477,12 @@ export default function DashboardPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Version Tracker Footer */}
+      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
+        CleanBuild v1.01
+      </div>
+
     </main>
   )
 }

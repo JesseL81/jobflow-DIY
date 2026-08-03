@@ -279,44 +279,44 @@ export default function TemplatesPage() {
   const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
   return (
-    <main className="p-8 max-w-6xl mx-auto space-y-6 bg-slate-100 min-h-screen text-slate-950">
-      {/* Header Banner */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border shadow-xs">
+    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+      
+      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] so it matches perfectly across all tabs */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-950">📋 Project Templates</h1>
-            <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50 font-semibold px-3 py-1">
-              Automation
-            </Badge>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📋 Project Templates</h1>
           </div>
-          <p className="text-slate-600 text-sm mt-1.5 leading-relaxed max-w-2xl">
+          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
             Select a project template below, pick a start date, and preview how the sequential schedule will look on your calendar.
           </p>
         </div>
 
-        {/* Start Date & Import Control */}
-        <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200 shrink-0">
-          <div>
-            <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-              Project Start Date
-            </Label>
-            <Input
-              id="start-date"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-white text-xs h-8 border-slate-200 mt-0.5"
-            />
+        {/* Start Date & Import Control styled for dark background */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-end gap-3">
+            <div>
+              <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                Project Start Date
+              </Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-900 text-white text-xs h-8 border-slate-600 focus:border-blue-500"
+              />
+            </div>
+            <Button
+              onClick={handleImportToSchedule}
+              disabled={isImporting}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-8 px-4 shadow-xs"
+            >
+              {isImporting ? "Importing..." : "🚀 Import to Schedule"}
+            </Button>
           </div>
-          <Button
-            onClick={handleImportToSchedule}
-            disabled={isImporting}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-12 px-4 shadow-xs self-end"
-          >
-            {isImporting ? "Importing..." : "🚀 Import to Schedule"}
-          </Button>
         </div>
-      </header>
+      </div>
 
       {/* TOP SECTION: Horizontal Template Options */}
       <section className="space-y-3">
@@ -370,7 +370,7 @@ export default function TemplatesPage() {
       </section>
 
       {/* BOTTOM SECTION: Preview Calendar */}
-      <section className="space-y-3">
+      <section className="space-y-3 flex-1">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Schedule Preview Calendar — {activeTemplate.name} ({calendarWeeks.length} Weeks)
@@ -518,6 +518,12 @@ export default function TemplatesPage() {
           </div>
         </Card>
       </section>
+
+      {/* Version Tracker Footer */}
+      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
+        CleanBuild v1.05
+      </div>
+      
     </main>
   )
 }

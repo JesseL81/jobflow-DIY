@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
@@ -178,167 +179,166 @@ export default function ContactsPage() {
   }
 
   return (
-    <main className="p-8 max-w-6xl mx-auto space-y-6 bg-slate-100 min-h-screen text-slate-950">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border shadow-xs">
+    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+      
+      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-950">📞 Contacts & Vendors</h1>
-            <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50 font-semibold px-3 py-1">
-              Directory
-            </Badge>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📞 Contacts & Vendors</h1>
           </div>
-          <p className="text-slate-600 text-sm mt-1.5 leading-relaxed max-w-2xl">
+          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
             Select or hover over a contact on the left to view complete details.
           </p>
         </div>
 
-        {/* Add Contact Modal */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger>
-            <span className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer transition-colors shadow-xs">
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Add Contact Modal */}
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none">
               + Add New Contact
-            </span>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border border-slate-200">
-            <form onSubmit={handleAddContact}>
-              <DialogHeader className="pb-2 border-b border-slate-100">
-                <DialogTitle className="text-lg font-bold text-slate-900">
-                  Add New Contact / Vendor
-                </DialogTitle>
-                <p className="text-xs text-slate-500">
-                  Fill in vendor and trade details to save them to your active directory.
-                </p>
-              </DialogHeader>
+            </DialogTrigger>
+            
+            <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border border-slate-200">
+              <form onSubmit={handleAddContact}>
+                <DialogHeader className="pb-2 border-b border-slate-100">
+                  <DialogTitle className="text-lg font-bold text-slate-900">
+                    Add New Contact / Vendor
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500">
+                    Fill in vendor and trade details to save them to your active directory.
+                  </DialogDescription>
+                </DialogHeader>
 
-              <div className="grid gap-4 py-4 text-xs">
-                {/* Name & Company */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-4 py-4 text-xs">
+                  {/* Name & Company */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="name" className="font-semibold text-slate-700">Contact Person Name *</Label>
+                      <Input
+                        id="name"
+                        placeholder="e.g. Dave Miller"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="bg-white border-slate-200 text-xs h-9"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="company" className="font-semibold text-slate-700">Business / Company Name *</Label>
+                      <Input
+                        id="company"
+                        placeholder="e.g. Apex Electrical"
+                        value={newCompany}
+                        onChange={(e) => setNewCompany(e.target.value)}
+                        className="bg-white border-slate-200 text-xs h-9"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Trade Select & Status Select */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="trade" className="font-semibold text-slate-700">Trade / Specialty</Label>
+                      <select
+                        id="trade"
+                        value={newTrade}
+                        onChange={(e) => setNewTrade(e.target.value)}
+                        className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                      >
+                        <option value="General Subcontractor">General Subcontractor</option>
+                        <option value="Electrician">Electrician</option>
+                        <option value="Plumbing">Plumbing</option>
+                        <option value="HVAC">HVAC</option>
+                        <option value="Framing & Carpentry">Framing & Carpentry</option>
+                        <option value="Tile & Flooring">Tile & Flooring</option>
+                        <option value="Drywall & Paint">Drywall & Paint</option>
+                        <option value="Masonry & Concrete">Masonry & Concrete</option>
+                        <option value="Roofing">Roofing</option>
+                        <option value="Inspector / Permitting">Inspector / Permitting</option>
+                        <option value="Material Supplier">Material Supplier</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="status" className="font-semibold text-slate-700">Status</Label>
+                      <select
+                        id="status"
+                        value={newStatus}
+                        onChange={(e) => setNewStatus(e.target.value as "Active" | "Preferred" | "On Hold")}
+                        className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Preferred">Preferred</option>
+                        <option value="On Hold">On Hold</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Phone & Email */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="phone" className="font-semibold text-slate-700">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        placeholder="(555) 000-0000"
+                        value={newPhone}
+                        onChange={(e) => setNewPhone(e.target.value)}
+                        className="bg-white border-slate-200 text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="email" className="font-semibold text-slate-700">Email Address</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="contact@company.com"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="bg-white border-slate-200 text-xs h-9"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Office Address */}
                   <div className="space-y-1.5">
-                    <Label htmlFor="name" className="font-semibold text-slate-700">Contact Person Name *</Label>
+                    <Label htmlFor="address" className="font-semibold text-slate-700">Office / Shop Address</Label>
                     <Input
-                      id="name"
-                      placeholder="e.g. Dave Miller"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
+                      id="address"
+                      placeholder="123 Main St, Suite 100, City, ST"
+                      value={newAddress}
+                      onChange={(e) => setNewAddress(e.target.value)}
                       className="bg-white border-slate-200 text-xs h-9"
-                      required
                     />
                   </div>
+
+                  {/* Notes & Details */}
                   <div className="space-y-1.5">
-                    <Label htmlFor="company" className="font-semibold text-slate-700">Business / Company Name *</Label>
-                    <Input
-                      id="company"
-                      placeholder="e.g. Apex Electrical"
-                      value={newCompany}
-                      onChange={(e) => setNewCompany(e.target.value)}
-                      className="bg-white border-slate-200 text-xs h-9"
-                      required
+                    <Label htmlFor="notes" className="font-semibold text-slate-700">Notes & Trade Details</Label>
+                    <textarea
+                      id="notes"
+                      placeholder="Rates, lead times, licensing info, or scheduling requirements..."
+                      value={newNotes}
+                      onChange={(e) => setNewNotes(e.target.value)}
+                      className="flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     />
                   </div>
                 </div>
 
-                {/* Trade Select & Status Select */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="trade" className="font-semibold text-slate-700">Trade / Specialty</Label>
-                    <select
-                      id="trade"
-                      value={newTrade}
-                      onChange={(e) => setNewTrade(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
-                    >
-                      <option value="General Subcontractor">General Subcontractor</option>
-                      <option value="Electrician">Electrician</option>
-                      <option value="Plumbing">Plumbing</option>
-                      <option value="HVAC">HVAC</option>
-                      <option value="Framing & Carpentry">Framing & Carpentry</option>
-                      <option value="Tile & Flooring">Tile & Flooring</option>
-                      <option value="Drywall & Paint">Drywall & Paint</option>
-                      <option value="Masonry & Concrete">Masonry & Concrete</option>
-                      <option value="Roofing">Roofing</option>
-                      <option value="Inspector / Permitting">Inspector / Permitting</option>
-                      <option value="Material Supplier">Material Supplier</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="status" className="font-semibold text-slate-700">Status</Label>
-                    <select
-                      id="status"
-                      value={newStatus}
-                      onChange={(e) => setNewStatus(e.target.value as "Active" | "Preferred" | "On Hold")}
-                      className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Preferred">Preferred</option>
-                      <option value="On Hold">On Hold</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Phone & Email */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="phone" className="font-semibold text-slate-700">Phone Number</Label>
-                    <Input
-                      id="phone"
-                      placeholder="(555) 000-0000"
-                      value={newPhone}
-                      onChange={(e) => setNewPhone(e.target.value)}
-                      className="bg-white border-slate-200 text-xs h-9"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email" className="font-semibold text-slate-700">Email Address</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="contact@company.com"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      className="bg-white border-slate-200 text-xs h-9"
-                    />
-                  </div>
-                </div>
-
-                {/* Office Address */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="address" className="font-semibold text-slate-700">Office / Shop Address</Label>
-                  <Input
-                    id="address"
-                    placeholder="123 Main St, Suite 100, City, ST"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    className="bg-white border-slate-200 text-xs h-9"
-                  />
-                </div>
-
-                {/* Notes & Details */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="notes" className="font-semibold text-slate-700">Notes & Trade Details</Label>
-                  <textarea
-                    id="notes"
-                    placeholder="Rates, lead times, licensing info, or scheduling requirements..."
-                    value={newNotes}
-                    onChange={(e) => setNewNotes(e.target.value)}
-                    className="flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
-                  />
-                </div>
-              </div>
-
-              <DialogFooter className="pt-2 border-t border-slate-100">
-                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4">
-                  Save Contact
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </header>
+                <DialogFooter className="pt-2 border-t border-slate-100">
+                  <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4">
+                    Save Contact
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
 
       {/* Two-Column Master-Detail Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start flex-1">
         
         {/* Left Side: Search + Scrollable Directory List (4 Columns) */}
         <div className="md:col-span-4 space-y-3">
@@ -399,9 +399,9 @@ export default function ContactsPage() {
         {/* Right Side: Expanded Detail Card (8 Columns) */}
         <div className="md:col-span-8">
           {activeContact ? (
-            <Card className="bg-white border shadow-xs min-h-[420px]">
-              <CardHeader className="pb-4 border-b border-slate-100">
-                <div className="flex items-center justify-between gap-3 mb-1">
+            <Card className="bg-white border rounded-xl p-6 shadow-sm min-h-[420px] space-y-6">
+              <div className="pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between gap-3 mb-2">
                   <Badge
                     variant="secondary"
                     className="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
@@ -420,15 +420,15 @@ export default function ContactsPage() {
                   </Badge>
                 </div>
 
-                <CardTitle className="text-2xl font-bold text-slate-950 leading-tight">
+                <h2 className="text-2xl font-bold text-slate-950 leading-tight">
                   {activeContact.name}
-                </CardTitle>
-                <CardDescription className="text-sm font-medium text-slate-600">
+                </h2>
+                <p className="text-sm font-medium text-slate-600 mt-0.5">
                   {activeContact.company}
-                </CardDescription>
-              </CardHeader>
+                </p>
+              </div>
 
-              <CardContent className="pt-6 space-y-6">
+              <div className="space-y-6">
                 {/* Phone & Email Section */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200">
@@ -473,16 +473,22 @@ export default function ContactsPage() {
                     {activeContact.notes}
                   </p>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ) : (
-            <Card className="bg-white border p-12 text-center text-slate-500 text-xs">
+            <Card className="bg-white border rounded-xl p-12 text-center text-slate-500 text-xs">
               Select or search for a contact on the left to view details.
             </Card>
           )}
         </div>
 
       </div>
+
+      {/* Version Tracker Footer */}
+      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
+        CleanBuild v1.02
+      </div>
+      
     </main>
   )
 }
