@@ -1,25 +1,26 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
   { label: "Schedule & Tasks", href: "/schedule", icon: "📅" },
+  { label: "Punch List & To-Do's", href: "/punch-list", icon: "✅" },
   { label: "Daily Logs & Photos", href: "/logs", icon: "📷" },
   { label: "Expenses", href: "/expenses", icon: "💰" },
   { label: "Selections", href: "/selections", icon: "🛍️" },
   { label: "Contacts & Vendors", href: "/contacts", icon: "📞" },
   { label: "Templates", href: "/templates", icon: "📋" },
   { label: "Tips & Tricks", href: "/tips", icon: "💡" },
-  { label: "Logo Showcase", href: "/logo-preview", icon: "🎨" }, // Temporary Preview Tab
+  { label: "Logo Showcase", href: "/logo-preview", icon: "🎨" },
 ]
 
-// Integrated CleanBuild Logo (Option 13)
+// Integrated CleanBuild Logo (Option 13) - Transparent Background
 function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <rect width="100" height="100" rx="22" fill="#18181B" />
       <path d="M20 38L50 20L80 38L50 56L20 38Z" fill="#FF8C00"/>
       <path d="M20 38V68L50 85V56L20 38Z" fill="#C2410C"/>
       <path d="M80 38V68L50 85V56L80 38Z" fill="#FF6B00"/>
@@ -42,21 +43,73 @@ function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGE
 
 export default function SidebarNav() {
   const pathname = usePathname()
+  
+  // Project Name State
+  const [projectName, setProjectName] = useState("My Project")
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [tempName, setTempName] = useState("")
+
+  useEffect(() => {
+    const savedName = localStorage.getItem("cleanbuild_project_name")
+    if (savedName) setProjectName(savedName)
+  }, [])
+
+  const handleSaveProjectName = () => {
+    const finalName = tempName.trim() || "My Project"
+    setProjectName(finalName)
+    localStorage.setItem("cleanbuild_project_name", finalName)
+    // Dispatch event so exports on other tabs automatically catch the new name
+    window.dispatchEvent(new Event("project-name-updated"))
+    setIsEditingName(false)
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Brand Header (With New Logo & Name) */}
-      <div className="px-3 py-2 flex items-center gap-3">
-        <LogoCBBlock className="h-9 w-9 shrink-0 shadow-md rounded-xl" />
-        <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-white leading-none">
+    <div className="w-full">
+      {/* Brand Header (With Logo, Title, and Editable Project Name) */}
+      <div className="px-4 pt-2 pb-5 flex flex-col gap-4">
+        
+        {/* Top Row: Logo & Name perfectly inline */}
+        <div className="flex items-center gap-3">
+          <LogoCBBlock className="h-10 w-10 shrink-0 drop-shadow-md" />
+          <h1 className="text-2xl font-extrabold tracking-tight text-white leading-none">
             Clean<span className="text-orange-400">Build</span>
           </h1>
         </div>
+        
+        {/* Bottom Row: Editable Project Name */}
+        <div className="flex items-center group h-7">
+          {isEditingName ? (
+            <input
+              autoFocus
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveProjectName()}
+              onBlur={handleSaveProjectName}
+              className="text-base bg-slate-800 text-white border border-slate-600 rounded px-2 py-1 w-full outline-none focus:border-orange-400 font-bold"
+              placeholder="Project Name..."
+            />
+          ) : (
+            <>
+              <span className="text-base font-bold text-slate-200 truncate max-w-[160px]" title={projectName}>
+                {projectName}
+              </span>
+              <button 
+                onClick={() => { setTempName(projectName); setIsEditingName(true); }}
+                className="opacity-0 group-hover:opacity-100 ml-2 text-sm text-slate-500 hover:text-orange-400 transition-opacity"
+                title="Edit Project Name"
+              >
+                ✏️
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
+      {/* Explicit, Foolproof Bold Orange Line */}
+      <div className="mx-4 mb-6 h-[3px] bg-orange-500 rounded-full" />
+
       {/* Navigation Links */}
-      <nav className="space-y-1 text-sm font-medium">
+      <nav className="space-y-1.5 text-sm font-medium px-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href
 

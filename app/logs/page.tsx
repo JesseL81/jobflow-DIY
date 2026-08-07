@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 import html2canvas from "html2canvas-pro"
 import jsPDF from "jspdf"
 import JSZip from "jszip"
@@ -64,6 +65,7 @@ const getTodayInputDate = () => {
 
 export default function DailyLogsPage() {
   const [logs, setLogs] = useState<DailyLog[]>([])
+  const [projectName, setProjectName] = useState("My Project")
   const [isLogDialogOpen, setIsLogDialogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<DailyLog | null>(null)
 
@@ -84,32 +86,50 @@ export default function DailyLogsPage() {
   const exportCardRef = useRef<HTMLDivElement>(null)
   const [exportLogTarget, setExportLogTarget] = useState<DailyLog | null>(null)
 
-  // Load logs from IndexedDB
+  // Load logs and project name from IndexedDB/LocalStorage & Cloud
   useEffect(() => {
     async function loadLogs() {
       try {
+        // 1. Instant Offline Load
         const savedLogs = await get<DailyLog[]>("daily_logs_data")
         if (savedLogs && Array.isArray(savedLogs) && savedLogs.length > 0) {
           setLogs(savedLogs)
         } else {
           setLogs(INITIAL_LOGS)
-          await saveAndSyncLogs(INITIAL_LOGS)
+        }
+
+        // 2. Silent Cloud Pull (Pulls latest logs in background)
+        const cloudLogs = await syncManager.pullFromCloud("daily_logs_data")
+        if (cloudLogs) {
+          setLogs(cloudLogs)
         }
       } catch (e) {
-        console.error("Error loading logs from IndexedDB:", e)
+        console.error("Error loading logs:", e)
         setLogs(INITIAL_LOGS)
       }
     }
     loadLogs()
+
+    const loadProjectName = () => {
+      const savedName = localStorage.getItem("cleanbuild_project_name")
+      if (savedName) setProjectName(savedName)
+    }
+    loadProjectName()
+    
+    // Listen for name updates from the sidebar
+    window.addEventListener("project-name-updated", loadProjectName)
+    return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
 
-  // Save logs to state & IndexedDB + sync non-workdays map
+  // Save logs to state & IndexedDB + push to Cloud
   const saveAndSyncLogs = async (updatedLogs: DailyLog[]) => {
     setLogs(updatedLogs)
     try {
+      // Save Locally & Push to Cloud
       await set("daily_logs_data", updatedLogs)
+      await syncManager.pushToCloud("daily_logs_data", updatedLogs)
 
-      // Sync non-workday flags with schedule component using forced YYYY-MM-DD
+      // Sync non-workday flags with schedule component
       const nonWorkdaysMap = updatedLogs
         .filter((l) => l.isNonWorkday)
         .reduce((acc, l) => {
@@ -118,13 +138,15 @@ export default function DailyLogsPage() {
           return acc
         }, {} as Record<string, string>)
 
+      // Save Map Locally & Push to Cloud
       await set("non_workdays_map", nonWorkdaysMap)
+      await syncManager.pushToCloud("non_workdays_map", nonWorkdaysMap)
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("logs-updated"))
       }
     } catch (e) {
-      console.error("Failed to save to IndexedDB:", e)
+      console.error("Failed to save and sync logs:", e)
     }
   }
 
@@ -257,7 +279,9 @@ export default function DailyLogsPage() {
 
       const zip = new JSZip()
       const dateFormatted = log.date || "log"
-      zip.file(`Daily_Log_${dateFormatted}.pdf`, pdfBlob)
+      const safeName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+
+      zip.file(`${safeName}_Daily_Log_${dateFormatted}.pdf`, pdfBlob)
 
       if (log.photos && log.photos.length > 0) {
         const photoFolder = zip.folder("photos")
@@ -272,7 +296,7 @@ export default function DailyLogsPage() {
       }
 
       const zipContent = await zip.generateAsync({ type: "blob" })
-      saveAs(zipContent, `Daily_Log_${dateFormatted}_Export.zip`)
+      saveAs(zipContent, `${safeName}_Daily_Log_${dateFormatted}_Export.zip`)
     } catch (err) {
       console.error("Export failed:", err)
     } finally {
@@ -290,6 +314,7 @@ export default function DailyLogsPage() {
     const zip = new JSZip()
     const pdfsFolder = zip.folder("Daily_Logs_PDFs")
     const photosFolder = zip.folder("All_Photos")
+    const safeName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
 
     try {
       const masterPdf = new jsPDF("p", "mm", "a4")
@@ -310,7 +335,7 @@ export default function DailyLogsPage() {
 
         const singlePdf = new jsPDF("p", "mm", "a4")
         singlePdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
-        pdfsFolder?.file(`Daily_Log_${log.date}.pdf`, singlePdf.output("blob"))
+        pdfsFolder?.file(`${safeName}_Daily_Log_${log.date}.pdf`, singlePdf.output("blob"))
 
         if (log.photos && log.photos.length > 0) {
           for (let pIdx = 0; pIdx < log.photos.length; pIdx++) {
@@ -325,11 +350,11 @@ export default function DailyLogsPage() {
       }
 
       setExportProgress("Finalizing ZIP archive...")
-      zip.file(`All_Daily_Logs_Combined.pdf`, masterPdf.output("blob"))
+      zip.file(`${safeName}_All_Daily_Logs_Combined.pdf`, masterPdf.output("blob"))
 
       const todayStr = getTodayInputDate()
       const zipContent = await zip.generateAsync({ type: "blob" })
-      saveAs(zipContent, `All_Daily_Logs_Export_${todayStr}.zip`)
+      saveAs(zipContent, `${safeName}_All_Daily_Logs_Export_${todayStr}.zip`)
     } catch (err) {
       console.error("Export all failed:", err)
     } finally {
@@ -702,7 +727,7 @@ export default function DailyLogsPage() {
           >
             <div className="border-b pb-3">
               <h2 className="text-lg font-bold">Daily Log Entry</h2>
-              <p className="text-xs text-slate-500">Site Documentation</p>
+              <p className="text-xs text-slate-500">{projectName} - Site Documentation</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -765,7 +790,7 @@ export default function DailyLogsPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.02
+        CleanBuild v1.04
       </div>
       
     </main>

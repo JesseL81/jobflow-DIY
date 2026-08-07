@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -28,6 +28,8 @@ interface DailyLog {
 interface PunchItem {
   id: number
   text: string
+  category: string
+  notes?: string
   completed: boolean
 }
 
@@ -53,9 +55,10 @@ export default function DashboardPage() {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false)
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null)
 
-  // Load real-time data from IndexedDB
+  // Load real-time data from IndexedDB & Cloud
   const loadDashboardData = async () => {
     try {
+      // 1. Instant Offline Load (from local browser storage)
       const savedExpenses = await get<Expense[]>("builderlite_expenses")
       const savedBudget = await get<number>("builderlite_total_budget")
       const savedLogs = await get<DailyLog[]>("daily_logs_data")
@@ -67,6 +70,21 @@ export default function DashboardPage() {
       if (savedLogs) setLogs(savedLogs)
       if (savedNonWorkdays) setNonWorkdaysMap(savedNonWorkdays)
       if (savedPunch) setPunchList(savedPunch)
+
+      // 2. Silent Cloud Sync (Pulls the latest data if you updated it on another device)
+      const cloudPunch = await syncManager.pullFromCloud("jobflow_punch_list")
+      const cloudExpenses = await syncManager.pullFromCloud("builderlite_expenses")
+      const cloudBudget = await syncManager.pullFromCloud("builderlite_total_budget")
+      const cloudLogs = await syncManager.pullFromCloud("daily_logs_data")
+      const cloudNonWorkdays = await syncManager.pullFromCloud("non_workdays_map")
+
+      // Immediately update the UI if the cloud had newer data
+      if (cloudPunch) setPunchList(cloudPunch)
+      if (cloudExpenses) setExpenses(cloudExpenses)
+      if (cloudBudget !== undefined && cloudBudget !== null) setTotalBudget(cloudBudget)
+      if (cloudLogs) setLogs(cloudLogs)
+      if (cloudNonWorkdays) setNonWorkdaysMap(cloudNonWorkdays)
+
     } catch (e) {
       console.error("Error loading dashboard data:", e)
     }
@@ -85,25 +103,38 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Punch List Logic
+  // Punch List Logic (Cloud-Synced)
   const handleAddPunchItem = async () => {
     if (!newPunchText.trim()) return
-    const updated = [...punchList, { id: Date.now(), text: newPunchText.trim(), completed: false }]
+    const newItem: PunchItem = { 
+      id: Date.now(), 
+      text: newPunchText.trim(), 
+      category: "General To-Do", 
+      completed: false 
+    }
+    const updated = [...punchList, newItem]
     setPunchList(updated)
     setNewPunchText("")
+    
+    // Save locally, then push instantly to the cloud
     await set("jobflow_punch_list", updated)
+    await syncManager.pushToCloud("jobflow_punch_list", updated)
   }
 
   const handleTogglePunch = async (id: number) => {
     const updated = punchList.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
     setPunchList(updated)
+    
     await set("jobflow_punch_list", updated)
+    await syncManager.pushToCloud("jobflow_punch_list", updated)
   }
 
   const handleDeletePunch = async (id: number) => {
     const updated = punchList.filter((item) => item.id !== id)
     setPunchList(updated)
+    
     await set("jobflow_punch_list", updated)
+    await syncManager.pushToCloud("jobflow_punch_list", updated)
   }
 
   // Punch List Counter Calculations
@@ -237,7 +268,12 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Progress value={percentBudgetUsed} className="h-3 bg-slate-100" />
+                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                  <div 
+                    className="h-full bg-emerald-500 transition-all duration-500" 
+                    style={{ width: `${percentBudgetUsed}%` }} 
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -251,7 +287,12 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Progress value={percentTimeUsed} className="h-3 bg-slate-100" />
+                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                  <div 
+                    className="h-full bg-blue-600 transition-all duration-500" 
+                    style={{ width: `${percentTimeUsed}%` }} 
+                  />
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -265,15 +306,25 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-sm font-bold text-slate-900">✅ Site Punch List / To-Do's</CardTitle>
                   
-                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2.5 py-0.5 rounded">
-                    {completedPunchItems} of {totalPunchItems} Completed ({percentPunchCompleted}%)
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2.5 py-0.5 rounded">
+                      {completedPunchItems} of {totalPunchItems} Completed ({percentPunchCompleted}%)
+                    </span>
+                    <Link href="/punch-list" className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                      View All →
+                    </Link>
+                  </div>
                 </div>
                 <CardDescription className="text-xs">Track quick daily tasks and micro-to-do items.</CardDescription>
 
                 {totalPunchItems > 0 && (
-                  <div className="pt-1">
-                    <Progress value={percentPunchCompleted} className="h-1.5 bg-slate-100" />
+                  <div className="pt-2">
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                      <div 
+                        className="h-full bg-blue-600 transition-all duration-500" 
+                        style={{ width: `${percentPunchCompleted}%` }} 
+                      />
+                    </div>
                   </div>
                 )}
               </CardHeader>
@@ -284,10 +335,10 @@ export default function DashboardPage() {
                     placeholder="Add to-do item (e.g. Return fittings, Call inspector)..."
                     value={newPunchText}
                     onChange={(e) => setNewPunchText(e.target.value)}
-                    className="text-xs h-8"
+                    className="text-xs h-9 shadow-sm"
                     onKeyDown={(e) => e.key === "Enter" && handleAddPunchItem()}
                   />
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 px-3" onClick={handleAddPunchItem}>
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-4 shadow-sm" onClick={handleAddPunchItem}>
                     Add
                   </Button>
                 </div>
@@ -480,7 +531,7 @@ export default function DashboardPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
+        CleanBuild v1.05
       </div>
 
     </main>

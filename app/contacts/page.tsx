@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
+import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -87,7 +89,7 @@ const INITIAL_CONTACTS: Contact[] = [
 ]
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS)
+  const [contacts, setContacts] = useState<Contact[]>([])
   const [activeContactId, setActiveContactId] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -103,32 +105,53 @@ export default function ContactsPage() {
   const [newNotes, setNewNotes] = useState("")
   const [newStatus, setNewStatus] = useState<"Active" | "Preferred" | "On Hold">("Active")
 
-  // 1. Load saved contacts from LocalStorage when page mounts
+  // --- LOCAL STORAGE & CLOUD SYNC: READ ON MOUNT ---
   useEffect(() => {
-    const savedContacts = localStorage.getItem("jobflow_contacts")
-    if (savedContacts) {
+    async function loadData() {
       try {
-        const parsed = JSON.parse(savedContacts)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setContacts(parsed)
-          setActiveContactId(parsed[0].id)
+        // 1. Instant Offline Load (from IndexedDB)
+        const savedContacts = await get<Contact[]>("jobflow_contacts")
+        if (savedContacts && Array.isArray(savedContacts) && savedContacts.length > 0) {
+          setContacts(savedContacts)
+          setActiveContactId(savedContacts[0].id)
         } else {
+          setContacts(INITIAL_CONTACTS)
           setActiveContactId(INITIAL_CONTACTS[0].id)
         }
-      } catch (err) {
-        console.error("Failed to parse contacts from localStorage", err)
-        setActiveContactId(INITIAL_CONTACTS[0].id)
-      }
-    } else {
-      setActiveContactId(INITIAL_CONTACTS[0].id)
-    }
-    setIsLoaded(true)
-  }, [])
 
-  // 2. Save contacts to LocalStorage whenever they change
+        setIsLoaded(true) // UI renders instantly
+
+        // 2. Silent Cloud Pull
+        const cloudContacts = await syncManager.pullFromCloud("jobflow_contacts")
+        if (cloudContacts && Array.isArray(cloudContacts) && cloudContacts.length > 0) {
+          setContacts(cloudContacts)
+          // If the currently active contact ID isn't in the newly pulled list, reset to the first one
+          if (!cloudContacts.find(c => c.id === activeContactId)) {
+            setActiveContactId(cloudContacts[0].id)
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load contacts:", err)
+        setContacts(INITIAL_CONTACTS)
+        setActiveContactId(INITIAL_CONTACTS[0].id)
+        setIsLoaded(true)
+      }
+    }
+    loadData()
+  }, [activeContactId])
+
+  // --- LOCAL STORAGE & CLOUD SYNC: SAVE ON CHANGE ---
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem("jobflow_contacts", JSON.stringify(contacts))
+      const syncData = async () => {
+        try {
+          await set("jobflow_contacts", contacts)
+          await syncManager.pushToCloud("jobflow_contacts", contacts)
+        } catch (e) {
+          console.error("Failed to sync contacts:", e)
+        }
+      }
+      syncData()
     }
   }, [contacts, isLoaded])
 
@@ -486,7 +509,7 @@ export default function ContactsPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.02
+        CleanBuild v1.03
       </div>
       
     </main>

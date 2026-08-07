@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -94,7 +95,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
 ]
 
 export default function SelectionsPage() {
-  const [items, setItems] = useState<SelectionItem[]>(INITIAL_SELECTIONS)
+  const [items, setItems] = useState<SelectionItem[]>([])
   const [categoryBudgets, setCategoryBudgets] = useState<Record<string, number>>({
     "Plumbing Fixtures": 500,
     "Tile & Flooring": 800,
@@ -123,33 +124,59 @@ export default function SelectionsPage() {
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Selected")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
 
-  // --- LOCAL STORAGE READ ---
+  // --- LOCAL STORAGE & CLOUD SYNC READ ---
   useEffect(() => {
-    const saved = localStorage.getItem("jobflow_selections_items")
-    const savedBudgets = localStorage.getItem("jobflow_selections_budgets")
-    if (saved) {
+    async function loadData() {
       try {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) setItems(parsed)
+        // 1. Instant Offline Load (Migrated to IndexedDB)
+        const savedItems = await get<SelectionItem[]>("jobflow_selections_items")
+        const savedBudgets = await get<Record<string, number>>("jobflow_selections_budgets")
+
+        if (savedItems && Array.isArray(savedItems) && savedItems.length > 0) {
+          setItems(savedItems)
+        } else {
+          setItems(INITIAL_SELECTIONS)
+        }
+
+        if (savedBudgets) {
+          setCategoryBudgets(savedBudgets)
+        }
+
+        setIsLoaded(true)
+
+        // 2. Silent Cloud Pull
+        const cloudItems = await syncManager.pullFromCloud("jobflow_selections_items")
+        const cloudBudgets = await syncManager.pullFromCloud("jobflow_selections_budgets")
+
+        if (cloudItems && Array.isArray(cloudItems)) {
+          setItems(cloudItems)
+        }
+        if (cloudBudgets) {
+          setCategoryBudgets(cloudBudgets)
+        }
       } catch (e) {
-        console.error(e)
+        console.error("Error loading selections:", e)
+        setIsLoaded(true)
       }
     }
-    if (savedBudgets) {
-      try {
-        setCategoryBudgets(JSON.parse(savedBudgets))
-      } catch (e) {
-        console.error(e)
-      }
-    }
-    setIsLoaded(true)
+    loadData()
   }, [])
 
-  // --- LOCAL STORAGE SAVE ---
+  // --- LOCAL STORAGE & CLOUD SYNC SAVE ---
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem("jobflow_selections_items", JSON.stringify(items))
-      localStorage.setItem("jobflow_selections_budgets", JSON.stringify(categoryBudgets))
+      const syncData = async () => {
+        try {
+          await set("jobflow_selections_items", items)
+          await syncManager.pushToCloud("jobflow_selections_items", items)
+
+          await set("jobflow_selections_budgets", categoryBudgets)
+          await syncManager.pushToCloud("jobflow_selections_budgets", categoryBudgets)
+        } catch (e) {
+          console.error("Failed to sync selections:", e)
+        }
+      }
+      syncData()
     }
   }, [items, categoryBudgets, isLoaded])
 
@@ -263,6 +290,7 @@ export default function SelectionsPage() {
       setItems((prev) => [updatedItem, ...prev])
     }
 
+    // Handle syncing the item cost to the Expenses Tab and Cloud
     if (formSyncToExpenses) {
       try {
         const existingExpenses = (await get<ExpenseItem[]>("builderlite_expenses")) || []
@@ -278,7 +306,9 @@ export default function SelectionsPage() {
           date: new Date().toISOString().split("T")[0],
         }
 
-        await set("builderlite_expenses", [newExpenseRecord, ...filteredExpenses])
+        const newExpenseList = [newExpenseRecord, ...filteredExpenses]
+        await set("builderlite_expenses", newExpenseList)
+        await syncManager.pushToCloud("builderlite_expenses", newExpenseList)
         window.dispatchEvent(new Event("expenses-updated"))
       } catch (err) {
         console.error(err)
@@ -292,10 +322,13 @@ export default function SelectionsPage() {
   const handleDeleteItem = async () => {
     if (!editingItem) return
     setItems((prev) => prev.filter((i) => i.id !== editingItem.id))
+    
+    // Also remove from Expenses/Cloud if it was synced
     try {
       const existingExpenses = (await get<ExpenseItem[]>("builderlite_expenses")) || []
       const filteredExpenses = existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
       await set("builderlite_expenses", filteredExpenses)
+      await syncManager.pushToCloud("builderlite_expenses", filteredExpenses)
       window.dispatchEvent(new Event("expenses-updated"))
     } catch (err) {
       console.error(err)
@@ -682,7 +715,7 @@ export default function SelectionsPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
+        CleanBuild v1.02
       </div>
     </main>
   )

@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { get, set as idbSet } from "idb-keyval"
+import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -100,63 +101,94 @@ export default function SchedulePage() {
   const [tasks, setTasks] = useState<CalendarTask[]>(INITIAL_TASKS)
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // --- LOCAL STORAGE PERSISTENCE: READ ON MOUNT ---
+  // --- LOCAL STORAGE -> CLOUD SYNC: READ ON MOUNT ---
   useEffect(() => {
-    const savedTasks = localStorage.getItem("jobflow_calendar_tasks")
-    if (savedTasks) {
+    const loadScheduleData = async () => {
       try {
-        const parsed = JSON.parse(savedTasks)
-        if (Array.isArray(parsed) && parsed.length > 0) setTasks(parsed)
-      } catch (e) { console.error(e) }
+        // 1. Instant Offline Load (from IndexedDB)
+        const savedTasks = await get<CalendarTask[]>("jobflow_calendar_tasks")
+        const savedCustom = await get<CustomNonWorkday[]>("jobflow_custom_nonworkdays")
+        const savedExplicit = await get<string[]>("jobflow_explicit_working_days")
+        const savedSatOff = await get<boolean>("jobflow_saturdays_off")
+        const savedSunOff = await get<boolean>("jobflow_sundays_off")
+        const savedLogMap = await get<Record<string, string>>("non_workdays_map")
+
+        if (savedTasks) setTasks(savedTasks)
+        if (savedCustom) setCustomNonWorkdays(savedCustom)
+        if (savedExplicit) setExplicitWorkingDays(savedExplicit)
+        if (savedSatOff !== undefined) setSaturdaysOff(savedSatOff)
+        if (savedSunOff !== undefined) setSundaysOff(savedSunOff)
+        if (savedLogMap) {
+          const formatted = Object.entries(savedLogMap).map(([date, reason]) => ({
+            date, title: reason ? `${reason}` : "Non-Workday (Log)", isFromLog: true
+          }))
+          setLogNonWorkdays(formatted)
+        }
+
+        setIsLoaded(true) // UI renders instantly
+
+        // 2. Silent Cloud Pull
+        const cloudTasks = await syncManager.pullFromCloud("jobflow_calendar_tasks")
+        const cloudCustom = await syncManager.pullFromCloud("jobflow_custom_nonworkdays")
+        const cloudExplicit = await syncManager.pullFromCloud("jobflow_explicit_working_days")
+        const cloudSatOff = await syncManager.pullFromCloud("jobflow_saturdays_off")
+        const cloudSunOff = await syncManager.pullFromCloud("jobflow_sundays_off")
+        const cloudLogMap = await syncManager.pullFromCloud("non_workdays_map")
+
+        if (cloudTasks) setTasks(cloudTasks)
+        if (cloudCustom) setCustomNonWorkdays(cloudCustom)
+        if (cloudExplicit) setExplicitWorkingDays(cloudExplicit)
+        if (cloudSatOff !== undefined && cloudSatOff !== null) setSaturdaysOff(cloudSatOff)
+        if (cloudSunOff !== undefined && cloudSunOff !== null) setSundaysOff(cloudSunOff)
+        if (cloudLogMap) {
+          const formatted = Object.entries(cloudLogMap).map(([date, reason]) => ({
+            date, title: (reason as string) || "Non-Workday (Log)", isFromLog: true
+          }))
+          setLogNonWorkdays(formatted)
+        }
+
+      } catch (e) {
+        console.error("Error loading schedule data:", e)
+        setIsLoaded(true)
+      }
     }
-
-    const savedNonWorkdays = localStorage.getItem("jobflow_custom_nonworkdays")
-    if (savedNonWorkdays) {
-      try {
-        const parsed = JSON.parse(savedNonWorkdays)
-        if (Array.isArray(parsed)) setCustomNonWorkdays(parsed)
-      } catch (e) { console.error(e) }
-    }
-
-    const savedWorkingDays = localStorage.getItem("jobflow_explicit_working_days")
-    if (savedWorkingDays) {
-      try {
-        const parsed = JSON.parse(savedWorkingDays)
-        if (Array.isArray(parsed)) setExplicitWorkingDays(parsed)
-      } catch (e) { console.error(e) }
-    }
-
-    const savedSatOff = localStorage.getItem("jobflow_saturdays_off")
-    const savedSunOff = localStorage.getItem("jobflow_sundays_off")
-
-    if (savedSatOff !== null) setSaturdaysOff(savedSatOff === "true")
-    if (savedSunOff !== null) setSundaysOff(savedSunOff === "true")
-
-    setIsLoaded(true)
+    loadScheduleData()
   }, [])
 
-  // --- LOCAL STORAGE PERSISTENCE: SAVE ON CHANGE ---
+  // --- AUTOMATIC CLOUD PUSH ON CHANGE ---
   useEffect(() => {
-    if (isLoaded) localStorage.setItem("jobflow_calendar_tasks", JSON.stringify(tasks))
+    if (isLoaded) {
+      set("jobflow_calendar_tasks", tasks)
+      syncManager.pushToCloud("jobflow_calendar_tasks", tasks)
+    }
   }, [tasks, isLoaded])
 
   useEffect(() => {
-    if (isLoaded) localStorage.setItem("jobflow_custom_nonworkdays", JSON.stringify(customNonWorkdays))
+    if (isLoaded) {
+      set("jobflow_custom_nonworkdays", customNonWorkdays)
+      syncManager.pushToCloud("jobflow_custom_nonworkdays", customNonWorkdays)
+    }
   }, [customNonWorkdays, isLoaded])
 
   useEffect(() => {
-    if (isLoaded) localStorage.setItem("jobflow_explicit_working_days", JSON.stringify(explicitWorkingDays))
+    if (isLoaded) {
+      set("jobflow_explicit_working_days", explicitWorkingDays)
+      syncManager.pushToCloud("jobflow_explicit_working_days", explicitWorkingDays)
+    }
   }, [explicitWorkingDays, isLoaded])
 
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem("jobflow_saturdays_off", String(saturdaysOff))
-      localStorage.setItem("jobflow_sundays_off", String(sundaysOff))
+      set("jobflow_saturdays_off", saturdaysOff)
+      set("jobflow_sundays_off", sundaysOff)
+      syncManager.pushToCloud("jobflow_saturdays_off", saturdaysOff)
+      syncManager.pushToCloud("jobflow_sundays_off", sundaysOff)
     }
   }, [saturdaysOff, sundaysOff, isLoaded])
 
-  const loadLogNonWorkdays = async () => {
-    try {
+  // Keep Log Non-Workdays mapped if updated from another tab
+  useEffect(() => {
+    const handleSync = async () => {
       const map = await get<Record<string, string>>("non_workdays_map")
       if (map) {
         const formatted: CustomNonWorkday[] = Object.entries(map).map(([date, reason]) => ({
@@ -165,15 +197,8 @@ export default function SchedulePage() {
           isFromLog: true,
         }))
         setLogNonWorkdays(formatted)
-      } else {
-        setLogNonWorkdays([])
       }
-    } catch (e) { console.error(e) }
-  }
-
-  useEffect(() => {
-    loadLogNonWorkdays()
-    const handleSync = () => loadLogNonWorkdays()
+    }
     window.addEventListener("logs-updated", handleSync)
     return () => window.removeEventListener("logs-updated", handleSync)
   }, [])
@@ -449,7 +474,8 @@ export default function SchedulePage() {
 
       if (logMapChanged) {
         try {
-          await idbSet("non_workdays_map", currentLogMap)
+          await set("non_workdays_map", currentLogMap)
+          await syncManager.pushToCloud("non_workdays_map", currentLogMap)
           window.dispatchEvent(new Event("logs-updated"))
         } catch (e) { console.error(e) }
       }
@@ -961,7 +987,7 @@ export default function SchedulePage() {
       
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.03
+        CleanBuild v1.04
       </div>
     </main>
   )

@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import SidebarNav from "@/components/sidebar-nav"
+import ClientLayout from "@/components/client-layout"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -18,18 +18,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.className} bg-slate-900 text-slate-100 flex min-h-screen`}
+        className={`${inter.className} bg-slate-900 text-slate-100`}
         suppressHydrationWarning
       >
-        {/* Left Sidebar Navigation */}
-        <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 shrink-0">
-          <SidebarNav />
-        </aside>
-
-        {/* Main Content Area */}
-        <div className="flex-1 bg-slate-100 text-slate-900 overflow-y-auto">
-          {children}
-        </div>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -38,6 +39,7 @@ const formatDisplayDate = (dateStr: string) => {
 export default function ExpenseTracker() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [totalBudget, setTotalBudget] = useState<number>(23402)
+  const [projectName, setProjectName] = useState("My Project")
 
   // Modal States
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -55,10 +57,11 @@ export default function ExpenseTracker() {
   // Lightbox State
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 
-  // Load from IndexedDB
+  // Load from IndexedDB and LocalStorage & Cloud
   useEffect(() => {
     async function loadData() {
       try {
+        // 1. Instant Offline Load
         const savedExpenses = await get<Expense[]>("builderlite_expenses")
         const savedBudget = await get<number>("builderlite_total_budget")
 
@@ -66,33 +69,55 @@ export default function ExpenseTracker() {
           setExpenses(savedExpenses)
         } else {
           setExpenses(INITIAL_EXPENSES)
-          await saveExpensesToIDB(INITIAL_EXPENSES)
         }
 
-        if (savedBudget !== undefined) {
+        if (savedBudget !== undefined && savedBudget !== null) {
           setTotalBudget(savedBudget)
           setTempBudget(savedBudget.toString())
-        } else {
-          await saveBudgetToIDB(23402)
         }
+
+        // 2. Silent Cloud Pull (Pulls latest data in background)
+        const cloudExpenses = await syncManager.pullFromCloud("builderlite_expenses")
+        const cloudBudget = await syncManager.pullFromCloud("builderlite_total_budget")
+
+        if (cloudExpenses && Array.isArray(cloudExpenses)) {
+          setExpenses(cloudExpenses)
+        }
+        
+        if (cloudBudget !== undefined && cloudBudget !== null) {
+          setTotalBudget(cloudBudget)
+          setTempBudget(cloudBudget.toString())
+        }
+
       } catch (e) {
-        console.error("Failed to load expenses from IndexedDB:", e)
+        console.error("Failed to load expenses:", e)
         setExpenses(INITIAL_EXPENSES)
       }
     }
     loadData()
+
+    const loadProjectName = () => {
+      const savedName = localStorage.getItem("cleanbuild_project_name")
+      if (savedName) setProjectName(savedName)
+    }
+    loadProjectName()
+    
+    // Listen for name updates from the sidebar
+    window.addEventListener("project-name-updated", loadProjectName)
+    return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
 
-  // Save changes to IndexedDB + trigger sync event
+  // Save changes to IndexedDB + Cloud + trigger sync event
   const saveExpensesToIDB = async (updated: Expense[]) => {
     setExpenses(updated)
     try {
       await set("builderlite_expenses", updated)
+      await syncManager.pushToCloud("builderlite_expenses", updated)
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("expenses-updated"))
       }
     } catch (e) {
-      console.error("Failed to save expenses:", e)
+      console.error("Failed to save and sync expenses:", e)
     }
   }
 
@@ -100,11 +125,12 @@ export default function ExpenseTracker() {
     setTotalBudget(newBudget)
     try {
       await set("builderlite_total_budget", newBudget)
+      await syncManager.pushToCloud("builderlite_total_budget", newBudget)
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("expenses-updated"))
       }
     } catch (e) {
-      console.error("Failed to save budget:", e)
+      console.error("Failed to save and sync budget:", e)
     }
   }
 
@@ -117,9 +143,8 @@ export default function ExpenseTracker() {
   const percentUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0
 
   // Circular Progress Math
-  const radius = 24; // Increased radius for a larger circle
+  const radius = 24;
   const circumference = 2 * Math.PI * radius;
-  // Cap the visual ring stroke at 100% so it doesn't wrap backwards, even if text shows > 100%
   const strokeDashoffset = circumference - (Math.min(percentUsed, 100) / 100) * circumference;
 
   // Open Modal for Add/Edit
@@ -136,8 +161,8 @@ export default function ExpenseTracker() {
       const todayStr = new Date().toISOString().split("T")[0]
       setDate(todayStr)
       setDescription("")
-      setMaterials("") // Empty placeholder
-      setLabor("")     // Empty placeholder
+      setMaterials("") 
+      setLabor("")     
       setReceiptPhoto("")
     }
     setIsDialogOpen(true)
@@ -208,23 +233,35 @@ export default function ExpenseTracker() {
     setIsBudgetDialogOpen(false)
   }
 
-  // Export to CSV
+  // Export to CSV with Branded Project Name & Clean Math formatting
   const handleExportCSV = () => {
-    const headers = ["ID", "Date", "Description", "Materials ($)", "Labor ($)", "Total ($)"]
-    const rows = expenses.map((e) => [
-      e.id,
-      e.date,
-      `"${e.description.replace(/"/g, '""')}"`,
-      e.materials,
-      e.labor,
-      e.materials + e.labor,
-    ])
+    const safeName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+    
+    // Removed ID Column Header
+    const headers = ["Date", "Description", "Materials ($)", "Labor ($)", "Total ($)"]
+    
+    const rows = expenses.map((e) => {
+      const mat = e.materials || 0;
+      const lab = e.labor || 0;
+      return [
+        e.date,
+        `"${e.description.replace(/"/g, '""')}"`,
+        mat.toFixed(2), // Forced to 2 decimal places
+        lab.toFixed(2), // Forced to 2 decimal places
+        (mat + lab).toFixed(2), // Forced to 2 decimal places
+      ]
+    })
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    // Inject Text-Based Logo/Branding and project title at the top of the CSV
+    const brandingRow = `"CleanBuild - Project Expense Report"\n`
+    const titleRow = `"Project: ${projectName.replace(/"/g, '""')}"\n\n`
+    
+    const csvContent = "data:text/csv;charset=utf-8," + brandingRow + titleRow + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
     link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `Expenses_Report_${new Date().toISOString().split("T")[0]}.csv`)
+    link.setAttribute("download", `${safeName}_Expenses_Report_${new Date().toISOString().split("T")[0]}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -311,7 +348,7 @@ export default function ExpenseTracker() {
 
             <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
               <CardHeader className="pb-2 p-5">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-center">
                   <div>
                     <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       Total Spent
@@ -585,7 +622,7 @@ export default function ExpenseTracker() {
       
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.04
+        CleanBuild v1.07
       </div>
     </main>
   )
