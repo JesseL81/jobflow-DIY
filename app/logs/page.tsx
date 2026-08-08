@@ -68,7 +68,6 @@ export default function DailyLogsPage() {
   const [projectName, setProjectName] = useState("My Project")
   const [isLogDialogOpen, setIsLogDialogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<DailyLog | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
 
   // Form State
   const [logDate, setLogDate] = useState("")
@@ -87,6 +86,7 @@ export default function DailyLogsPage() {
   const exportCardRef = useRef<HTMLDivElement>(null)
   const [exportLogTarget, setExportLogTarget] = useState<DailyLog | null>(null)
 
+  // Load logs and project name from IndexedDB/LocalStorage
   useEffect(() => {
     async function loadLogs() {
       try {
@@ -95,14 +95,15 @@ export default function DailyLogsPage() {
           setLogs(savedLogs)
         } else {
           setLogs(INITIAL_LOGS)
+          await saveAndSyncLogs(INITIAL_LOGS)
         }
-
+        
         const cloudLogs = await syncManager.pullFromCloud("daily_logs_data")
         if (cloudLogs) {
           setLogs(cloudLogs)
         }
       } catch (e) {
-        console.error("Error loading logs:", e)
+        console.error("Error loading logs from IndexedDB:", e)
         setLogs(INITIAL_LOGS)
       }
     }
@@ -118,11 +119,12 @@ export default function DailyLogsPage() {
     return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
 
+  // Save logs to state & IndexedDB + BACKGROUND sync to cloud
   const saveAndSyncLogs = async (updatedLogs: DailyLog[]) => {
     setLogs(updatedLogs)
     try {
+      // 1. Instant Offline Local Save
       await set("daily_logs_data", updatedLogs)
-      await syncManager.pushToCloud("daily_logs_data", updatedLogs)
 
       const nonWorkdaysMap = updatedLogs
         .filter((l) => l.isNonWorkday)
@@ -133,13 +135,18 @@ export default function DailyLogsPage() {
         }, {} as Record<string, string>)
 
       await set("non_workdays_map", nonWorkdaysMap)
-      await syncManager.pushToCloud("non_workdays_map", nonWorkdaysMap)
 
+      // Notify other tabs instantly
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("logs-updated"))
       }
+
+      // 2. BACKGROUND CLOUD PUSH (Removed 'await' so UI never freezes)
+      syncManager.pushToCloud("daily_logs_data", updatedLogs).catch(e => console.error("Cloud logs sync failed:", e))
+      syncManager.pushToCloud("non_workdays_map", nonWorkdaysMap).catch(e => console.error("Cloud map sync failed:", e))
+
     } catch (e) {
-      console.error("Failed to save and sync logs:", e)
+      console.error("Failed to save logs locally:", e)
     }
   }
 
@@ -147,6 +154,7 @@ export default function DailyLogsPage() {
     return [...logs].sort((a, b) => b.date.localeCompare(a.date))
   }, [logs])
 
+  // Automatic Weather Fetcher via Open-Meteo API
   const fetchWeatherForDate = async (targetDateStr: string) => {
     setIsFetchingWeather(true)
     try {
@@ -210,6 +218,7 @@ export default function DailyLogsPage() {
     return "Overcast"
   }
 
+  // Convert Base64 or Image URL to clean JPG Blob
   const fetchJpgBlob = async (url: string): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
@@ -238,6 +247,7 @@ export default function DailyLogsPage() {
     })
   }
 
+  // Helper function to capture a log card to a canvas
   const renderLogToCanvas = async (log: DailyLog): Promise<HTMLCanvasElement | null> => {
     setExportLogTarget(log)
     await new Promise((r) => setTimeout(r, 150))
@@ -250,6 +260,7 @@ export default function DailyLogsPage() {
     })
   }
 
+  // Export Single Log: PDF + JPG Photos in a ZIP
   const handleExportLogAndPhotos = async (log: DailyLog) => {
     setIsExporting(true)
     setExportProgress("Preparing export...")
@@ -295,6 +306,7 @@ export default function DailyLogsPage() {
     }
   }
 
+  // Export ALL Logs: Master PDF + individual PDFs + all photos in a ZIP package
   const handleExportAllLogs = async () => {
     if (sortedLogs.length === 0) return
 
@@ -435,9 +447,6 @@ export default function DailyLogsPage() {
 
   const handleSaveLog = async () => {
     if (!logNotes.trim() && !isNonWorkday) return
-    
-    // Disable the button to prevent duplicate submissions
-    setIsSaving(true)
 
     let updatedLogs: DailyLog[] = []
 
@@ -470,11 +479,10 @@ export default function DailyLogsPage() {
       ]
     }
 
-    // Await the local save and the cloud upload
+    // Await the local save ONLY. The cloud push happens silently in the background!
     await saveAndSyncLogs(updatedLogs)
     
-    // Unlock the button and close the modal
-    setIsSaving(false)
+    // Instantly close the modal
     setIsLogDialogOpen(false)
   }
 
@@ -730,11 +738,11 @@ export default function DailyLogsPage() {
           </div>
 
           <DialogFooter className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsLogDialogOpen(false)} disabled={isSaving}>
+            <Button variant="outline" onClick={() => setIsLogDialogOpen(false)}>
               Cancel
             </Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveLog} disabled={isSaving}>
-              {isSaving ? "Saving..." : editingLog ? "Update Log" : "Save Log"}
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveLog}>
+              {editingLog ? "Update Log" : "Save Log"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -809,7 +817,7 @@ export default function DailyLogsPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.07
+        CleanBuild v1.08
       </div>
       
     </main>

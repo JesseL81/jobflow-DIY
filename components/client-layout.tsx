@@ -87,10 +87,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
   }, [])
 
-  // 4. PULL-TO-REFRESH TOUCH HANDLERS
+  // 4. PREVENT PWA NATIVE BOUNCE (Rubber-banding)
+  useEffect(() => {
+    // This stops iOS from bouncing the whole app window when pinned to the home screen,
+    // allowing our custom pull-to-refresh to accurately capture the drag gesture!
+    document.body.style.overscrollBehaviorY = "none"
+    return () => {
+      document.body.style.overscrollBehaviorY = "auto"
+    }
+  }, [])
+
+  // 5. PULL-TO-REFRESH TOUCH HANDLERS
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Only track pulling if we are at the absolute top of the page
-    if (window.scrollY === 0) {
+    // Allow a small 5px margin in case the PWA status bar offsets the scroll slightly
+    if (window.scrollY <= 5) {
       touchStartY.current = e.touches[0].clientY
     }
   }
@@ -101,7 +111,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const distance = currentY - touchStartY.current
 
     // If pulling downwards while at the top of the page
-    if (distance > 0 && window.scrollY === 0) {
+    if (distance > 0 && window.scrollY <= 5) {
       // Create a resistance effect (max out at 80px visual drop)
       setPullProgress(Math.min(distance * 0.4, 80))
     }
@@ -110,8 +120,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const handleTouchEnd = () => {
     if (pullProgress > 60) {
       setIsRefreshing(true)
-      // Force a hard browser reload to dump cache and restart app
-      window.location.reload()
+      
+      // Fire instant sync commands behind the scenes just in case cache is stubborn
+      window.dispatchEvent(new Event("logs-updated"))
+      window.dispatchEvent(new Event("expenses-updated"))
+      window.dispatchEvent(new Event("project-name-updated"))
+
+      // Force a hard browser reload
+      setTimeout(() => {
+        window.location.reload()
+      }, 300)
     } else {
       setPullProgress(0)
     }
