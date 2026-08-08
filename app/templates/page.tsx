@@ -292,28 +292,30 @@ export default function TemplatesPage() {
           </p>
         </div>
 
-        {/* REBUILT IMPORT WIDGET: Strict width and flex constraints to prevent iOS Safari input overflow */}
-        <div className="w-full md:w-auto flex justify-center md:justify-end shrink-0 pt-2 md:pt-0">
-          <div className="bg-slate-800/80 p-4 sm:p-3 rounded-xl border border-slate-700 flex flex-col sm:flex-row sm:items-end gap-3.5 w-full max-w-[280px] sm:max-w-none shadow-inner mx-auto md:mx-0 box-border">
-            <div className="w-full min-w-0 sm:w-auto flex flex-col">
-              <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 ml-0.5">
-                Target Start Date
-              </Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full sm:w-[160px] shadow-inner box-border block"
-              />
+        {/* REBUILT IMPORT WIDGET: Fully restructured layout container to bust cache and force iOS bounds */}
+        <div className="w-full md:w-auto flex shrink-0 pt-2 md:pt-0">
+          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 w-full md:w-auto shadow-inner">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3 w-full">
+              <div className="w-full sm:w-[180px]">
+                <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 ml-0.5">
+                  Target Start Date
+                </Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full"
+                />
+              </div>
+              <Button
+                onClick={handleImportToSchedule}
+                disabled={isImporting}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 w-full sm:w-auto px-6 shadow-md"
+              >
+                {isImporting ? "Importing..." : "🚀 Import to Schedule"}
+              </Button>
             </div>
-            <Button
-              onClick={handleImportToSchedule}
-              disabled={isImporting}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 px-5 shadow-md w-full sm:w-auto transition-all box-border block"
-            >
-              {isImporting ? "Importing..." : "🚀 Import to Schedule"}
-            </Button>
           </div>
         </div>
       </div>
@@ -371,7 +373,6 @@ export default function TemplatesPage() {
 
       {/* BOTTOM SECTION: Preview Calendar */}
       <section className="space-y-3 flex-1">
-        {/* MOBLE STACK FIX APPLIED HERE */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider leading-snug">
             Schedule Preview Calendar — {activeTemplate.name} ({calendarWeeks.length} Weeks)
@@ -522,7 +523,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.10
+        CleanBuild v1.11
       </div>
       
     </main>

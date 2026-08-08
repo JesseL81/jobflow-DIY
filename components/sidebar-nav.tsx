@@ -53,26 +53,26 @@ export default function SidebarNav() {
   const [tempName, setTempName] = useState("")
 
   useEffect(() => {
-    const loadName = async () => {
+    // 1. INSTANT LOCAL LOAD: Prevent the flash by grabbing the local name immediately
+    const savedName = localStorage.getItem("cleanbuild_project_name")
+    if (savedName) {
+      setProjectName(savedName)
+    }
+
+    // 2. SILENT CLOUD VERIFY: Check the cloud in the background to ensure it's up to date
+    const verifyCloudName = async () => {
       try {
-        // Pull project name from the cloud first
         const cloudName = await syncManager.pullFromCloud("cleanbuild_project_name")
-        if (cloudName && typeof cloudName === "string") {
+        if (cloudName && typeof cloudName === "string" && cloudName !== savedName) {
           setProjectName(cloudName)
           localStorage.setItem("cleanbuild_project_name", cloudName)
           window.dispatchEvent(new Event("project-name-updated"))
-        } else {
-          // Fallback to local storage if cloud fails or is empty
-          const savedName = localStorage.getItem("cleanbuild_project_name")
-          if (savedName) setProjectName(savedName)
         }
       } catch (e) {
-        console.error(e)
-        const savedName = localStorage.getItem("cleanbuild_project_name")
-        if (savedName) setProjectName(savedName)
+        console.error("Failed to verify project name with cloud:", e)
       }
     }
-    loadName()
+    verifyCloudName()
   }, [])
 
   const handleSaveProjectName = async () => {
@@ -179,7 +179,7 @@ export default function SidebarNav() {
       {/* Version Tracker at the Bottom */}
       <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0">
         <span className="text-[11px] font-bold text-slate-600 tracking-widest uppercase">
-          CleanBuild v1.12
+          CleanBuild v1.13
         </span>
       </div>
     </div>
