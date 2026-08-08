@@ -282,7 +282,9 @@ export default function TemplatesPage() {
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
       {/* LOCKED HEIGHT HEADER BUBBLE: Auto-expands on mobile to fit the stacked box */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 mb-6 md:h-[140px] shrink-0">
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 mb-6 md:h-[140px] shrink-0 box-border">
+        
+        {/* Left Info Section */}
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📋 Project Templates</h1>
@@ -292,11 +294,12 @@ export default function TemplatesPage() {
           </p>
         </div>
 
-        {/* REBUILT IMPORT WIDGET: Fully restructured layout container to bust cache and force iOS bounds */}
-        <div className="w-full md:w-auto flex shrink-0 pt-2 md:pt-0">
-          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 w-full md:w-auto shadow-inner">
-            <div className="flex flex-col sm:flex-row sm:items-end gap-3 w-full">
-              <div className="w-full sm:w-[180px]">
+        {/* COMPLETELY REWRITTEN IMPORT WIDGET: Guaranteed responsive stack */}
+        <div className="w-full md:w-auto shrink-0 mt-2 md:mt-0">
+          <div className="bg-slate-800 p-4 md:p-3 rounded-xl border border-slate-700 shadow-inner w-full">
+            <div className="flex flex-col md:flex-row md:items-end gap-3 w-full">
+              
+              <div className="w-full md:w-[160px]">
                 <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 ml-0.5">
                   Target Start Date
                 </Label>
@@ -305,19 +308,22 @@ export default function TemplatesPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full"
+                  className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full shadow-inner px-3 box-border"
                 />
               </div>
+
               <Button
                 onClick={handleImportToSchedule}
                 disabled={isImporting}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 w-full sm:w-auto px-6 shadow-md"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 px-5 shadow-md w-full md:w-auto transition-all"
               >
                 {isImporting ? "Importing..." : "🚀 Import to Schedule"}
               </Button>
+
             </div>
           </div>
         </div>
+
       </div>
 
       {/* TOP SECTION: Horizontal Template Options */}
@@ -523,7 +529,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.11
+        CleanBuild v1.12
       </div>
       
     </main>
