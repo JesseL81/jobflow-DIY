@@ -68,7 +68,7 @@ export default function DailyLogsPage() {
   const [projectName, setProjectName] = useState("My Project")
   const [isLogDialogOpen, setIsLogDialogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<DailyLog | null>(null)
-  const [isSaving, setIsSaving] = useState(false) // Prevents multiple saves
+  const [isSaving, setIsSaving] = useState(false)
 
   // Form State
   const [logDate, setLogDate] = useState("")
@@ -388,9 +388,41 @@ export default function DailyLogsPage() {
 
     files.forEach((file) => {
       const reader = new FileReader()
-      reader.onloadend = () => {
-        if (reader.result) {
-          setLogPhotos((prev) => [...prev, reader.result as string])
+      
+      // Auto-compress the image to bypass cloud payload limits
+      reader.onload = (event) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement("canvas")
+          const MAX_WIDTH = 1200
+          const MAX_HEIGHT = 1200
+          let width = img.width
+          let height = img.height
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width
+              width = MAX_WIDTH
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height
+              height = MAX_HEIGHT
+            }
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext("2d")
+          ctx?.drawImage(img, 0, 0, width, height)
+
+          // Compress to 70% quality JPEG format
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7)
+          setLogPhotos((prev) => [...prev, compressedBase64])
+        }
+        
+        if (event.target?.result) {
+          img.src = event.target.result as string
         }
       }
       reader.readAsDataURL(file)
@@ -777,7 +809,7 @@ export default function DailyLogsPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.06
+        CleanBuild v1.07
       </div>
       
     </main>

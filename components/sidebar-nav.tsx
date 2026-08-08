@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { syncManager } from "@/lib/syncManager"
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
@@ -52,14 +53,40 @@ export default function SidebarNav() {
   const [tempName, setTempName] = useState("")
 
   useEffect(() => {
-    const savedName = localStorage.getItem("cleanbuild_project_name")
-    if (savedName) setProjectName(savedName)
+    const loadName = async () => {
+      try {
+        // Pull project name from the cloud first
+        const cloudName = await syncManager.pullFromCloud("cleanbuild_project_name")
+        if (cloudName && typeof cloudName === "string") {
+          setProjectName(cloudName)
+          localStorage.setItem("cleanbuild_project_name", cloudName)
+          window.dispatchEvent(new Event("project-name-updated"))
+        } else {
+          // Fallback to local storage if cloud fails or is empty
+          const savedName = localStorage.getItem("cleanbuild_project_name")
+          if (savedName) setProjectName(savedName)
+        }
+      } catch (e) {
+        console.error(e)
+        const savedName = localStorage.getItem("cleanbuild_project_name")
+        if (savedName) setProjectName(savedName)
+      }
+    }
+    loadName()
   }, [])
 
-  const handleSaveProjectName = () => {
+  const handleSaveProjectName = async () => {
     const finalName = tempName.trim() || "My Project"
     setProjectName(finalName)
     localStorage.setItem("cleanbuild_project_name", finalName)
+    
+    // Push the new name to the cloud instantly
+    try {
+      await syncManager.pushToCloud("cleanbuild_project_name", finalName)
+    } catch (e) {
+      console.error("Failed to sync project name:", e)
+    }
+
     // Dispatch event so exports on other tabs automatically catch the new name
     window.dispatchEvent(new Event("project-name-updated"))
     setIsEditingName(false)
@@ -152,7 +179,7 @@ export default function SidebarNav() {
       {/* Version Tracker at the Bottom */}
       <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0">
         <span className="text-[11px] font-bold text-slate-600 tracking-widest uppercase">
-          CleanBuild v1.0
+          CleanBuild v1.12
         </span>
       </div>
     </div>
