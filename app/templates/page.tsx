@@ -281,11 +281,11 @@ export default function TemplatesPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      {/* LOCKED HEIGHT HEADER BUBBLE: Auto-expands on mobile to fit the stacked box */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 mb-6 md:h-[140px] shrink-0 box-border">
+      {/* LOCKED HEIGHT HEADER BUBBLE */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between mb-6 md:h-[140px] shrink-0 box-border">
         
         {/* Left Info Section */}
-        <div className="flex-1">
+        <div className="flex-1 w-full">
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📋 Project Templates</h1>
           </div>
@@ -294,12 +294,14 @@ export default function TemplatesPage() {
           </p>
         </div>
 
-        {/* COMPLETELY REWRITTEN IMPORT WIDGET: Guaranteed responsive stack */}
-        <div className="w-full md:w-auto shrink-0 mt-2 md:mt-0">
-          <div className="bg-slate-800 p-4 md:p-3 rounded-xl border border-slate-700 shadow-inner w-full">
-            <div className="flex flex-col md:flex-row md:items-end gap-3 w-full">
+        {/* COMPLETELY REWRITTEN IMPORT WIDGET: Indestructible Block Layout */}
+        <div className="w-full md:w-auto shrink-0 mt-5 md:mt-0">
+          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-inner w-full md:w-auto box-border overflow-hidden">
+            {/* Mobile: Standard Block Stack | Desktop: Flex Row */}
+            <div className="block md:flex md:items-end md:gap-3 w-full">
               
-              <div className="w-full md:w-[160px]">
+              {/* Force the input box to be a block element on mobile */}
+              <div className="block mb-3 md:mb-0 w-full md:w-[160px]">
                 <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 ml-0.5">
                   Target Start Date
                 </Label>
@@ -312,10 +314,11 @@ export default function TemplatesPage() {
                 />
               </div>
 
+              {/* Force the button to be a full-width block element on mobile */}
               <Button
                 onClick={handleImportToSchedule}
                 disabled={isImporting}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 px-5 shadow-md w-full md:w-auto transition-all"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 px-5 shadow-md w-full md:w-auto transition-all box-border"
               >
                 {isImporting ? "Importing..." : "🚀 Import to Schedule"}
               </Button>
@@ -529,7 +532,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.12
+        CleanBuild v1.13
       </div>
       
     </main>
