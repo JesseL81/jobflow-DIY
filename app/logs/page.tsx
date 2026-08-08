@@ -68,6 +68,7 @@ export default function DailyLogsPage() {
   const [projectName, setProjectName] = useState("My Project")
   const [isLogDialogOpen, setIsLogDialogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<DailyLog | null>(null)
+  const [isSaving, setIsSaving] = useState(false) // Prevents multiple saves
 
   // Form State
   const [logDate, setLogDate] = useState("")
@@ -402,6 +403,9 @@ export default function DailyLogsPage() {
 
   const handleSaveLog = async () => {
     if (!logNotes.trim() && !isNonWorkday) return
+    
+    // Disable the button to prevent duplicate submissions
+    setIsSaving(true)
 
     let updatedLogs: DailyLog[] = []
 
@@ -434,7 +438,11 @@ export default function DailyLogsPage() {
       ]
     }
 
+    // Await the local save and the cloud upload
     await saveAndSyncLogs(updatedLogs)
+    
+    // Unlock the button and close the modal
+    setIsSaving(false)
     setIsLogDialogOpen(false)
   }
 
@@ -446,7 +454,7 @@ export default function DailyLogsPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📷 Daily Logs & Photos</h1>
@@ -456,7 +464,6 @@ export default function DailyLogsPage() {
           </p>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
         <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
           {sortedLogs.length > 0 && (
             <Button
@@ -691,11 +698,11 @@ export default function DailyLogsPage() {
           </div>
 
           <DialogFooter className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsLogDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsLogDialogOpen(false)} disabled={isSaving}>
               Cancel
             </Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveLog}>
-              {editingLog ? "Update Log" : "Save Log"}
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveLog} disabled={isSaving}>
+              {isSaving ? "Saving..." : editingLog ? "Update Log" : "Save Log"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -770,7 +777,7 @@ export default function DailyLogsPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.05
+        CleanBuild v1.06
       </div>
       
     </main>

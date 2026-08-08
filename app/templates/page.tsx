@@ -282,7 +282,7 @@ export default function TemplatesPage() {
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
       {/* LOCKED HEIGHT HEADER BUBBLE: Auto-expands on mobile to fit the stacked box */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 mb-6 md:h-[140px] shrink-0">
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📋 Project Templates</h1>
@@ -292,10 +292,10 @@ export default function TemplatesPage() {
           </p>
         </div>
 
-        {/* REBUILT IMPORT WIDGET: Stacks neatly on mobile, inline on desktop */}
-        <div className="w-full md:w-auto shrink-0 pt-2 md:pt-0">
-          <div className="bg-slate-800/80 p-3 sm:p-2.5 rounded-xl border border-slate-700 flex flex-col sm:flex-row sm:items-end gap-3 w-full shadow-inner">
-            <div className="flex-1 sm:flex-none">
+        {/* REBUILT IMPORT WIDGET: Compact, centered on mobile, inline on desktop */}
+        <div className="w-full md:w-auto flex justify-center md:justify-end shrink-0 pt-2 md:pt-0">
+          <div className="bg-slate-800/80 p-4 sm:p-3 rounded-xl border border-slate-700 flex flex-col sm:flex-row sm:items-end gap-3 w-full max-w-sm sm:max-w-none shadow-inner">
+            <div className="w-full sm:w-auto">
               <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 ml-0.5">
                 Target Start Date
               </Label>
@@ -304,7 +304,7 @@ export default function TemplatesPage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full sm:w-[150px] shadow-inner"
+                className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full sm:w-[160px] shadow-inner"
               />
             </div>
             <Button
@@ -371,8 +371,9 @@ export default function TemplatesPage() {
 
       {/* BOTTOM SECTION: Preview Calendar */}
       <section className="space-y-3 flex-1">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+        {/* MOBLE STACK FIX APPLIED HERE */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider leading-snug">
             Schedule Preview Calendar — {activeTemplate.name} ({calendarWeeks.length} Weeks)
           </h3>
           <span className="text-xs text-slate-500 font-medium">
@@ -521,7 +522,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.07
+        CleanBuild v1.09
       </div>
       
     </main>

@@ -200,18 +200,16 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        {/* ALWAYS VISIBLE PHOTO GALLERY BUTTON */}
         <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
-          {allPhotos.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
-              onClick={() => setIsGalleryOpen(true)}
-            >
-              🖼️ Photo Gallery ({allPhotos.length})
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            onClick={() => setIsGalleryOpen(true)}
+          >
+            🖼️ Photo Gallery ({allPhotos.length})
+          </Button>
         </div>
       </div>
 
@@ -455,17 +453,25 @@ export default function DashboardPage() {
           <DialogHeader>
             <DialogTitle>🖼️ Project Photo Gallery ({allPhotos.length} Photos)</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 py-4">
-            {allPhotos.map((photo, index) => (
-              <img
-                key={index}
-                src={photo}
-                alt={`Site photo ${index + 1}`}
-                className="h-32 w-full object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setSelectedPhotoIndex(index)}
-              />
-            ))}
-          </div>
+          
+          {/* EMPTY STATE MESSAGE FOR 0 PHOTOS */}
+          {allPhotos.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 text-sm border-2 border-dashed rounded-lg mt-4">
+              No photos have been uploaded yet.<br/> Add site photos inside your <strong>Daily Logs</strong> to see them gathered here!
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 py-4">
+              {allPhotos.map((photo, index) => (
+                <img
+                  key={index}
+                  src={photo}
+                  alt={`Site photo ${index + 1}`}
+                  className="h-32 w-full object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => setSelectedPhotoIndex(index)}
+                />
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -531,7 +537,7 @@ export default function DashboardPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.06
+        CleanBuild v1.07
       </div>
 
     </main>
