@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
@@ -43,6 +44,7 @@ function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGE
 
 export default function SidebarNav() {
   const pathname = usePathname()
+  const router = useRouter()
   
   // Project Name State
   const [projectName, setProjectName] = useState("My Project")
@@ -63,10 +65,15 @@ export default function SidebarNav() {
     setIsEditingName(false)
   }
 
+  const handleLogOut = async () => {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
   return (
-    <div className="w-full">
-      {/* Brand Header (With Logo, Title, and Editable Project Name) */}
-      <div className="px-4 pt-2 pb-5 flex flex-col gap-4">
+    <div className="w-full flex flex-col h-full">
+      {/* Brand Header */}
+      <div className="px-4 pt-2 pb-5 flex flex-col gap-4 shrink-0">
         
         {/* Top Row: Logo & Name perfectly inline */}
         <div className="flex items-center gap-3">
@@ -77,7 +84,7 @@ export default function SidebarNav() {
         </div>
         
         {/* Bottom Row: Editable Project Name */}
-        <div className="flex items-center group h-7">
+        <div className="flex items-center group h-7 mt-2">
           {isEditingName ? (
             <input
               autoFocus
@@ -106,10 +113,10 @@ export default function SidebarNav() {
       </div>
 
       {/* Explicit, Foolproof Bold Orange Line */}
-      <div className="mx-4 mb-6 h-[3px] bg-orange-500 rounded-full" />
+      <div className="mx-4 mb-4 h-[3px] bg-orange-500 rounded-full shrink-0" />
 
       {/* Navigation Links */}
-      <nav className="space-y-1.5 text-sm font-medium px-2">
+      <nav className="space-y-1.5 text-sm font-medium px-2 flex-1 overflow-y-auto pb-4">
         {navItems.map((item) => {
           const isActive = pathname === item.href
 
@@ -128,7 +135,26 @@ export default function SidebarNav() {
             </Link>
           )
         })}
+
+        {/* Divider */}
+        <div className="h-[1px] bg-slate-800/80 my-3 mx-2" />
+
+        {/* Log Out Button styled perfectly as the last tab */}
+        <button
+          onClick={handleLogOut}
+          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg transition-all text-slate-400 hover:text-white hover:bg-rose-600/80 text-left"
+        >
+          <span className="text-base">🚪</span>
+          <span>Sign Out</span>
+        </button>
       </nav>
+
+      {/* Version Tracker at the Bottom */}
+      <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0">
+        <span className="text-[11px] font-bold text-slate-600 tracking-widest uppercase">
+          CleanBuild v1.0
+        </span>
+      </div>
     </div>
   )
 }

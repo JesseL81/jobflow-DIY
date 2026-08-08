@@ -36,6 +36,7 @@ export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
   const [isSignUp, setIsSignUp] = useState(false)
@@ -106,21 +107,32 @@ export default function LoginPage() {
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400"
+                className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400 pr-10"
               />
             </div>
 
             <div className="space-y-1.5 text-left">
               <Label htmlFor="password" className="text-xs font-semibold text-slate-300">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400"
-              />
+              <div className="relative flex items-center">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400 pr-16 w-full"
+                />
+                
+                {/* BULLETPROOF TEXT BUTTON FOR SAFARI/MOBILE */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded shadow-sm transition-colors focus:outline-none"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
 
             <Button

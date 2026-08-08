@@ -125,10 +125,14 @@ export default function ContactsPage() {
         const cloudContacts = await syncManager.pullFromCloud("jobflow_contacts")
         if (cloudContacts && Array.isArray(cloudContacts) && cloudContacts.length > 0) {
           setContacts(cloudContacts)
-          // If the currently active contact ID isn't in the newly pulled list, reset to the first one
-          if (!cloudContacts.find(c => c.id === activeContactId)) {
-            setActiveContactId(cloudContacts[0].id)
-          }
+          
+          // Update the active ID safely without triggering a loop
+          setActiveContactId((currentId) => {
+            if (!cloudContacts.find(c => c.id === currentId)) {
+              return cloudContacts[0].id
+            }
+            return currentId
+          })
         }
       } catch (err) {
         console.error("Failed to load contacts:", err)
@@ -138,7 +142,7 @@ export default function ContactsPage() {
       }
     }
     loadData()
-  }, [activeContactId])
+  }, []) // Empty dependency array ensures this ONLY fires when the page first loads!
 
   // --- LOCAL STORAGE & CLOUD SYNC: SAVE ON CHANGE ---
   useEffect(() => {
@@ -205,13 +209,13 @@ export default function ContactsPage() {
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
       {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📞 Contacts & Vendors</h1>
           </div>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            Select or hover over a contact on the left to view complete details.
+            Select a contact on the left to view complete details.
           </p>
         </div>
 
@@ -395,7 +399,6 @@ export default function ContactsPage() {
                 return (
                   <button
                     key={contact.id}
-                    onMouseEnter={() => setActiveContactId(contact.id)}
                     onClick={() => setActiveContactId(contact.id)}
                     className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between ${
                       isActive
@@ -509,7 +512,7 @@ export default function ContactsPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.03
+        CleanBuild v1.05
       </div>
       
     </main>
