@@ -282,7 +282,7 @@ export default function TemplatesPage() {
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
       {/* LOCKED HEIGHT HEADER BUBBLE */}
-      <div className="bg-slate-900 text-white p-5 sm:p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 mb-6 md:h-[140px] shrink-0 w-full">
+      <div className="bg-slate-900 text-white p-5 sm:p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 mb-6 md:h-[140px] shrink-0 w-full box-border">
         
         {/* Left Info Section */}
         <div className="flex-1 w-full">
@@ -294,15 +294,17 @@ export default function TemplatesPage() {
           </p>
         </div>
 
-        {/* COMPLETELY REBUILT IMPORT WIDGET: STRICT CSS GRID BOUNDARIES */}
-        <div className="w-full md:w-auto shrink-0 flex justify-center mt-3 md:mt-0">
-          {/* Outer Dark Frame */}
-          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-inner w-full max-w-[320px] md:max-w-none">
-            {/* 1 Column Grid on Phone | 2 Column Grid on Laptop */}
-            <div className="grid grid-cols-1 md:grid-cols-[160px_auto] gap-3 items-end w-full">
+        {/* COMPLETELY REBUILT IMPORT WIDGET: The "Nuclear Option" against iOS Safari */}
+        <div className="w-full md:w-auto shrink-0 mt-4 md:mt-0 flex justify-center md:justify-end">
+          
+          {/* overflow-hidden added to physical cookie-cutter anything trying to step out of bounds */}
+          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-inner w-full max-w-[320px] md:max-w-none mx-auto md:mx-0 overflow-hidden box-border">
+            
+            <div className="flex flex-col md:flex-row md:items-end gap-3 w-full min-w-0">
               
-              <div className="flex flex-col w-full">
-                <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">
+              {/* min-w-0 forces the container to ignore iOS input's stubborn minimum width */}
+              <div className="w-full min-w-0 flex-1">
+                <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 ml-0.5">
                   Target Start Date
                 </Label>
                 <Input
@@ -310,14 +312,14 @@ export default function TemplatesPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full px-3"
+                  className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full min-w-0 block appearance-none shadow-inner"
                 />
               </div>
 
               <Button
                 onClick={handleImportToSchedule}
                 disabled={isImporting}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 w-full px-5 shadow-md transition-all"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 w-full md:w-auto px-5 shadow-md shrink-0"
               >
                 {isImporting ? "Importing..." : "🚀 Import to Schedule"}
               </Button>
@@ -531,7 +533,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.14
+        CleanBuild v1.15
       </div>
       
     </main>
