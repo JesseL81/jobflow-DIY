@@ -281,9 +281,9 @@ export default function TemplatesPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] so it matches perfectly across all tabs */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
-        <div>
+      {/* LOCKED HEIGHT HEADER BUBBLE: Auto-expands on mobile to fit the stacked box */}
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+        <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📋 Project Templates</h1>
           </div>
@@ -292,26 +292,25 @@ export default function TemplatesPage() {
           </p>
         </div>
 
-        {/* Start Date & Import Control styled for dark background */}
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
-        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
-          <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-end justify-center w-full md:w-auto gap-3">
-            <div>
-              <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Project Start Date
+        {/* REBUILT IMPORT WIDGET: Stacks neatly on mobile, inline on desktop */}
+        <div className="w-full md:w-auto shrink-0 pt-2 md:pt-0">
+          <div className="bg-slate-800/80 p-3 sm:p-2.5 rounded-xl border border-slate-700 flex flex-col sm:flex-row sm:items-end gap-3 w-full shadow-inner">
+            <div className="flex-1 sm:flex-none">
+              <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 ml-0.5">
+                Target Start Date
               </Label>
               <Input
                 id="start-date"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-slate-900 text-white text-xs h-8 border-slate-600 focus:border-blue-500 w-full"
+                className="bg-slate-900 text-white text-sm h-10 border-slate-600 focus:border-blue-500 w-full sm:w-[150px] shadow-inner"
               />
             </div>
             <Button
               onClick={handleImportToSchedule}
               disabled={isImporting}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-8 px-4 shadow-xs"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-10 px-5 shadow-md w-full sm:w-auto transition-all"
             >
               {isImporting ? "Importing..." : "🚀 Import to Schedule"}
             </Button>
@@ -522,7 +521,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.06
+        CleanBuild v1.07
       </div>
       
     </main>
