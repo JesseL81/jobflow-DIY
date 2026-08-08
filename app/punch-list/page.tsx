@@ -178,7 +178,8 @@ export default function PunchListPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
           <div className="bg-slate-800/80 border border-slate-700 py-1.5 px-3 rounded-lg text-right">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Completion</span>
             <span className="text-base font-extrabold text-emerald-400">
@@ -384,7 +385,7 @@ export default function PunchListPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
+        CleanBuild v1.02
       </div>
     </main>
   )

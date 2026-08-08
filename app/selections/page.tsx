@@ -124,11 +124,9 @@ export default function SelectionsPage() {
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Selected")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
 
-  // --- LOCAL STORAGE & CLOUD SYNC READ ---
   useEffect(() => {
     async function loadData() {
       try {
-        // 1. Instant Offline Load (Migrated to IndexedDB)
         const savedItems = await get<SelectionItem[]>("jobflow_selections_items")
         const savedBudgets = await get<Record<string, number>>("jobflow_selections_budgets")
 
@@ -144,7 +142,6 @@ export default function SelectionsPage() {
 
         setIsLoaded(true)
 
-        // 2. Silent Cloud Pull
         const cloudItems = await syncManager.pullFromCloud("jobflow_selections_items")
         const cloudBudgets = await syncManager.pullFromCloud("jobflow_selections_budgets")
 
@@ -162,7 +159,6 @@ export default function SelectionsPage() {
     loadData()
   }, [])
 
-  // --- LOCAL STORAGE & CLOUD SYNC SAVE ---
   useEffect(() => {
     if (isLoaded) {
       const syncData = async () => {
@@ -180,10 +176,8 @@ export default function SelectionsPage() {
     }
   }, [items, categoryBudgets, isLoaded])
 
-  // --- CALCULATIONS ---
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items])
 
-  // Total calculated ONLY for checked items
   const totalCost = useMemo(() => {
     return items.reduce((sum, item) => {
       if (!item.checked || !item.price) return sum
@@ -192,7 +186,6 @@ export default function SelectionsPage() {
     }, 0)
   }, [items])
 
-  // Active Category Cost
   const activeCategoryCost = useMemo(() => {
     if (selectedCategory === "All Categories") return totalCost
     return items.reduce((sum, item) => {
@@ -202,12 +195,10 @@ export default function SelectionsPage() {
     }, 0)
   }, [items, selectedCategory, totalCost])
 
-  // Toggle Checked State
   const handleToggleCheck = (id: string) => {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)))
   }
 
-  // Filtered Items
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesCategory = selectedCategory === "All Categories" || item.category === selectedCategory
@@ -219,14 +210,12 @@ export default function SelectionsPage() {
     })
   }, [items, selectedCategory, searchQuery])
 
-  // Budget Modal Save
   const handleSaveBudget = () => {
     const num = parseFloat(tempBudgetVal) || 0
     setCategoryBudgets((prev) => ({ ...prev, [selectedCategory]: num }))
     setIsBudgetModalOpen(false)
   }
 
-  // Open Add Modal
   const handleOpenAdd = () => {
     setEditingItem(null)
     setFormTitle("")
@@ -240,7 +229,6 @@ export default function SelectionsPage() {
     setIsModalOpen(true)
   }
 
-  // Open Edit Modal
   const handleOpenEdit = (item: SelectionItem) => {
     setEditingItem(item)
     setFormTitle(item.title)
@@ -254,7 +242,6 @@ export default function SelectionsPage() {
     setIsModalOpen(true)
   }
 
-  // Save Modal Form
   const handleSaveItem = async () => {
     if (!formTitle.trim()) return
     const itemPriceNumber = parseFloat(formPrice.replace(/[^0-9.]/g, "")) || 0
@@ -290,7 +277,6 @@ export default function SelectionsPage() {
       setItems((prev) => [updatedItem, ...prev])
     }
 
-    // Handle syncing the item cost to the Expenses Tab and Cloud
     if (formSyncToExpenses) {
       try {
         const existingExpenses = (await get<ExpenseItem[]>("builderlite_expenses")) || []
@@ -318,12 +304,10 @@ export default function SelectionsPage() {
     setIsModalOpen(false)
   }
 
-  // Delete Item
   const handleDeleteItem = async () => {
     if (!editingItem) return
     setItems((prev) => prev.filter((i) => i.id !== editingItem.id))
     
-    // Also remove from Expenses/Cloud if it was synced
     try {
       const existingExpenses = (await get<ExpenseItem[]>("builderlite_expenses")) || []
       const filteredExpenses = existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
@@ -357,7 +341,6 @@ export default function SelectionsPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 text-slate-950 flex flex-col">
       
-      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
@@ -368,7 +351,8 @@ export default function SelectionsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
           <div className="bg-slate-800/80 border border-slate-700 py-1.5 px-3 rounded-lg text-right">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Checked Total</span>
             <span className="text-base font-extrabold text-emerald-400">
@@ -387,13 +371,10 @@ export default function SelectionsPage() {
       </div>
 
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
-        {/* Inner Content Spacing Container */}
         <div className="p-6 space-y-6">
 
-          {/* Split Layout */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
-            {/* Left Category Sidebar */}
             <div className="md:col-span-1 space-y-2">
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
@@ -421,10 +402,8 @@ export default function SelectionsPage() {
               </div>
             </div>
 
-            {/* Right Content Area */}
             <div className="md:col-span-3 space-y-4">
               
-              {/* Category Budget Allowance Bar */}
               {selectedCategory !== "All Categories" && (
                 <div className="bg-white p-4 rounded-xl border shadow-xs flex items-center justify-between gap-4">
                   <div>
@@ -467,7 +446,6 @@ export default function SelectionsPage() {
                 </div>
               )}
 
-              {/* Search Toolbar */}
               <div className="bg-white p-3 rounded-xl border shadow-xs">
                 <Input
                   placeholder="Search items, model specs, notes..."
@@ -477,7 +455,6 @@ export default function SelectionsPage() {
                 />
               </div>
 
-              {/* Cards */}
               <div className="space-y-3">
                 {filteredItems.map((item) => {
                   let cardStyle = "border-slate-200 hover:border-slate-300 shadow-xs bg-white"
@@ -580,7 +557,6 @@ export default function SelectionsPage() {
         </div>
       </Card>
 
-      {/* Target Allowance Modal */}
       <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -607,7 +583,6 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add / Edit Selection Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -713,9 +688,8 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.02
+        CleanBuild v1.03
       </div>
     </main>
   )

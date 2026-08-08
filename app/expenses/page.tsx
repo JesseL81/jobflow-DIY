@@ -46,7 +46,7 @@ export default function ExpenseTracker() {
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
 
-  // Form Fields (Initialized as empty strings so they act as placeholders)
+  // Form Fields
   const [date, setDate] = useState("")
   const [description, setDescription] = useState("")
   const [materials, setMaterials] = useState<string>("")
@@ -76,7 +76,7 @@ export default function ExpenseTracker() {
           setTempBudget(savedBudget.toString())
         }
 
-        // 2. Silent Cloud Pull (Pulls latest data in background)
+        // 2. Silent Cloud Pull
         const cloudExpenses = await syncManager.pullFromCloud("builderlite_expenses")
         const cloudBudget = await syncManager.pullFromCloud("builderlite_total_budget")
 
@@ -139,7 +139,7 @@ export default function ExpenseTracker() {
   const totalLabor = expenses.reduce((sum, item) => sum + (item.labor || 0), 0)
   const totalSpent = totalMaterials + totalLabor
   
-  // Percent Used (No longer capped at 100)
+  // Percent Used
   const percentUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0
 
   // Circular Progress Math
@@ -233,11 +233,10 @@ export default function ExpenseTracker() {
     setIsBudgetDialogOpen(false)
   }
 
-  // Export to CSV with Branded Project Name & Clean Math formatting
+  // Export to CSV
   const handleExportCSV = () => {
     const safeName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
     
-    // Removed ID Column Header
     const headers = ["Date", "Description", "Materials ($)", "Labor ($)", "Total ($)"]
     
     const rows = expenses.map((e) => {
@@ -246,13 +245,12 @@ export default function ExpenseTracker() {
       return [
         e.date,
         `"${e.description.replace(/"/g, '""')}"`,
-        mat.toFixed(2), // Forced to 2 decimal places
-        lab.toFixed(2), // Forced to 2 decimal places
-        (mat + lab).toFixed(2), // Forced to 2 decimal places
+        mat.toFixed(2),
+        lab.toFixed(2),
+        (mat + lab).toFixed(2),
       ]
     })
 
-    // Inject Text-Based Logo/Branding and project title at the top of the CSV
     const brandingRow = `"CleanBuild - Project Expense Report"\n`
     const titleRow = `"Project: ${projectName.replace(/"/g, '""')}"\n\n`
     
@@ -270,7 +268,6 @@ export default function ExpenseTracker() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
@@ -281,7 +278,8 @@ export default function ExpenseTracker() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
           <Button
             variant="outline"
             size="sm"
@@ -300,13 +298,9 @@ export default function ExpenseTracker() {
         </div>
       </div>
 
-      {/* Main Container Card Wrapper */}
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
-        
-        {/* Inner Content Spacing Container */}
         <div className="p-6 space-y-6">
 
-          {/* Overview Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
               <CardHeader className="pb-2 p-5">
@@ -355,7 +349,6 @@ export default function ExpenseTracker() {
                     </CardDescription>
                     <CardTitle className="text-2xl font-extrabold text-indigo-600 mt-1">${totalSpent.toLocaleString()}</CardTitle>
                   </div>
-                  {/* Larger Circular Progress inside Total Spent Box */}
                   <div className="relative flex items-center justify-center w-14 h-14 shrink-0">
                     <svg className="w-full h-full transform -rotate-90">
                       <circle cx="28" cy="28" r={radius} stroke="currentColor" strokeWidth="4.5" fill="transparent" className="text-slate-100" />
@@ -392,7 +385,6 @@ export default function ExpenseTracker() {
             </Card>
           </div>
 
-          {/* Expense Ledger Table Container */}
           <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
             <CardHeader className="p-6 pb-2">
               <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
@@ -468,10 +460,8 @@ export default function ExpenseTracker() {
           </Card>
 
         </div>
-
       </Card>
 
-      {/* Add / Edit Expense Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -576,7 +566,6 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Budget Dialog */}
       <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
         <DialogContent className="sm:max-w-[360px]">
           <DialogHeader>
@@ -605,7 +594,6 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
 
-      {/* Lightbox Dialog */}
       <Dialog open={Boolean(lightboxPhoto)} onOpenChange={() => setLightboxPhoto(null)}>
         <DialogContent className="max-w-[90vw] md:max-w-3xl h-[80vh] p-2 bg-black/95 border-slate-800 flex flex-col items-center justify-center">
           <div className="relative w-full h-full flex items-center justify-center p-2">
@@ -620,9 +608,8 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
       
-      {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.07
+        CleanBuild v1.08
       </div>
     </main>
   )

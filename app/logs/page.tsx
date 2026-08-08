@@ -86,11 +86,9 @@ export default function DailyLogsPage() {
   const exportCardRef = useRef<HTMLDivElement>(null)
   const [exportLogTarget, setExportLogTarget] = useState<DailyLog | null>(null)
 
-  // Load logs and project name from IndexedDB/LocalStorage & Cloud
   useEffect(() => {
     async function loadLogs() {
       try {
-        // 1. Instant Offline Load
         const savedLogs = await get<DailyLog[]>("daily_logs_data")
         if (savedLogs && Array.isArray(savedLogs) && savedLogs.length > 0) {
           setLogs(savedLogs)
@@ -98,7 +96,6 @@ export default function DailyLogsPage() {
           setLogs(INITIAL_LOGS)
         }
 
-        // 2. Silent Cloud Pull (Pulls latest logs in background)
         const cloudLogs = await syncManager.pullFromCloud("daily_logs_data")
         if (cloudLogs) {
           setLogs(cloudLogs)
@@ -116,20 +113,16 @@ export default function DailyLogsPage() {
     }
     loadProjectName()
     
-    // Listen for name updates from the sidebar
     window.addEventListener("project-name-updated", loadProjectName)
     return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
 
-  // Save logs to state & IndexedDB + push to Cloud
   const saveAndSyncLogs = async (updatedLogs: DailyLog[]) => {
     setLogs(updatedLogs)
     try {
-      // Save Locally & Push to Cloud
       await set("daily_logs_data", updatedLogs)
       await syncManager.pushToCloud("daily_logs_data", updatedLogs)
 
-      // Sync non-workday flags with schedule component
       const nonWorkdaysMap = updatedLogs
         .filter((l) => l.isNonWorkday)
         .reduce((acc, l) => {
@@ -138,7 +131,6 @@ export default function DailyLogsPage() {
           return acc
         }, {} as Record<string, string>)
 
-      // Save Map Locally & Push to Cloud
       await set("non_workdays_map", nonWorkdaysMap)
       await syncManager.pushToCloud("non_workdays_map", nonWorkdaysMap)
 
@@ -154,7 +146,6 @@ export default function DailyLogsPage() {
     return [...logs].sort((a, b) => b.date.localeCompare(a.date))
   }, [logs])
 
-  // Automatic Weather Fetcher via Open-Meteo API
   const fetchWeatherForDate = async (targetDateStr: string) => {
     setIsFetchingWeather(true)
     try {
@@ -218,7 +209,6 @@ export default function DailyLogsPage() {
     return "Overcast"
   }
 
-  // Convert Base64 or Image URL to clean JPG Blob
   const fetchJpgBlob = async (url: string): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
@@ -247,7 +237,6 @@ export default function DailyLogsPage() {
     })
   }
 
-  // Helper function to capture a log card to a canvas
   const renderLogToCanvas = async (log: DailyLog): Promise<HTMLCanvasElement | null> => {
     setExportLogTarget(log)
     await new Promise((r) => setTimeout(r, 150))
@@ -260,7 +249,6 @@ export default function DailyLogsPage() {
     })
   }
 
-  // Export Single Log: PDF + JPG Photos in a ZIP
   const handleExportLogAndPhotos = async (log: DailyLog) => {
     setIsExporting(true)
     setExportProgress("Preparing export...")
@@ -306,7 +294,6 @@ export default function DailyLogsPage() {
     }
   }
 
-  // Export ALL Logs: Master PDF + individual PDFs + all photos in a ZIP package
   const handleExportAllLogs = async () => {
     if (sortedLogs.length === 0) return
 
@@ -459,7 +446,6 @@ export default function DailyLogsPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
@@ -470,7 +456,8 @@ export default function DailyLogsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
           {sortedLogs.length > 0 && (
             <Button
               variant="outline"
@@ -493,10 +480,8 @@ export default function DailyLogsPage() {
         </div>
       </div>
 
-      {/* Daily Logs Main Card Wrapper with Full Width Match */}
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         
-        {/* Progress banner during batch export */}
         {isExporting && exportProgress && (
           <div className="bg-indigo-50 border-b border-indigo-200 text-indigo-900 text-xs px-6 py-2.5 flex items-center justify-between animate-pulse">
             <span>⏳ {exportProgress}</span>
@@ -504,7 +489,6 @@ export default function DailyLogsPage() {
           </div>
         )}
 
-        {/* Logs Feed Container */}
         <div className="p-6">
           {sortedLogs.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm border-2 border-dashed rounded-lg">
@@ -592,7 +576,6 @@ export default function DailyLogsPage() {
 
       </Card>
 
-      {/* Add / Edit Log Modal */}
       <Dialog open={isLogDialogOpen} onOpenChange={setIsLogDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -718,7 +701,6 @@ export default function DailyLogsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Hidden Offscreen Export Template */}
       <div className="absolute top-[-9999px] left-[-9999px]">
         {exportLogTarget && (
           <div
@@ -773,7 +755,6 @@ export default function DailyLogsPage() {
         )}
       </div>
 
-      {/* Lightbox Modal */}
       <Dialog open={Boolean(lightboxPhoto)} onOpenChange={() => setLightboxPhoto(null)}>
         <DialogContent className="max-w-[90vw] md:max-w-5xl h-[85vh] p-2 bg-black/95 border-slate-800 flex flex-col items-center justify-center">
           <div className="relative w-full h-full flex items-center justify-center p-2">
@@ -788,9 +769,8 @@ export default function DailyLogsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.04
+        CleanBuild v1.05
       </div>
       
     </main>

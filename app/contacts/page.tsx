@@ -95,7 +95,6 @@ export default function ContactsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Form State for Adding New Contact
   const [newName, setNewName] = useState("")
   const [newCompany, setNewCompany] = useState("")
   const [newTrade, setNewTrade] = useState("General Subcontractor")
@@ -105,11 +104,9 @@ export default function ContactsPage() {
   const [newNotes, setNewNotes] = useState("")
   const [newStatus, setNewStatus] = useState<"Active" | "Preferred" | "On Hold">("Active")
 
-  // --- LOCAL STORAGE & CLOUD SYNC: READ ON MOUNT ---
   useEffect(() => {
     async function loadData() {
       try {
-        // 1. Instant Offline Load (from IndexedDB)
         const savedContacts = await get<Contact[]>("jobflow_contacts")
         if (savedContacts && Array.isArray(savedContacts) && savedContacts.length > 0) {
           setContacts(savedContacts)
@@ -119,14 +116,12 @@ export default function ContactsPage() {
           setActiveContactId(INITIAL_CONTACTS[0].id)
         }
 
-        setIsLoaded(true) // UI renders instantly
+        setIsLoaded(true)
 
-        // 2. Silent Cloud Pull
         const cloudContacts = await syncManager.pullFromCloud("jobflow_contacts")
         if (cloudContacts && Array.isArray(cloudContacts) && cloudContacts.length > 0) {
           setContacts(cloudContacts)
           
-          // Update the active ID safely without triggering a loop
           setActiveContactId((currentId) => {
             if (!cloudContacts.find(c => c.id === currentId)) {
               return cloudContacts[0].id
@@ -142,9 +137,8 @@ export default function ContactsPage() {
       }
     }
     loadData()
-  }, []) // Empty dependency array ensures this ONLY fires when the page first loads!
+  }, [])
 
-  // --- LOCAL STORAGE & CLOUD SYNC: SAVE ON CHANGE ---
   useEffect(() => {
     if (isLoaded) {
       const syncData = async () => {
@@ -159,7 +153,6 @@ export default function ContactsPage() {
     }
   }, [contacts, isLoaded])
 
-  // Filter contacts by search query
   const filteredContacts = contacts.filter((c) => {
     const term = searchTerm.toLowerCase()
     return (
@@ -169,7 +162,6 @@ export default function ContactsPage() {
     )
   })
 
-  // Selected contact or fall back to first in filtered list
   const activeContact =
     filteredContacts.find((c) => c.id === activeContactId) || filteredContacts[0] || null
 
@@ -193,7 +185,6 @@ export default function ContactsPage() {
     setContacts(updatedContacts)
     setActiveContactId(newContact.id)
 
-    // Reset Form
     setNewName("")
     setNewCompany("")
     setNewTrade("General Subcontractor")
@@ -208,7 +199,6 @@ export default function ContactsPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      {/* LOCKED HEIGHT HEADER BUBBLE: Standardized to exactly md:h-[140px] */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -219,8 +209,8 @@ export default function ContactsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Add Contact Modal */}
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none">
               + Add New Contact
@@ -238,7 +228,6 @@ export default function ContactsPage() {
                 </DialogHeader>
 
                 <div className="grid gap-4 py-4 text-xs">
-                  {/* Name & Company */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="name" className="font-semibold text-slate-700">Contact Person Name *</Label>
@@ -264,7 +253,6 @@ export default function ContactsPage() {
                     </div>
                   </div>
 
-                  {/* Trade Select & Status Select */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="trade" className="font-semibold text-slate-700">Trade / Specialty</Label>
@@ -303,7 +291,6 @@ export default function ContactsPage() {
                     </div>
                   </div>
 
-                  {/* Phone & Email */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="phone" className="font-semibold text-slate-700">Phone Number</Label>
@@ -328,7 +315,6 @@ export default function ContactsPage() {
                     </div>
                   </div>
 
-                  {/* Office Address */}
                   <div className="space-y-1.5">
                     <Label htmlFor="address" className="font-semibold text-slate-700">Office / Shop Address</Label>
                     <Input
@@ -340,7 +326,6 @@ export default function ContactsPage() {
                     />
                   </div>
 
-                  {/* Notes & Details */}
                   <div className="space-y-1.5">
                     <Label htmlFor="notes" className="font-semibold text-slate-700">Notes & Trade Details</Label>
                     <textarea
@@ -364,10 +349,8 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* Two-Column Master-Detail Layout */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start flex-1">
         
-        {/* Left Side: Search + Scrollable Directory List (4 Columns) */}
         <div className="md:col-span-4 space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -375,7 +358,6 @@ export default function ContactsPage() {
             </h3>
           </div>
 
-          {/* Search Input Bar */}
           <div className="relative">
             <Input
               type="text"
@@ -386,7 +368,6 @@ export default function ContactsPage() {
             />
           </div>
 
-          {/* Scroll List: Contact Name Title followed by Business Name */}
           <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1">
             {filteredContacts.length === 0 ? (
               <p className="text-xs text-slate-500 p-3 text-center bg-white rounded-lg border">
@@ -422,7 +403,6 @@ export default function ContactsPage() {
           </div>
         </div>
 
-        {/* Right Side: Expanded Detail Card (8 Columns) */}
         <div className="md:col-span-8">
           {activeContact ? (
             <Card className="bg-white border rounded-xl p-6 shadow-sm min-h-[420px] space-y-6">
@@ -455,7 +435,6 @@ export default function ContactsPage() {
               </div>
 
               <div className="space-y-6">
-                {/* Phone & Email Section */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200">
                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
@@ -480,7 +459,6 @@ export default function ContactsPage() {
                   </div>
                 </div>
 
-                {/* Office / Shop Address */}
                 <div>
                   <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
                     Address / Office Location
@@ -490,7 +468,6 @@ export default function ContactsPage() {
                   </p>
                 </div>
 
-                {/* Notes & Details */}
                 <div>
                   <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
                     Notes & Trade Details
@@ -510,9 +487,8 @@ export default function ContactsPage() {
 
       </div>
 
-      {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.05
+        CleanBuild v1.06
       </div>
       
     </main>

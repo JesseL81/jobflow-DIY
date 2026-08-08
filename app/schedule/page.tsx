@@ -585,8 +585,9 @@ export default function SchedulePage() {
           </Button>
         </div>
 
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
         {/* Right Column */}
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center justify-center md:justify-end w-full gap-3">
           <Button
             variant="outline"
             size="sm"
@@ -987,7 +988,7 @@ export default function SchedulePage() {
       
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.04
+        CleanBuild v1.05
       </div>
     </main>
   )

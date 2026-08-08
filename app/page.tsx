@@ -200,8 +200,8 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Header Action Controls */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
           {allPhotos.length > 0 && (
             <Button
               variant="outline"
@@ -531,7 +531,7 @@ export default function DashboardPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.05
+        CleanBuild v1.06
       </div>
 
     </main>

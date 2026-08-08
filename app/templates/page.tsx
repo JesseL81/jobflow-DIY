@@ -293,8 +293,9 @@ export default function TemplatesPage() {
         </div>
 
         {/* Start Date & Import Control styled for dark background */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-end gap-3">
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
+        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
+          <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-end justify-center w-full md:w-auto gap-3">
             <div>
               <Label htmlFor="start-date" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                 Project Start Date
@@ -304,7 +305,7 @@ export default function TemplatesPage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-slate-900 text-white text-xs h-8 border-slate-600 focus:border-blue-500"
+                className="bg-slate-900 text-white text-xs h-8 border-slate-600 focus:border-blue-500 w-full"
               />
             </div>
             <Button
@@ -521,7 +522,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.05
+        CleanBuild v1.06
       </div>
       
     </main>
