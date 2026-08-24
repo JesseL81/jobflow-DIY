@@ -33,7 +33,7 @@ const TEMPLATES: ProjectTemplate[] = [
     name: "Full Basement Finish",
     description: "Complete basement buildout sequence including framing, mechanicals, drywall, trim, paint, final inspection, carpet, and site cleaning.",
     estimatedWorkdays: 35,
-    category: "Residential Remodel",
+    category: "New Build",
     icon: "🏠",
     tasks: [
       { title: "Framing", duration: 3, color: "bg-rose-700", textColor: "text-white", phase: "Framing" },
@@ -57,11 +57,11 @@ const TEMPLATES: ProjectTemplate[] = [
     ],
   },
   {
-    id: "bathroom-remodel",
-    name: "Full Bathroom Remodel",
+    id: "bathroom-Remodel",
+    name: "Full Bathroom Finish",
     description: "Complete bathroom remodel sequence including demo, plumbing & electric roughs, inspections, drywall, tile, millwork, paint, trim outs, and final inspection.",
     estimatedWorkdays: 17,
-    category: "Bathroom",
+    category: "Remodel",
     icon: "🛁",
     tasks: [
       { title: "Demo", duration: 2, color: "bg-neutral-800", textColor: "text-white", phase: "Demolition" },
@@ -533,7 +533,7 @@ export default function TemplatesPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.15
+        CleanBuild v1.00
       </div>
       
     </main>

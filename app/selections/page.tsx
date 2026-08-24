@@ -689,7 +689,7 @@ export default function SelectionsPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.03
+        CleanBuild v1.00
       </div>
     </main>
   )

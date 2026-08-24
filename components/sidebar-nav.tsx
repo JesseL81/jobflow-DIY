@@ -10,7 +10,7 @@ const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
   { label: "Schedule & Tasks", href: "/schedule", icon: "📅" },
   { label: "Punch List & To-Do's", href: "/punch-list", icon: "✅" },
-  { label: "Daily Logs & Photos", href: "/logs", icon: "📷" },
+  { label: "Vision Board", href: "/logs", icon: "📷" },
   { label: "Expenses", href: "/expenses", icon: "💰" },
   { label: "Selections", href: "/selections", icon: "🛍️" },
   { label: "Contacts & Vendors", href: "/contacts", icon: "📞" },
@@ -19,7 +19,7 @@ const navItems = [
   { label: "Logo Showcase", href: "/logo-preview", icon: "🎨" },
 ]
 
-// Integrated CleanBuild Logo (Option 13) - Transparent Background
+// Integrated CleanBuild Logo - Transparent Background
 function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -179,7 +179,7 @@ export default function SidebarNav() {
       {/* Version Tracker at the Bottom */}
       <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0">
         <span className="text-[11px] font-bold text-slate-600 tracking-widest uppercase">
-          CleanBuild v1.13
+          CleanBuild v1.000
         </span>
       </div>
     </div>
