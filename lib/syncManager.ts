@@ -1,15 +1,12 @@
 import { supabase } from "./supabase"
 import { get, set } from "idb-keyval"
 
-// Paste the long User ID you copied from Supabase right here!
-const DEV_USER_ID = "336fe036-0a59-4dcf-af3b-25a8a7bdaf2f"
+// Paste your actual User ID right here!
+const DEV_USER_ID = "PASTE-YOUR-LONG-USER-ID-HERE"
 
 export const syncManager = {
-  // 1. Push local data up to the cloud
   async pushToCloud(storeKey: string, data: any) {
     const { data: userData } = await supabase.auth.getUser()
-    
-    // Use the logged-in user, OR fallback to your dev ID for testing
     const userId = userData?.user?.id || DEV_USER_ID
 
     if (!userId) {
@@ -17,37 +14,42 @@ export const syncManager = {
       return 
     }
 
-    // Push the data to the cloud_sync table securely
-    const { error } = await supabase
+    // 1. Try to UPDATE the existing cloud row first
+    const { data: existingData, error: updateError } = await supabase
       .from('cloud_sync')
-      .upsert({
-        user_id: userId,
-        store_key: storeKey,
+      .update({
         data: data,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id, store_key' })
+      })
+      .eq('user_id', userId)
+      .eq('store_key', storeKey)
+      .select()
 
-    if (error) {
-      console.error(`Cloud Sync Failed for ${storeKey}:`, error.message)
-    } else {
-      console.log(`✅ Successfully synced ${storeKey} to cloud!`)
+    // 2. If no row was updated (because it doesn't exist yet), INSERT a new one
+    if (!existingData || existingData.length === 0) {
+      await supabase
+        .from('cloud_sync')
+        .insert({
+          user_id: userId,
+          store_key: storeKey,
+          data: data
+        })
     }
   },
 
-  // 2. Pull the latest cloud data down to the device
   async pullFromCloud(storeKey: string) {
     const { data: userData } = await supabase.auth.getUser()
-    
     const userId = userData?.user?.id || DEV_USER_ID
 
     if (!userId) return null
 
+    // Use .maybeSingle() instead of .single() to safely handle empty databases
     const { data, error } = await supabase
       .from('cloud_sync')
       .select('data')
       .eq('user_id', userId)
       .eq('store_key', storeKey)
-      .single()
+      .maybeSingle() 
 
     if (error || !data) return null
 
