@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager" // <-- Added Sync Manager
+import { syncManager } from "@/lib/syncManager"
 import html2canvas from "html2canvas-pro"
 import jsPDF from "jspdf"
 import JSZip from "jszip"
@@ -103,13 +103,11 @@ export default function VisionBoardPage() {
   const exportCardRef = useRef<HTMLDivElement>(null)
   const [exportTarget, setExportTarget] = useState<VisionBoardItem | null>(null)
 
-  // --- CLOUD SYNC & LOAD ---
   useEffect(() => {
     setIsMounted(true)
 
     async function loadData() {
       try {
-        // 1. Instantly load local items
         const savedData = await get<VisionBoardItem[]>("jobflow_vision_board") 
         if (savedData && Array.isArray(savedData) && savedData.length > 0) {
           const sanitizedData = savedData.map(item => ({
@@ -120,7 +118,6 @@ export default function VisionBoardPage() {
           setBoardItems(INITIAL_BOARD)
         }
 
-        // 2. Instantly load local categories
         const savedCategories = await get<string[]>("jobflow_vision_board_categories")
         if (savedCategories && Array.isArray(savedCategories) && savedCategories.length > 0) {
           setCategories(savedCategories)
@@ -128,11 +125,9 @@ export default function VisionBoardPage() {
           setCategories(DEFAULT_CATEGORIES)
         }
 
-        // 3. Silently pull latest items from the Cloud
         const cloudData = await syncManager.pullFromCloud("jobflow_vision_board")
         if (cloudData) setBoardItems(cloudData)
 
-        // 4. Silently pull latest categories from the Cloud
         const cloudCategories = await syncManager.pullFromCloud("jobflow_vision_board_categories")
         if (cloudCategories) setCategories(cloudCategories)
 
@@ -145,18 +140,16 @@ export default function VisionBoardPage() {
     loadData()
   }, [])
 
-  // --- SAVE & PUSH TO CLOUD ---
   const saveAndSync = async (updatedItems: VisionBoardItem[]) => {
     setBoardItems(updatedItems || [])
     try {
       await set("jobflow_vision_board", updatedItems || [])
-      await syncManager.pushToCloud("jobflow_vision_board", updatedItems || []) // <-- Pushes to cloud
+      await syncManager.pushToCloud("jobflow_vision_board", updatedItems || [])
     } catch (e) {
       console.error("Failed to sync Vision Board:", e)
     }
   }
 
-  // --- SAVE CATEGORY TO CLOUD ---
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return
     const trimmed = newCategoryName.trim()
@@ -172,7 +165,7 @@ export default function VisionBoardPage() {
     
     try {
       await set("jobflow_vision_board_categories", updatedCategories)
-      await syncManager.pushToCloud("jobflow_vision_board_categories", updatedCategories) // <-- Pushes to cloud
+      await syncManager.pushToCloud("jobflow_vision_board_categories", updatedCategories)
     } catch (e) {
       console.error("Failed to save categories:", e)
     }
@@ -353,16 +346,6 @@ export default function VisionBoardPage() {
     if (selectedPhotoIndex === null || safePhotos.length === 0) return
     setSelectedPhotoIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : safePhotos.length - 1))
   }
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (selectedPhotoIndex === null) return
-      if (e.key === "ArrowRight") handleNextPhoto()
-      if (e.key === "ArrowLeft") handlePrevPhoto()
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [selectedPhotoIndex, filteredPhotos])
 
   const handleOpenModal = (itemToEdit?: VisionBoardItem) => {
     if (itemToEdit) {
@@ -826,7 +809,14 @@ export default function VisionBoardPage() {
       </div>
 
       <Dialog open={selectedPhotoIndex !== null} onOpenChange={() => setSelectedPhotoIndex(null)}>
-        <DialogContent className="max-w-[95vw] md:max-w-5xl h-[85vh] p-4 bg-slate-950 text-white border-slate-800 flex flex-col justify-between">
+        {/* FIX: ADDED onKeyDown LISTENER DIRECTLY TO THE MODAL CONTENT */}
+        <DialogContent 
+          className="max-w-[95vw] md:max-w-5xl h-[85vh] p-4 bg-slate-950 text-white border-slate-800 flex flex-col justify-between outline-none"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight") handleNextPhoto()
+            if (e.key === "ArrowLeft") handlePrevPhoto()
+          }}
+        >
           <DialogTitle className="sr-only">Photo Viewer</DialogTitle>
           <DialogDescription className="sr-only">View full resolution project photos.</DialogDescription>
 
