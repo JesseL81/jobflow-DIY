@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager" // <-- Added Sync Manager
 import html2canvas from "html2canvas-pro"
 import jsPDF from "jspdf"
 import JSZip from "jszip"
@@ -78,12 +79,9 @@ const getTodayInputDate = () => {
 }
 
 export default function VisionBoardPage() {
-  // THE FIX: This state prevents the server cache from crashing the browser
   const [isMounted, setIsMounted] = useState(false)
   
   const [boardItems, setBoardItems] = useState<VisionBoardItem[]>([])
-  
-  // Dynamic Categories State
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES)
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
@@ -92,50 +90,54 @@ export default function VisionBoardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<VisionBoardItem | null>(null)
 
-  // Form State
   const [itemDate, setItemDate] = useState("")
   const [itemCategory, setItemCategory] = useState("Inspiration & Ideas")
   const [itemNotes, setItemNotes] = useState("")
   const [itemUrl, setItemUrl] = useState("")
   const [itemPhotos, setItemPhotos] = useState<string[]>([])
 
-  // Lightbox State
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null)
   
-  // Export State
   const [isExporting, setIsExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState("")
   const exportCardRef = useRef<HTMLDivElement>(null)
   const [exportTarget, setExportTarget] = useState<VisionBoardItem | null>(null)
 
-  // Load items and categories from IndexedDB
+  // --- CLOUD SYNC & LOAD ---
   useEffect(() => {
-    // Flag that the client has successfully taken over from the server
     setIsMounted(true)
 
     async function loadData() {
       try {
-        const savedData = await get<VisionBoardItem[]>("daily_logs_data") 
+        // 1. Instantly load local items
+        const savedData = await get<VisionBoardItem[]>("jobflow_vision_board") 
         if (savedData && Array.isArray(savedData) && savedData.length > 0) {
           const sanitizedData = savedData.map(item => ({
-            ...item,
-            photos: Array.isArray(item?.photos) ? item.photos : []
+            ...item, photos: Array.isArray(item?.photos) ? item.photos : []
           }))
           setBoardItems(sanitizedData)
         } else {
           setBoardItems(INITIAL_BOARD)
-          await saveAndSync(INITIAL_BOARD)
         }
 
-        const savedCategories = await get<string[]>("vision_board_categories")
+        // 2. Instantly load local categories
+        const savedCategories = await get<string[]>("jobflow_vision_board_categories")
         if (savedCategories && Array.isArray(savedCategories) && savedCategories.length > 0) {
           setCategories(savedCategories)
         } else {
           setCategories(DEFAULT_CATEGORIES)
-          await set("vision_board_categories", DEFAULT_CATEGORIES)
         }
+
+        // 3. Silently pull latest items from the Cloud
+        const cloudData = await syncManager.pullFromCloud("jobflow_vision_board")
+        if (cloudData) setBoardItems(cloudData)
+
+        // 4. Silently pull latest categories from the Cloud
+        const cloudCategories = await syncManager.pullFromCloud("jobflow_vision_board_categories")
+        if (cloudCategories) setCategories(cloudCategories)
+
       } catch (e) {
-        console.error("Error loading Vision Board from IndexedDB:", e)
+        console.error("Error loading Vision Board:", e)
         setBoardItems(INITIAL_BOARD)
         setCategories(DEFAULT_CATEGORIES)
       }
@@ -143,20 +145,18 @@ export default function VisionBoardPage() {
     loadData()
   }, [])
 
-  // Save to IndexedDB safely
+  // --- SAVE & PUSH TO CLOUD ---
   const saveAndSync = async (updatedItems: VisionBoardItem[]) => {
     setBoardItems(updatedItems || [])
     try {
-      await set("daily_logs_data", updatedItems || [])
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("logs-updated"))
-      }
+      await set("jobflow_vision_board", updatedItems || [])
+      await syncManager.pushToCloud("jobflow_vision_board", updatedItems || []) // <-- Pushes to cloud
     } catch (e) {
-      console.error("Failed to save to IndexedDB:", e)
+      console.error("Failed to sync Vision Board:", e)
     }
   }
 
-  // Handle saving new custom category
+  // --- SAVE CATEGORY TO CLOUD ---
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return
     const trimmed = newCategoryName.trim()
@@ -171,7 +171,8 @@ export default function VisionBoardPage() {
     setCategories(updatedCategories)
     
     try {
-      await set("vision_board_categories", updatedCategories)
+      await set("jobflow_vision_board_categories", updatedCategories)
+      await syncManager.pushToCloud("jobflow_vision_board_categories", updatedCategories) // <-- Pushes to cloud
     } catch (e) {
       console.error("Failed to save categories:", e)
     }
@@ -181,7 +182,6 @@ export default function VisionBoardPage() {
     setSelectedCategory(trimmed) 
   }
 
-  // Sorting and Filtering
   const sortedItems = useMemo(() => {
     return [...(boardItems || [])].sort((a, b) => (b?.date || "").localeCompare(a?.date || ""))
   }, [boardItems])
@@ -200,7 +200,6 @@ export default function VisionBoardPage() {
     });
   }, [filteredItems])
 
-  // Convert Base64 or Image URL to clean JPG Blob
   const fetchJpgBlob = async (url: string): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
@@ -229,7 +228,6 @@ export default function VisionBoardPage() {
     })
   }
 
-  // Helper function to capture a card to a canvas
   const renderItemToCanvas = async (item: VisionBoardItem): Promise<HTMLCanvasElement | null> => {
     setExportTarget(item)
     await new Promise((r) => setTimeout(r, 150))
@@ -242,7 +240,6 @@ export default function VisionBoardPage() {
     })
   }
 
-  // Export Single Item: PDF + JPG Photos in a ZIP
   const handleExportItemAndPhotos = async (item: VisionBoardItem) => {
     setIsExporting(true)
     setExportProgress("Preparing export...")
@@ -287,7 +284,6 @@ export default function VisionBoardPage() {
     }
   }
 
-  // Export ALL Items: Master PDF + individual PDFs + all photos in a ZIP package
   const handleExportAll = async () => {
     const safeItems = filteredItems || []
     if (safeItems.length === 0) return
@@ -346,7 +342,6 @@ export default function VisionBoardPage() {
     }
   }
 
-  // Lightbox Cycling Handlers
   const handleNextPhoto = () => {
     const safePhotos = filteredPhotos || []
     if (selectedPhotoIndex === null || safePhotos.length === 0) return
@@ -369,7 +364,6 @@ export default function VisionBoardPage() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [selectedPhotoIndex, filteredPhotos])
 
-  // Modals
   const handleOpenModal = (itemToEdit?: VisionBoardItem) => {
     if (itemToEdit) {
       setEditingItem(itemToEdit)
@@ -450,15 +444,10 @@ export default function VisionBoardPage() {
     await saveAndSync(updatedItems)
   }
 
-  // THE FIX: Do not render HTML until client finishes loading to avoid Hydration cache mismatch
-  if (!isMounted) {
-    return null;
-  }
+  if (!isMounted) return null;
 
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
-      
-      {/* Detached Header Banner */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
@@ -492,10 +481,7 @@ export default function VisionBoardPage() {
         </div>
       </div>
 
-      {/* Main Content Card */}
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
-        
-        {/* Progress banner during batch export */}
         {isExporting && exportProgress && (
           <div className="bg-indigo-50 border-b border-indigo-200 text-indigo-900 text-xs px-6 py-2.5 flex items-center justify-between animate-pulse">
             <span>⏳ {exportProgress}</span>
@@ -503,13 +489,8 @@ export default function VisionBoardPage() {
           </div>
         )}
 
-        {/* Inner Content Spacing Container */}
         <div className="p-6">
-
-          {/* Two-Column Master-Detail Layout */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            
-            {/* Left Side: Categories Sidebar (3 Columns) */}
             <div className="md:col-span-3 space-y-2">
               <div className="bg-white p-3 rounded-xl border shadow-sm space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
@@ -539,7 +520,6 @@ export default function VisionBoardPage() {
                   )
                 })}
 
-                {/* Add Custom Category UI */}
                 {isAddingCategory ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -582,7 +562,6 @@ export default function VisionBoardPage() {
               </div>
             </div>
 
-            {/* Right Side: Visual Feed (9 Columns) */}
             <div className="md:col-span-9">
               {(filteredItems || []).length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-xl text-slate-400 text-sm border-2 border-dashed border-slate-200 shadow-sm">
@@ -596,7 +575,6 @@ export default function VisionBoardPage() {
                       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start">
                         <div className="space-y-3 flex-1 w-full">
                           
-                          {/* Top Badges */}
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge className="bg-slate-900 text-white hover:bg-slate-800 text-[10px]">
                               📅 Added: {formatDisplayDate(item.date)}
@@ -607,14 +585,12 @@ export default function VisionBoardPage() {
                             </Badge>
                           </div>
 
-                          {/* Notes */}
                           {item.notes && (
                             <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
                               {item.notes}
                             </p>
                           )}
 
-                          {/* Link Button */}
                           {item.url && (
                             <div className="pt-1">
                               <a
@@ -628,7 +604,6 @@ export default function VisionBoardPage() {
                             </div>
                           )}
 
-                          {/* Masonry-style Photo Grid */}
                           {item.photos && Array.isArray(item.photos) && item.photos.length > 0 && (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-2">
                               {(item.photos || []).map((photoUrl, idx) => {
@@ -652,7 +627,6 @@ export default function VisionBoardPage() {
                           )}
                         </div>
 
-                        {/* Action Buttons */}
                         <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
                           <Button
                             variant="outline"
@@ -687,14 +661,10 @@ export default function VisionBoardPage() {
                 </div>
               )}
             </div>
-
           </div>
-
         </div>
-
       </Card>
 
-      {/* Add / Edit Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-slate-200">
           <DialogHeader>
@@ -801,7 +771,6 @@ export default function VisionBoardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Hidden Offscreen Export Template */}
       <div className="absolute top-[-9999px] left-[-9999px]">
         {exportTarget && (
           <div
@@ -856,7 +825,6 @@ export default function VisionBoardPage() {
         )}
       </div>
 
-      {/* ENLARGED LIGHTBOX DIALOG WITH CYCLING CONTROLS */}
       <Dialog open={selectedPhotoIndex !== null} onOpenChange={() => setSelectedPhotoIndex(null)}>
         <DialogContent className="max-w-[95vw] md:max-w-5xl h-[85vh] p-4 bg-slate-950 text-white border-slate-800 flex flex-col justify-between">
           <DialogTitle className="sr-only">Photo Viewer</DialogTitle>
