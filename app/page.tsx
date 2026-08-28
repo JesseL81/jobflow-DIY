@@ -6,7 +6,6 @@ import { syncManager } from "@/lib/syncManager"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-// THE FIX: DialogDescription has been added to this import list below!
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
@@ -30,7 +29,7 @@ interface PunchItem {
   notes?: string
   completed: boolean
   dueDate?: string 
-  assignedEmail?: string
+  assignedEmails?: string[]
 }
 
 const formatDisplayDate = (dateStr: string) => {
@@ -60,6 +59,7 @@ export default function DashboardPage() {
   
   // Edit Punch Item Modal State
   const [editingPunch, setEditingPunch] = useState<PunchItem | null>(null)
+  const [emailInput, setEmailInput] = useState("")
 
   const loadDashboardData = async () => {
     try {
@@ -106,7 +106,8 @@ export default function DashboardPage() {
       id: Date.now(), 
       text: newPunchText.trim(), 
       category: "General To-Do", 
-      completed: false 
+      completed: false,
+      assignedEmails: []
     }
     const updated = [...punchList, newItem]
     setPunchList(updated)
@@ -130,6 +131,39 @@ export default function DashboardPage() {
     
     await set("jobflow_punch_list", updated)
     await syncManager.pushToCloud("jobflow_punch_list", updated)
+  }
+
+  // Edit Modal Handlers
+  const handleOpenEditModal = (item: PunchItem) => {
+    let emails = item.assignedEmails || []
+    // Silently migrate old single-string emails if they exist
+    if ((item as any).assignedEmail && emails.length === 0) {
+      emails = [(item as any).assignedEmail]
+    }
+    setEditingPunch({ ...item, assignedEmails: emails })
+    setEmailInput("")
+  }
+
+  const handleAddEmail = () => {
+    if (!emailInput.trim() || !editingPunch) return
+    const trimmed = emailInput.trim().toLowerCase()
+    const currentEmails = editingPunch.assignedEmails || []
+    
+    if (!currentEmails.includes(trimmed)) {
+      setEditingPunch({
+        ...editingPunch,
+        assignedEmails: [...currentEmails, trimmed]
+      })
+    }
+    setEmailInput("")
+  }
+
+  const handleRemoveEmail = (emailToRemove: string) => {
+    if (!editingPunch) return
+    setEditingPunch({
+      ...editingPunch,
+      assignedEmails: (editingPunch.assignedEmails || []).filter(e => e !== emailToRemove)
+    })
   }
 
   const handleSavePunchEdit = async () => {
@@ -317,6 +351,10 @@ export default function DashboardPage() {
                   ) : (
                     punchList.map((item) => {
                       const alertStatus = getAlertStatus(item.dueDate, item.completed)
+                      const legacyEmail = (item as any).assignedEmail
+                      const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
+                        ? item.assignedEmails 
+                        : (legacyEmail ? [legacyEmail] : [])
 
                       return (
                         <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg gap-3">
@@ -333,7 +371,7 @@ export default function DashboardPage() {
                               </span>
                               
                               {/* Sub-Text Details */}
-                              {(!item.completed && (item.dueDate || item.assignedEmail)) && (
+                              {(!item.completed && (item.dueDate || emailsToDisplay.length > 0)) && (
                                 <div className="flex flex-wrap items-center gap-2 mt-1">
                                   {item.dueDate && (
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
@@ -347,18 +385,18 @@ export default function DashboardPage() {
                                       {formatDisplayDate(item.dueDate)}
                                     </span>
                                   )}
-                                  {item.assignedEmail && (
-                                    <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
-                                      ✉️ {item.assignedEmail}
+                                  {emailsToDisplay.map(email => (
+                                    <span key={email} className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
+                                      ✉️ {email}
                                     </span>
-                                  )}
+                                  ))}
                                 </div>
                               )}
                             </div>
                           </label>
 
                           <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
-                            <Button variant="outline" size="sm" onClick={() => setEditingPunch(item)} className="h-7 text-xs px-2 shadow-xs">
+                            <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(item)} className="h-7 text-xs px-2 shadow-xs">
                               ✏️ Edit / Notify
                             </Button>
                             <button onClick={() => handleDeletePunch(item.id)} className="text-slate-400 hover:text-rose-600 h-7 w-7 flex items-center justify-center rounded hover:bg-rose-50 transition-colors">
@@ -409,7 +447,7 @@ export default function DashboardPage() {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Edit Task & Notifications</DialogTitle>
-            <DialogDescription className="text-xs">Set due dates for alerts or assign an email to send a reminder.</DialogDescription>
+            <DialogDescription className="text-xs">Set due dates for alerts or assign emails to send reminders.</DialogDescription>
           </DialogHeader>
 
           {editingPunch && (
@@ -424,44 +462,53 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-date" className="text-xs font-bold text-slate-700">Due Date (For Alerts)</Label>
-                  <Input
-                    id="edit-date"
-                    type="date"
-                    value={editingPunch.dueDate || ""}
-                    onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })}
-                    className="text-sm shadow-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-email" className="text-xs font-bold text-slate-700">Vendor / Sub Email</Label>
-                  <Input
-                    id="edit-email"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={editingPunch.assignedEmail || ""}
-                    onChange={(e) => setEditingPunch({ ...editingPunch, assignedEmail: e.target.value })}
-                    className="text-sm shadow-sm"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-date" className="text-xs font-bold text-slate-700">Due Date (For Alerts)</Label>
+                <Input
+                  id="edit-date"
+                  type="date"
+                  value={editingPunch.dueDate || ""}
+                  onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })}
+                  className="text-sm shadow-sm"
+                />
               </div>
 
-              {/* 1-CLICK EMAIL INTEGRATION */}
-              <div className="pt-2 border-t mt-2">
-                <Label className="text-xs font-bold text-slate-700 block mb-2">Actions</Label>
-                {editingPunch.assignedEmail ? (
-                  <a
-                    href={`mailto:${editingPunch.assignedEmail}?subject=Project Task Reminder: ${editingPunch.text}&body=Hello,%0D%0A%0D%0APlease note the following task is required for the project:%0D%0A%0D%0ATask: ${editingPunch.text}%0D%0A${editingPunch.dueDate ? `Due Date: ${formatDisplayDate(editingPunch.dueDate)}%0D%0A` : ""}%0D%0AThank you!`}
-                    className="flex w-full items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold h-10 rounded-md shadow-sm transition-colors"
-                  >
-                    ✉️ Open Email Draft to Vendor
-                  </a>
-                ) : (
-                  <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2 text-center italic">
-                    Add an email address above to unlock the 1-click email reminder.
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Vendor / Sub Emails</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="name@example.com"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleAddEmail()
+                      }
+                    }}
+                    className="text-sm shadow-sm"
+                  />
+                  <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4">
+                    Add
+                  </Button>
+                </div>
+                
+                {/* Email Tag List */}
+                {(editingPunch.assignedEmails || []).length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {editingPunch.assignedEmails?.map((email, idx) => (
+                      <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium">
+                        {email}
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveEmail(email)} 
+                          className="hover:text-rose-600 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>

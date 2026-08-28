@@ -17,7 +17,7 @@ export interface PunchItem {
   notes?: string
   completed: boolean
   dueDate?: string 
-  assignedEmail?: string
+  assignedEmails?: string[]
 }
 
 const CATEGORIES = [
@@ -51,7 +51,10 @@ export default function PunchListPage() {
   const [formCategory, setFormCategory] = useState("General To-Do")
   const [formNotes, setFormNotes] = useState("")
   const [formDueDate, setFormDueDate] = useState("")
-  const [formAssignedEmail, setFormAssignedEmail] = useState("")
+  
+  // Multi-Email State
+  const [formEmails, setFormEmails] = useState<string[]>([])
+  const [emailInput, setEmailInput] = useState("")
 
   // --- LOCAL STORAGE & CLOUD READ ---
   useEffect(() => {
@@ -114,6 +117,21 @@ export default function PunchListPage() {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i)))
   }
 
+  // Email Handlers
+  const handleAddEmail = () => {
+    if (!emailInput.trim()) return
+    const trimmed = emailInput.trim().toLowerCase()
+    
+    if (!formEmails.includes(trimmed)) {
+      setFormEmails([...formEmails, trimmed])
+    }
+    setEmailInput("")
+  }
+
+  const handleRemoveEmail = (emailToRemove: string) => {
+    setFormEmails(formEmails.filter(e => e !== emailToRemove))
+  }
+
   // Open Add Modal
   const handleOpenAdd = () => {
     setEditingItem(null)
@@ -121,7 +139,8 @@ export default function PunchListPage() {
     setFormCategory(selectedCategory !== "All Categories" ? selectedCategory : "General To-Do")
     setFormNotes("")
     setFormDueDate("")
-    setFormAssignedEmail("")
+    setFormEmails([])
+    setEmailInput("")
     setIsModalOpen(true)
   }
 
@@ -132,7 +151,15 @@ export default function PunchListPage() {
     setFormCategory(item.category || "General To-Do")
     setFormNotes(item.notes || "")
     setFormDueDate(item.dueDate || "")
-    setFormAssignedEmail(item.assignedEmail || "")
+    
+    // Silently migrate legacy single-email string if it exists
+    let emails = item.assignedEmails || []
+    if ((item as any).assignedEmail && emails.length === 0) {
+      emails = [(item as any).assignedEmail]
+    }
+    
+    setFormEmails(emails)
+    setEmailInput("")
     setIsModalOpen(true)
   }
 
@@ -150,7 +177,7 @@ export default function PunchListPage() {
                 category: formCategory, 
                 notes: formNotes.trim(),
                 dueDate: formDueDate,
-                assignedEmail: formAssignedEmail.trim()
+                assignedEmails: formEmails
               }
             : i
         )
@@ -165,7 +192,7 @@ export default function PunchListPage() {
           notes: formNotes.trim(),
           completed: false,
           dueDate: formDueDate,
-          assignedEmail: formAssignedEmail.trim()
+          assignedEmails: formEmails
         },
       ])
     }
@@ -261,6 +288,11 @@ export default function PunchListPage() {
                     ? "bg-slate-50 border-slate-200 opacity-75" 
                     : "bg-white border-slate-200 hover:border-slate-300 shadow-xs"
 
+                  const legacyEmail = (item as any).assignedEmail
+                  const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
+                    ? item.assignedEmails 
+                    : (legacyEmail ? [legacyEmail] : [])
+
                   return (
                     <Card key={item.id} className={`transition-all ${cardStyle}`}>
                       <CardContent className="p-4 flex items-start gap-4">
@@ -273,7 +305,6 @@ export default function PunchListPage() {
                         <div className="flex-1 space-y-1.5">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              {/* NEW DATE & EMAIL BADGES ADDED HERE */}
                               <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <Badge variant="outline" className={`text-[10px] font-semibold ${item.completed ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
                                   {item.category}
@@ -283,11 +314,11 @@ export default function PunchListPage() {
                                     📅 Due: {item.dueDate}
                                   </Badge>
                                 )}
-                                {item.assignedEmail && (
-                                  <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200">
-                                    ✉️ {item.assignedEmail}
+                                {emailsToDisplay.map((email) => (
+                                  <Badge key={email} variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200">
+                                    ✉️ {email}
                                   </Badge>
-                                )}
+                                ))}
                                 {item.completed && (
                                   <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
                                     Completed ✓
@@ -332,11 +363,11 @@ export default function PunchListPage() {
 
       {/* Add / Edit Task Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit Task" : "Add New Task"}</DialogTitle>
             <DialogDescription className="text-xs">
-              Set due dates for alerts or assign an email to trigger automated notifications.
+              Set due dates for alerts or assign emails to trigger automated notifications.
             </DialogDescription>
           </DialogHeader>
 
@@ -348,7 +379,7 @@ export default function PunchListPage() {
                 placeholder="e.g. Caulk baseboards in master bath" 
                 value={formText} 
                 onChange={(e) => setFormText(e.target.value)} 
-                className="mt-1 shadow-sm h-10"
+                className="mt-1 shadow-sm h-10 text-sm"
               />
             </div>
 
@@ -368,8 +399,7 @@ export default function PunchListPage() {
               </select>
             </div>
 
-            {/* NEW DATE & EMAIL INPUTS ADDED HERE */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="task-date" className="text-xs font-semibold text-slate-700">Due Date (For Alerts)</Label>
                 <Input 
@@ -377,23 +407,53 @@ export default function PunchListPage() {
                   type="date"
                   value={formDueDate} 
                   onChange={(e) => setFormDueDate(e.target.value)} 
-                  className="mt-1 shadow-sm h-10"
+                  className="mt-1 shadow-sm h-10 text-sm"
                 />
               </div>
+              
+              {/* NEW EMAIL TAG LIST INPUT */}
               <div>
-                <Label htmlFor="task-email" className="text-xs font-semibold text-slate-700">Vendor Email</Label>
-                <Input 
-                  id="task-email" 
-                  type="email"
-                  placeholder="name@example.com"
-                  value={formAssignedEmail} 
-                  onChange={(e) => setFormAssignedEmail(e.target.value)} 
-                  className="mt-1 shadow-sm h-10"
-                />
+                <Label className="text-xs font-semibold text-slate-700">Vendor / Sub Emails</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input 
+                    type="email"
+                    placeholder="name@example.com"
+                    value={emailInput} 
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleAddEmail()
+                      }
+                    }} 
+                    className="shadow-sm h-10 text-sm"
+                  />
+                  <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-10">
+                    Add
+                  </Button>
+                </div>
+                
+                {/* Visual Tags for added emails */}
+                {formEmails.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {formEmails.map((email, idx) => (
+                      <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium">
+                        {email}
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveEmail(email)} 
+                          className="hover:text-rose-600 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div>
+            <div className="mt-2">
               <Label htmlFor="task-notes" className="text-xs font-semibold text-slate-700">Additional Notes (Optional)</Label>
               <textarea 
                 id="task-notes" 

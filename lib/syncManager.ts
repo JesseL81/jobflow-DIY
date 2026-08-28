@@ -1,16 +1,13 @@
 import { supabase } from "./supabase"
 import { get, set } from "idb-keyval"
 
-// Paste your actual User ID right here!
-const DEV_USER_ID = "PASTE-YOUR-LONG-USER-ID-HERE"
-
 export const syncManager = {
   async pushToCloud(storeKey: string, data: any) {
     const { data: userData } = await supabase.auth.getUser()
-    const userId = userData?.user?.id || DEV_USER_ID
+    const userId = userData?.user?.id
 
     if (!userId) {
-      console.warn("⚠️ Cannot sync: No user ID available.")
+      console.error(`🚨 Cloud Sync Aborted for ${storeKey}: No user is logged in.`)
       return 
     }
 
@@ -39,11 +36,13 @@ export const syncManager = {
 
   async pullFromCloud(storeKey: string) {
     const { data: userData } = await supabase.auth.getUser()
-    const userId = userData?.user?.id || DEV_USER_ID
+    const userId = userData?.user?.id
 
-    if (!userId) return null
+    if (!userId) {
+      console.warn(`⚠️ Cannot pull ${storeKey}: No user logged in.`)
+      return null
+    }
 
-    // Use .maybeSingle() instead of .single() to safely handle empty databases
     const { data, error } = await supabase
       .from('cloud_sync')
       .select('data')
