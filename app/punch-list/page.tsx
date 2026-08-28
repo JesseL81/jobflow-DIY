@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 
 export interface PunchItem {
   id: number
@@ -16,6 +16,8 @@ export interface PunchItem {
   category: string
   notes?: string
   completed: boolean
+  dueDate?: string 
+  assignedEmail?: string
 }
 
 const CATEGORIES = [
@@ -48,12 +50,13 @@ export default function PunchListPage() {
   const [formText, setFormText] = useState("")
   const [formCategory, setFormCategory] = useState("General To-Do")
   const [formNotes, setFormNotes] = useState("")
+  const [formDueDate, setFormDueDate] = useState("")
+  const [formAssignedEmail, setFormAssignedEmail] = useState("")
 
   // --- LOCAL STORAGE & CLOUD READ ---
   useEffect(() => {
     async function loadData() {
       try {
-        // 1. Instant Offline Load (from IndexedDB)
         const saved = await get<PunchItem[]>("jobflow_punch_list")
         if (saved && Array.isArray(saved) && saved.length > 0) {
           setItems(saved)
@@ -62,7 +65,6 @@ export default function PunchListPage() {
         }
         setIsLoaded(true)
 
-        // 2. Silent Cloud Pull (Pulls latest data in background)
         const cloudPunch = await syncManager.pullFromCloud("jobflow_punch_list")
         if (cloudPunch) {
           setItems(cloudPunch)
@@ -118,6 +120,8 @@ export default function PunchListPage() {
     setFormText("")
     setFormCategory(selectedCategory !== "All Categories" ? selectedCategory : "General To-Do")
     setFormNotes("")
+    setFormDueDate("")
+    setFormAssignedEmail("")
     setIsModalOpen(true)
   }
 
@@ -127,6 +131,8 @@ export default function PunchListPage() {
     setFormText(item.text)
     setFormCategory(item.category || "General To-Do")
     setFormNotes(item.notes || "")
+    setFormDueDate(item.dueDate || "")
+    setFormAssignedEmail(item.assignedEmail || "")
     setIsModalOpen(true)
   }
 
@@ -138,7 +144,14 @@ export default function PunchListPage() {
       setItems((prev) =>
         prev.map((i) =>
           i.id === editingItem.id
-            ? { ...i, text: formText.trim(), category: formCategory, notes: formNotes.trim() }
+            ? { 
+                ...i, 
+                text: formText.trim(), 
+                category: formCategory, 
+                notes: formNotes.trim(),
+                dueDate: formDueDate,
+                assignedEmail: formAssignedEmail.trim()
+              }
             : i
         )
       )
@@ -151,6 +164,8 @@ export default function PunchListPage() {
           category: formCategory,
           notes: formNotes.trim(),
           completed: false,
+          dueDate: formDueDate,
+          assignedEmail: formAssignedEmail.trim()
         },
       ])
     }
@@ -174,11 +189,10 @@ export default function PunchListPage() {
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">✅ Punch List & To-Do's</h1>
           </div>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            Track missing items, inspections, returns, and final project cleanups by category.
+            Track missing items, inspections, returns, and set automated reminders.
           </p>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
         <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
           <div className="bg-slate-800/80 border border-slate-700 py-1.5 px-3 rounded-lg text-right">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Completion</span>
@@ -197,13 +211,8 @@ export default function PunchListPage() {
         </div>
       </div>
 
-      {/* Main Container Card Wrapper */}
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
-        
-        {/* Inner Content Spacing Container */}
         <div className="p-6 space-y-6">
-
-          {/* Split Layout */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
             {/* Left Category Sidebar */}
@@ -237,7 +246,6 @@ export default function PunchListPage() {
             {/* Right Content Area */}
             <div className="md:col-span-3 space-y-4">
               
-              {/* Search Toolbar */}
               <div className="bg-white p-3 rounded-xl border shadow-xs">
                 <Input
                   placeholder="Search tasks, notes, or categories..."
@@ -247,7 +255,6 @@ export default function PunchListPage() {
                 />
               </div>
 
-              {/* Task Cards */}
               <div className="space-y-3">
                 {filteredItems.map((item) => {
                   const cardStyle = item.completed 
@@ -266,10 +273,21 @@ export default function PunchListPage() {
                         <div className="flex-1 space-y-1.5">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="flex items-center gap-2 mb-1">
+                              {/* NEW DATE & EMAIL BADGES ADDED HERE */}
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <Badge variant="outline" className={`text-[10px] font-semibold ${item.completed ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
                                   {item.category}
                                 </Badge>
+                                {item.dueDate && (
+                                  <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200">
+                                    📅 Due: {item.dueDate}
+                                  </Badge>
+                                )}
+                                {item.assignedEmail && (
+                                  <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200">
+                                    ✉️ {item.assignedEmail}
+                                  </Badge>
+                                )}
                                 {item.completed && (
                                   <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
                                     Completed ✓
@@ -308,11 +326,8 @@ export default function PunchListPage() {
               </div>
 
             </div>
-
           </div>
-
         </div>
-
       </Card>
 
       {/* Add / Edit Task Modal */}
@@ -320,6 +335,9 @@ export default function PunchListPage() {
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit Task" : "Add New Task"}</DialogTitle>
+            <DialogDescription className="text-xs">
+              Set due dates for alerts or assign an email to trigger automated notifications.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
@@ -330,7 +348,7 @@ export default function PunchListPage() {
                 placeholder="e.g. Caulk baseboards in master bath" 
                 value={formText} 
                 onChange={(e) => setFormText(e.target.value)} 
-                className="mt-1 shadow-sm"
+                className="mt-1 shadow-sm h-10"
               />
             </div>
 
@@ -348,6 +366,31 @@ export default function PunchListPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* NEW DATE & EMAIL INPUTS ADDED HERE */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="task-date" className="text-xs font-semibold text-slate-700">Due Date (For Alerts)</Label>
+                <Input 
+                  id="task-date" 
+                  type="date"
+                  value={formDueDate} 
+                  onChange={(e) => setFormDueDate(e.target.value)} 
+                  className="mt-1 shadow-sm h-10"
+                />
+              </div>
+              <div>
+                <Label htmlFor="task-email" className="text-xs font-semibold text-slate-700">Vendor Email</Label>
+                <Input 
+                  id="task-email" 
+                  type="email"
+                  placeholder="name@example.com"
+                  value={formAssignedEmail} 
+                  onChange={(e) => setFormAssignedEmail(e.target.value)} 
+                  className="mt-1 shadow-sm h-10"
+                />
+              </div>
             </div>
 
             <div>
@@ -383,7 +426,6 @@ export default function PunchListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
         CleanBuild v1.00
       </div>
