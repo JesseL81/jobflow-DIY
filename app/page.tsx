@@ -272,6 +272,7 @@ export default function DashboardPage() {
       await set("jobflow_custom_nonworkdays", [])
       await set("jobflow_vision_board", [])
       await set("jobflow_selections", [])
+      await set("jobflow_contacts", []) // ADDED CONTACTS
 
       // 2. Overwrite the Cloud Database with empty arrays
       await syncManager.pushToCloud("builderlite_expenses", [])
@@ -280,6 +281,7 @@ export default function DashboardPage() {
       await syncManager.pushToCloud("jobflow_custom_nonworkdays", [])
       await syncManager.pushToCloud("jobflow_vision_board", [])
       await syncManager.pushToCloud("jobflow_selections", [])
+      await syncManager.pushToCloud("jobflow_contacts", []) // ADDED CONTACTS
 
       // 3. Hard refresh to show the clean slate
       window.location.reload()

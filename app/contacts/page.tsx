@@ -33,6 +33,17 @@ interface Contact {
 const INITIAL_CONTACTS: Contact[] = [
   {
     id: "c-1",
+    name: "👋 Welcome to Contacts!",
+    company: "CleanBuild Tutorial",
+    trade: "General Subcontractor",
+    phone: "(555) 000-0000",
+    email: "hello@cleanbuild.us",
+    address: "123 Tutorial Lane",
+    notes: "Keep track of all your subcontractors, vendors, and inspectors here. Click '+ Add New Contact' to get started!",
+    status: "Active",
+  },
+  {
+    id: "c-2",
     name: "Dave Miller",
     company: "Apex Electrical Services",
     trade: "Electrician",
@@ -41,51 +52,7 @@ const INITIAL_CONTACTS: Contact[] = [
     address: "104 Industrial Pkwy, Suite B",
     notes: "Requires 3-day notice for rough-in work. Excellent quality and licensed master electrician.",
     status: "Preferred",
-  },
-  {
-    id: "c-2",
-    name: "Sarah Jenkins",
-    company: "Blue Wave Plumbing",
-    trade: "Plumbing",
-    phone: "(555) 876-5432",
-    email: "sjenkins@bluewaveplumbing.com",
-    address: "410 Commerce St",
-    notes: "Handles all underground plumbing, finish trim, and water heater installs. Reliable schedule adherence.",
-    status: "Active",
-  },
-  {
-    id: "c-3",
-    name: "Marcus Vance",
-    company: "Vance Structural Framing",
-    trade: "Framing & Carpentry",
-    phone: "(555) 345-6789",
-    email: "marcus@vanceframing.com",
-    address: "88 Timberline Rd",
-    notes: "Great crew for heavy structural beam placements and complex roof trusses.",
-    status: "Preferred",
-  },
-  {
-    id: "c-4",
-    name: "Elena Rostova",
-    company: "Precision Tile & Stone",
-    trade: "Tile & Flooring",
-    phone: "(555) 901-2345",
-    email: "elena@precisiontile.com",
-    address: "312 Granite Ave",
-    notes: "Specializes in custom curbless showers and large-format porcelain tile.",
-    status: "Active",
-  },
-  {
-    id: "c-5",
-    name: "Tom Bradley",
-    company: "City Building Department",
-    trade: "Inspector / Permitting",
-    phone: "(555) 432-1098",
-    email: "tbradley@citygov.org",
-    address: "1 City Hall Plaza, Room 204",
-    notes: "Lead inspector for residential trade permits. Inspection requests must be submitted before 4 PM for next-day review.",
-    status: "Active",
-  },
+  }
 ]
 
 export default function ContactsPage() {
@@ -108,9 +75,12 @@ export default function ContactsPage() {
     async function loadData() {
       try {
         const savedContacts = await get<Contact[]>("jobflow_contacts")
-        if (savedContacts && Array.isArray(savedContacts) && savedContacts.length > 0) {
+        
+        // FIX: If savedContacts is defined (even if empty), use it. 
+        // Only load INITIAL_CONTACTS if it is strictly undefined.
+        if (savedContacts) {
           setContacts(savedContacts)
-          setActiveContactId(savedContacts[0].id)
+          setActiveContactId(savedContacts.length > 0 ? savedContacts[0].id : "")
         } else {
           setContacts(INITIAL_CONTACTS)
           setActiveContactId(INITIAL_CONTACTS[0].id)
@@ -119,15 +89,19 @@ export default function ContactsPage() {
         setIsLoaded(true)
 
         const cloudContacts = await syncManager.pullFromCloud("jobflow_contacts")
-        if (cloudContacts && Array.isArray(cloudContacts) && cloudContacts.length > 0) {
+        // FIX: Also apply the same logic to the cloud pull
+        if (cloudContacts) {
           setContacts(cloudContacts)
-          
-          setActiveContactId((currentId) => {
-            if (!cloudContacts.find(c => c.id === currentId)) {
-              return cloudContacts[0].id
-            }
-            return currentId
-          })
+          if (cloudContacts.length > 0) {
+            setActiveContactId((currentId) => {
+              if (!cloudContacts.find((c: Contact) => c.id === currentId)) {
+                return cloudContacts[0].id
+              }
+              return currentId
+            })
+          } else {
+            setActiveContactId("")
+          }
         }
       } catch (err) {
         console.error("Failed to load contacts:", err)
@@ -209,7 +183,6 @@ export default function ContactsPage() {
           </p>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
         <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none">
