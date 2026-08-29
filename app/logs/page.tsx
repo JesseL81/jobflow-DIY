@@ -44,23 +44,15 @@ const DEFAULT_CATEGORIES = [
 const INITIAL_BOARD: VisionBoardItem[] = [
   {
     id: 1,
-    date: "2026-07-22",
+    date: "2026-08-28",
     category: "Inspiration & Ideas",
-    notes: "Love the look of this modern farmhouse exterior. The white board and batten with black windows is perfect.",
-    url: "https://www.houzz.com",
-    photos: [
-      "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=800&auto=format&fit=crop&q=80",
-    ],
-  },
-  {
-    id: 2,
-    date: "2026-07-21",
-    category: "Paint",
-    notes: "Looking at Sherwin Williams 'Agreeable Gray' for the main living areas and a deep navy for the accent wall.",
-    url: "",
-    photos: [],
-  },
+    notes: "👋 Welcome to the Vision Board! Click '+ Add Photos / Idea' to upload your own.",
+    url: "https://diy.cleanbuild.us",
+    photos: ["https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=800&auto=format&fit=crop&q=80"],
+  }
 ]
+
+
 
 const formatDisplayDate = (dateStr: string) => {
   if (!dateStr) return ""

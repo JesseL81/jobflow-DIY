@@ -54,7 +54,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     notes: "Requires rough-in valve body #K-8304.",
     status: "Selected",
     checked: true,
-    syncToExpenses: true,
+    syncToExpenses: false,
   },
   {
     id: "2",
@@ -66,7 +66,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     notes: "Ordered 15% extra for waste/cuts (220 sqft total).",
     status: "Ordered",
     checked: true,
-    syncToExpenses: true,
+    syncToExpenses: false,
   },
   {
     id: "3",

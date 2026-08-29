@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { get, set } from "idb-keyval"
+import { get, set, clear } from "idb-keyval"
+import { supabase } from "@/lib/supabase" // Make sure this path matches your setup
 import { syncManager } from "@/lib/syncManager"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,9 +13,24 @@ import Link from "next/link"
 
 interface Expense {
   id: number
+  title?: string
+  category?: string
   materials: number
   labor: number
 }
+
+// Add these exact onboarding arrays to the Dashboard
+const INITIAL_EXPENSES = [
+  { id: 1, title: "Foundation Concrete", category: "Foundation", materials: 2770, labor: 750 },
+  { id: 2, title: "👋 Welcome to Expenses! Log your costs here.", category: "General", materials: 0, labor: 0 },
+  { id: 3, title: "Click 'Edit' to update or delete this example.", category: "General", materials: 0, labor: 0 }
+]
+
+const INITIAL_PUNCH_LIST: PunchItem[] = [
+  { id: 1, text: "👋 Welcome to CleanBuild! Check this box to complete a task.", category: "General To-Do", completed: false, assignedEmails: [] },
+  { id: 2, text: "Click 'Edit' to assign an email. (We'll email them a reminder!)", category: "General To-Do", completed: false, assignedEmails: [] },
+  { id: 3, text: "Delete this task using the 'Edit' menu.", category: "General To-Do", completed: false, assignedEmails: [] },
+]
 
 interface CustomNonWorkday {
   date: string
@@ -68,16 +84,23 @@ export default function DashboardPage() {
       const savedCustomNonWorkdays = await get<CustomNonWorkday[]>("jobflow_custom_nonworkdays")
       const savedPunch = await get<PunchItem[]>("jobflow_punch_list")
 
+      // If undefined, inject the onboarding data!
       if (savedExpenses) setExpenses(savedExpenses)
+      else setExpenses(INITIAL_EXPENSES)
+
+      if (savedPunch) setPunchList(savedPunch)
+      else setPunchList(INITIAL_PUNCH_LIST)
+
       if (savedBudget !== undefined) setTotalBudget(savedBudget)
       if (savedCustomNonWorkdays) setCustomNonWorkdays(savedCustomNonWorkdays)
-      if (savedPunch) setPunchList(savedPunch)
 
+      // Cloud Pull
       const cloudPunch = await syncManager.pullFromCloud("jobflow_punch_list")
       const cloudExpenses = await syncManager.pullFromCloud("builderlite_expenses")
       const cloudBudget = await syncManager.pullFromCloud("builderlite_total_budget")
       const cloudCustomNonWorkdays = await syncManager.pullFromCloud("jobflow_custom_nonworkdays")
 
+      // Only override if the cloud actually returned an array
       if (cloudPunch) setPunchList(cloudPunch)
       if (cloudExpenses) setExpenses(cloudExpenses)
       if (cloudBudget !== undefined && cloudBudget !== null) setTotalBudget(cloudBudget)
@@ -206,6 +229,65 @@ export default function DashboardPage() {
   const currentDay = Math.min(totalDays, Math.max(1, Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1))
   const percentTimeUsed = Math.min(100, Math.max(0, Math.round((currentDay / totalDays) * 100)))
 
+  const handleRestoreTutorial = async () => {
+    const isConfirmed = window.confirm(
+      "This will replace your current data with the tutorial examples. Continue?"
+    )
+    
+    if (!isConfirmed) return
+
+    try {
+      // 1. Wipe the offline browser database entirely
+      await clear()
+
+      // 2. Delete the user's cloud rows so the database thinks they are brand new
+      const { data: userData } = await supabase.auth.getUser()
+      if (userData?.user?.id) {
+        await supabase
+          .from("cloud_sync")
+          .delete()
+          .eq("user_id", userData.user.id)
+      }
+
+      // 3. Hard refresh to naturally spawn the examples
+      window.location.reload()
+    } catch (error) {
+      console.error("Failed to restore tutorial:", error)
+      alert("An error occurred while trying to load the tutorial.")
+    }
+  }
+
+  const handleClearAllData = async () => {
+    const isConfirmed = window.confirm(
+      "🚨 WARNING: Are you sure you want to completely wipe all project data? This will delete your schedule, punch list, and vision board forever. This cannot be undone."
+    )
+    
+    if (!isConfirmed) return
+
+    try {
+      // 1. Overwrite the offline database with empty arrays (prevents tutorial respawning)
+      await set("builderlite_expenses", [])
+      await set("jobflow_punch_list", [])
+      await set("jobflow_calendar_tasks", [])
+      await set("jobflow_custom_nonworkdays", [])
+      await set("jobflow_vision_board", [])
+      await set("jobflow_selections", [])
+
+      // 2. Overwrite the Cloud Database with empty arrays
+      await syncManager.pushToCloud("builderlite_expenses", [])
+      await syncManager.pushToCloud("jobflow_punch_list", [])
+      await syncManager.pushToCloud("jobflow_calendar_tasks", [])
+      await syncManager.pushToCloud("jobflow_custom_nonworkdays", [])
+      await syncManager.pushToCloud("jobflow_vision_board", [])
+      await syncManager.pushToCloud("jobflow_selections", [])
+
+      // 3. Hard refresh to show the clean slate
+      window.location.reload()
+    } catch (error) {
+      console.error("Failed to wipe data:", error)
+      alert("An error occurred while trying to clear your data.")
+    }
+  }
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
@@ -521,6 +603,41 @@ export default function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+{/* SYSTEM CONTROLS */}
+      <div className="mt-8 border border-slate-200 bg-white rounded-xl p-6 flex flex-col gap-6">
+        
+        {/* Tutorial Option */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
+          <div>
+            <h3 className="text-slate-900 font-bold text-sm">Load Onboarding Tutorial</h3>
+            <p className="text-slate-500 text-xs mt-1">Reset this account to a "brand new user" state to see the example project data.</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleRestoreTutorial}
+            className="shrink-0 shadow-sm font-bold text-blue-600 border-blue-200 hover:bg-blue-50"
+          >
+            👋 Load Examples
+          </Button>
+        </div>
+
+        {/* Clear All Option */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-rose-900 font-bold text-sm">Start Real Project (Clear Data)</h3>
+            <p className="text-rose-700 text-xs mt-1">Permanently delete all examples, tasks, and schedule items to start a true blank slate.</p>
+          </div>
+          <Button 
+            variant="destructive" 
+            onClick={handleClearAllData}
+            className="shrink-0 shadow-sm font-bold"
+          >
+            🗑️ Clear All Data
+          </Button>
+        </div>
+
+      </div>
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">

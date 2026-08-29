@@ -54,19 +54,8 @@ const COLOR_PALETTE = [
 ]
 
 const INITIAL_TASKS: CalendarTask[] = [
-  { id: 1, title: "test example 1", color: "bg-amber-400", textColor: "text-slate-900", startDate: "2026-06-29", endDate: "2026-07-06" },
-  { id: 2, title: "example 2", color: "bg-emerald-400", textColor: "text-slate-900", startDate: "2026-06-30", endDate: "2026-07-03" },
-  { id: 3, title: "Dumpster Drop", color: "bg-rose-700", textColor: "text-white", startDate: "2026-07-06", endDate: "2026-07-06" },
-  { id: 4, title: "Lumber Drop", color: "bg-rose-700", textColor: "text-white", startDate: "2026-07-06", endDate: "2026-07-06" },
-  { id: 5, title: "Porta Potty", color: "bg-rose-700", textColor: "text-white", startDate: "2026-07-06", endDate: "2026-07-06" },
-  { id: 6, title: "Mark Concrete to cut", color: "bg-teal-700", textColor: "text-white", startDate: "2026-07-06", endDate: "2026-07-06" },
-  { id: 7, title: "Framing", color: "bg-rose-700", textColor: "text-white", startDate: "2026-07-08", endDate: "2026-07-10" },
-  { id: 8, title: "Rough Mechanical", color: "bg-rose-700", textColor: "text-white", startDate: "2026-07-13", endDate: "2026-07-14" },
-  { id: 9, title: "Rough Plumbing", color: "bg-sky-700", textColor: "text-white", startDate: "2026-07-15", endDate: "2026-07-16" },
-  { id: 10, title: "Rough Electric 7/17", color: "bg-teal-700", textColor: "text-white", startDate: "2026-07-17", endDate: "2026-07-21" },
-  { id: 11, title: "Drywall Stock", color: "bg-orange-500", textColor: "text-white", startDate: "2026-07-21", endDate: "2026-07-21" },
-  { id: 12, title: "Rough Inspections", color: "bg-lime-500", textColor: "text-slate-900", startDate: "2026-07-24", endDate: "2026-07-24" },
-  { id: 13, title: "Drywall", color: "bg-purple-900", textColor: "text-white", startDate: "2026-07-23", endDate: "2026-07-30" },
+  { id: 1, title: "👋 Drag me to another date!", color: "bg-blue-600", textColor: "text-white", startDate: "2026-08-28", endDate: "2026-08-29" },
+  { id: 2, title: "Click me to edit colors & dates", color: "bg-amber-400", textColor: "text-slate-900", startDate: "2026-08-30", endDate: "2026-08-30" },
 ]
 
 export default function SchedulePage() {
@@ -246,7 +235,15 @@ export default function SchedulePage() {
     return { isNonWorkday: false, title: "", isFromLog: false }
   }
 
-  const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+  const daysOfWeek = [
+    { full: "Sunday", short: "Sun" },
+    { full: "Monday", short: "Mon" },
+    { full: "Tuesday", short: "Tue" },
+    { full: "Wednesday", short: "Wed" },
+    { full: "Thursday", short: "Thu" },
+    { full: "Friday", short: "Fri" },
+    { full: "Saturday", short: "Sat" },
+  ]
 
   const monthOptions = useMemo(() => {
     const options = []
@@ -366,22 +363,52 @@ export default function SchedulePage() {
     setDragOverDate(null)
     if (!draggedTaskId) return
 
+    // Helper to check if a specific date string is a non-workday
+    const isNonWork = (dStr: string) => 
+      isDateNonWorkdayCheck(dStr, allNonWorkdays, saturdaysOff, sundaysOff, explicitWorkingDays)
+
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
         if (task.id === draggedTaskId) {
-          const oldStart = new Date(task.startDate + "T00:00:00")
+          // 1. Find out how many WORKING days the original task took
+          let workingDays = 0
+          let currCountDate = new Date(task.startDate + "T00:00:00")
           const oldEnd = new Date(task.endDate + "T00:00:00")
-          const diffTime = oldEnd.getTime() - oldStart.getTime()
-          const diffDays = Math.round(diffTime / (1000 * 3600 * 24))
 
-          const newStart = new Date(newDropDate + "T00:00:00")
-          const newEnd = new Date(newStart)
-          newEnd.setDate(newStart.getDate() + diffDays)
+          while (currCountDate <= oldEnd) {
+            const dStr = currCountDate.toISOString().split("T")[0]
+            if (!isNonWork(dStr)) workingDays++
+            currCountDate.setDate(currCountDate.getDate() + 1)
+          }
+
+          if (workingDays === 0) workingDays = 1 // Safety fallback
+
+          // 2. If dropped on a weekend/holiday, push the start date to the next available working day
+          let newStart = new Date(newDropDate + "T00:00:00")
+          while (isNonWork(newStart.toISOString().split("T")[0])) {
+            newStart.setDate(newStart.getDate() + 1)
+          }
+          const finalStartStr = newStart.toISOString().split("T")[0]
+
+          // 3. Add the working days to find the true end date
+          let finalEndStr = finalStartStr
+          let currAddDate = new Date(finalStartStr + "T00:00:00")
+          let daysAdded = 1 // The start date itself counts as Day 1
+
+          while (daysAdded < workingDays) {
+            currAddDate.setDate(currAddDate.getDate() + 1)
+            const dStr = currAddDate.toISOString().split("T")[0]
+            
+            if (!isNonWork(dStr)) {
+              daysAdded++
+              finalEndStr = dStr
+            }
+          }
 
           return {
             ...task,
-            startDate: newDropDate,
-            endDate: newEnd.toISOString().split("T")[0],
+            startDate: finalStartStr,
+            endDate: finalEndStr,
           }
         }
         return task
@@ -613,7 +640,12 @@ export default function SchedulePage() {
         {/* Days Header - Colored Orange to match Theme */}
         <div className="grid grid-cols-7 border-b text-center text-[11px] font-bold text-orange-600 uppercase tracking-wider bg-slate-50 py-2.5 shrink-0 shadow-sm z-10">
           {daysOfWeek.map((day) => (
-            <div key={day}>{day}</div>
+            <div key={day.full}>
+              {/* Shows full word on screens larger than mobile */}
+              <span className="hidden sm:inline">{day.full}</span>
+              {/* Shows 3-letter abbreviation on mobile screens */}
+              <span className="sm:hidden">{day.short}</span>
+            </div>
           ))}
         </div>
 

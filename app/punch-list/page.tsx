@@ -30,10 +30,12 @@ const CATEGORIES = [
   "Exterior & Landscaping",
 ]
 
+
+
 const INITIAL_PUNCH_LIST: PunchItem[] = [
-  { id: 1, text: "Return extra PVC fittings to Home Depot", category: "Plumbing & HVAC", completed: false },
-  { id: 2, text: "Touch up paint on baseboards in hallway", category: "Finishes & Paint", notes: "Use the semi-gloss trim paint.", completed: false },
-  { id: 3, text: "Call city inspector for framing rough-in", category: "Framing & Drywall", completed: true },
+  { id: 1, text: "👋 Welcome to CleanBuild! Check this box to complete a task.", category: "General To-Do", completed: false },
+  { id: 2, text: "Click 'Edit' to assign an email. (We'll email them a reminder!)", category: "General To-Do", completed: false },
+  { id: 3, text: "Delete this task using the 'Edit' menu.", category: "General To-Do", completed: false },
 ]
 
 export default function PunchListPage() {
