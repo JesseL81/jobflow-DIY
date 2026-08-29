@@ -15,16 +15,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "CleanBuild",
-  description: "Construction project management, daily logs, schedules, contacts, and expense tracking.",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "CleanBuild",
-  },
-  icons: {
-    icon: "/icon-512.png",
-    apple: "/apple-touch-icon.png",
-  },
+  description: "Job site management",
+  manifest: "/manifest.json", // ADD THIS LINE
 }
 
 export default function RootLayout({
