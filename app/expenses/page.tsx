@@ -45,6 +45,9 @@ export default function ExpenseTracker() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  
+  // Submission Lock State
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form Fields
   const [date, setDate] = useState("")
@@ -149,6 +152,7 @@ export default function ExpenseTracker() {
 
   // Open Modal for Add/Edit
   const handleOpenModal = (expense?: Expense) => {
+    setIsSubmitting(false) // Reset lock when opening modal
     if (expense) {
       setEditingExpense(expense)
       setDate(expense.date)
@@ -181,42 +185,48 @@ export default function ExpenseTracker() {
     reader.readAsDataURL(file)
   }
 
-  // Save Expense Logic
+  // Save Expense Logic with Double-Tap Lock
   const handleSaveExpense = async () => {
-    if (!description.trim() || !date) return
+    if (!description.trim() || !date || isSubmitting) return
 
-    const matVal = parseFloat(materials) || 0
-    const labVal = parseFloat(labor) || 0
+    setIsSubmitting(true)
 
-    let updatedList: Expense[] = []
+    try {
+      const matVal = parseFloat(materials) || 0
+      const labVal = parseFloat(labor) || 0
 
-    if (editingExpense) {
-      updatedList = expenses.map((item) =>
-        item.id === editingExpense.id
-          ? {
-              ...item,
-              date,
-              description: description.trim(),
-              materials: matVal,
-              labor: labVal,
-              receiptPhoto: receiptPhoto || undefined,
-            }
-          : item
-      )
-    } else {
-      const newEntry: Expense = {
-        id: Date.now(),
-        date,
-        description: description.trim(),
-        materials: matVal,
-        labor: labVal,
-        receiptPhoto: receiptPhoto || undefined,
+      let updatedList: Expense[] = []
+
+      if (editingExpense) {
+        updatedList = expenses.map((item) =>
+          item.id === editingExpense.id
+            ? {
+                ...item,
+                date,
+                description: description.trim(),
+                materials: matVal,
+                labor: labVal,
+                receiptPhoto: receiptPhoto || undefined,
+              }
+            : item
+        )
+      } else {
+        const newEntry: Expense = {
+          id: Date.now(),
+          date,
+          description: description.trim(),
+          materials: matVal,
+          labor: labVal,
+          receiptPhoto: receiptPhoto || undefined,
+        }
+        updatedList = [newEntry, ...expenses]
       }
-      updatedList = [newEntry, ...expenses]
-    }
 
-    await saveExpensesToIDB(updatedList)
-    setIsDialogOpen(false)
+      await saveExpensesToIDB(updatedList)
+      setIsDialogOpen(false)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // Delete Expense
@@ -558,8 +568,12 @@ export default function ExpenseTracker() {
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveExpense}>
-                {editingExpense ? "Update Expense" : "Save Expense"}
+              <Button 
+                className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50" 
+                onClick={handleSaveExpense}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Saving..." : editingExpense ? "Update Expense" : "Save Expense"}
               </Button>
             </div>
           </DialogFooter>
