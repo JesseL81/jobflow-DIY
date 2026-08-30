@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key_for_build")
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("cloud_sync")
       .select("data")
-      .eq("store_key", "jobflow_punch_list")
+      .eq("store_key", "cleanbuild_punch_list")
       .single();
 
     if (error || !data) {

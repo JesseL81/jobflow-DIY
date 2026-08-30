@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -27,7 +26,6 @@ const INITIAL_EXPENSES: Expense[] = [
   { id: 5, date: "2026-07-20", description: "Railing Installation Subcontractor", materials: 120, labor: 400 },
 ]
 
-// Helper: Formats YYYY-MM-DD into M/D/YY for display
 const formatDisplayDate = (dateStr: string) => {
   if (!dateStr) return ""
   const cleanDate = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr
@@ -37,16 +35,16 @@ const formatDisplayDate = (dateStr: string) => {
 }
 
 export default function ExpenseTracker() {
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [totalBudget, setTotalBudget] = useState<number>(23402)
+  // 1. Universal Sync Hooks (Replaces 60+ lines of custom DB logic)
+  const [expenses, setExpenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
+  const [totalBudget, setTotalBudget] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
+  
   const [projectName, setProjectName] = useState("My Project")
 
   // Modal States
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
-  
-  // Submission Lock State
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form Fields
@@ -56,103 +54,36 @@ export default function ExpenseTracker() {
   const [labor, setLabor] = useState<string>("")
   const [receiptPhoto, setReceiptPhoto] = useState<string>("")
   const [tempBudget, setTempBudget] = useState<string>("23402")
-
-  // Lightbox State
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 
-  // Load from IndexedDB and LocalStorage & Cloud
+  // Keep Temp Budget synced with Total Budget when it loads
   useEffect(() => {
-    async function loadData() {
-      try {
-        // 1. Instant Offline Load
-        const savedExpenses = await get<Expense[]>("builderlite_expenses")
-        const savedBudget = await get<number>("builderlite_total_budget")
+    setTempBudget(totalBudget.toString())
+  }, [totalBudget])
 
-        if (savedExpenses && Array.isArray(savedExpenses) && savedExpenses.length > 0) {
-          setExpenses(savedExpenses)
-        } else {
-          setExpenses(INITIAL_EXPENSES)
-        }
-
-        if (savedBudget !== undefined && savedBudget !== null) {
-          setTotalBudget(savedBudget)
-          setTempBudget(savedBudget.toString())
-        }
-
-        // 2. Silent Cloud Pull
-        const cloudExpenses = await syncManager.pullFromCloud("builderlite_expenses")
-        const cloudBudget = await syncManager.pullFromCloud("builderlite_total_budget")
-
-        if (cloudExpenses && Array.isArray(cloudExpenses)) {
-          setExpenses(cloudExpenses)
-        }
-        
-        if (cloudBudget !== undefined && cloudBudget !== null) {
-          setTotalBudget(cloudBudget)
-          setTempBudget(cloudBudget.toString())
-        }
-
-      } catch (e) {
-        console.error("Failed to load expenses:", e)
-        setExpenses(INITIAL_EXPENSES)
-      }
-    }
-    loadData()
-
+  // Load project name from sidebar
+  useEffect(() => {
     const loadProjectName = () => {
       const savedName = localStorage.getItem("cleanbuild_project_name")
       if (savedName) setProjectName(savedName)
     }
     loadProjectName()
-    
-    // Listen for name updates from the sidebar
     window.addEventListener("project-name-updated", loadProjectName)
     return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
-
-  // Save changes to IndexedDB + Cloud + trigger sync event
-  const saveExpensesToIDB = async (updated: Expense[]) => {
-    setExpenses(updated)
-    try {
-      await set("builderlite_expenses", updated)
-      await syncManager.pushToCloud("builderlite_expenses", updated)
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("expenses-updated"))
-      }
-    } catch (e) {
-      console.error("Failed to save and sync expenses:", e)
-    }
-  }
-
-  const saveBudgetToIDB = async (newBudget: number) => {
-    setTotalBudget(newBudget)
-    try {
-      await set("builderlite_total_budget", newBudget)
-      await syncManager.pushToCloud("builderlite_total_budget", newBudget)
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("expenses-updated"))
-      }
-    } catch (e) {
-      console.error("Failed to save and sync budget:", e)
-    }
-  }
 
   // Calculations
   const totalMaterials = expenses.reduce((sum, item) => sum + (item.materials || 0), 0)
   const totalLabor = expenses.reduce((sum, item) => sum + (item.labor || 0), 0)
   const totalSpent = totalMaterials + totalLabor
-  
-  // Percent Used
   const percentUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0
 
-  // Circular Progress Math
-  const radius = 24;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (Math.min(percentUsed, 100) / 100) * circumference;
+  const radius = 24
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (Math.min(percentUsed, 100) / 100) * circumference
 
-  // Open Modal for Add/Edit
   const handleOpenModal = (expense?: Expense) => {
-    setIsSubmitting(false) // Reset lock when opening modal
+    setIsSubmitting(false)
     if (expense) {
       setEditingExpense(expense)
       setDate(expense.date)
@@ -172,7 +103,6 @@ export default function ExpenseTracker() {
     setIsDialogOpen(true)
   }
 
-  // Handle Photo Upload
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return
     const file = e.target.files[0]
@@ -185,7 +115,6 @@ export default function ExpenseTracker() {
     reader.readAsDataURL(file)
   }
 
-  // Save Expense Logic with Double-Tap Lock
   const handleSaveExpense = async () => {
     if (!description.trim() || !date || isSubmitting) return
 
@@ -222,31 +151,43 @@ export default function ExpenseTracker() {
         updatedList = [newEntry, ...expenses]
       }
 
-      await saveExpensesToIDB(updatedList)
+      await setExpenses(updatedList)
+      
+      // Notify Dashboard
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("expenses-updated"))
+      }
+      
       setIsDialogOpen(false)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Delete Expense
   const handleDeleteExpense = async (id: number) => {
     const updated = expenses.filter((e) => e.id !== id)
-    await saveExpensesToIDB(updated)
+    await setExpenses(updated)
+    
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("expenses-updated"))
+    }
+    
     setIsDialogOpen(false)
   }
 
-  // Save Budget Modal
   const handleSaveBudget = async () => {
     const parsed = parseFloat(tempBudget) || 0
-    await saveBudgetToIDB(parsed)
+    await setTotalBudget(parsed)
+    
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("expenses-updated"))
+    }
+    
     setIsBudgetDialogOpen(false)
   }
 
-  // Export to CSV
   const handleExportCSV = () => {
     const safeName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
-    
     const headers = ["Date", "Description", "Materials ($)", "Labor ($)", "Total ($)"]
     
     const rows = expenses.map((e) => {
@@ -263,7 +204,6 @@ export default function ExpenseTracker() {
 
     const brandingRow = `"CleanBuild - Project Expense Report"\n`
     const titleRow = `"Project: ${projectName.replace(/"/g, '""')}"\n\n`
-    
     const csvContent = "data:text/csv;charset=utf-8," + brandingRow + titleRow + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
     
     const encodedUri = encodeURI(csvContent)
@@ -288,7 +228,6 @@ export default function ExpenseTracker() {
           </p>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
         <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
           <Button
             variant="outline"

@@ -10,7 +10,7 @@ const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
   { label: "Schedule & Tasks", href: "/schedule", icon: "📅" },
   { label: "Punch List & To-Do's", href: "/punch-list", icon: "✅" },
-  { label: "Vision Board", href: "/logs", icon: "📷" },
+  { label: "Vision Board", href: "/vision-board", icon: "📷" },
   { label: "Expenses", href: "/expenses", icon: "💰" },
   { label: "Selections", href: "/selections", icon: "🛍️" },
   { label: "Contacts & Vendors", href: "/contacts", icon: "📞" },

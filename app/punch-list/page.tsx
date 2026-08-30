@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager"
+import { useState, useMemo } from "react"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,8 +29,6 @@ const CATEGORIES = [
   "Exterior & Landscaping",
 ]
 
-
-
 const INITIAL_PUNCH_LIST: PunchItem[] = [
   { id: 1, text: "👋 Welcome to CleanBuild! Check this box to complete a task.", category: "General To-Do", completed: false },
   { id: 2, text: "Click 'Edit' to assign an email. (We'll email them a reminder!)", category: "General To-Do", completed: false },
@@ -39,10 +36,11 @@ const INITIAL_PUNCH_LIST: PunchItem[] = [
 ]
 
 export default function PunchListPage() {
-  const [items, setItems] = useState<PunchItem[]>([])
+  // 1. Universal Sync Hook (Replaces all custom DB and Cloud logic!)
+  const [items, setItems] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
+  
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
-  const [isLoaded, setIsLoaded] = useState<boolean>(false)
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
@@ -57,46 +55,6 @@ export default function PunchListPage() {
   // Multi-Email State
   const [formEmails, setFormEmails] = useState<string[]>([])
   const [emailInput, setEmailInput] = useState("")
-
-  // --- LOCAL STORAGE & CLOUD READ ---
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const saved = await get<PunchItem[]>("jobflow_punch_list")
-        if (saved && Array.isArray(saved) && saved.length > 0) {
-          setItems(saved)
-        } else {
-          setItems(INITIAL_PUNCH_LIST)
-        }
-        setIsLoaded(true)
-
-        const cloudPunch = await syncManager.pullFromCloud("jobflow_punch_list")
-        if (cloudPunch) {
-          setItems(cloudPunch)
-        }
-      } catch (e) {
-        console.error("Failed to load punch list:", e)
-        setItems(INITIAL_PUNCH_LIST)
-        setIsLoaded(true)
-      }
-    }
-    loadData()
-  }, [])
-
-  // --- LOCAL STORAGE & CLOUD SAVE ---
-  useEffect(() => {
-    if (isLoaded) {
-      const syncData = async () => {
-        try {
-          await set("jobflow_punch_list", items)
-          await syncManager.pushToCloud("jobflow_punch_list", items)
-        } catch (e) {
-          console.error("Failed to save and sync punch list:", e)
-        }
-      }
-      syncData()
-    }
-  }, [items, isLoaded])
 
   // --- CALCULATIONS ---
   const completedCount = useMemo(() => items.filter((i) => i.completed).length, [items])

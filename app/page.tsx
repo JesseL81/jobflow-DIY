@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { get, set, clear } from "idb-keyval"
+import { useState } from "react"
+import { set, clear } from "idb-keyval"
 import { supabase } from "@/lib/supabase"
 import { syncManager } from "@/lib/syncManager"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -64,58 +65,17 @@ const getLocalTodayStr = () => {
 }
 
 export default function DashboardPage() {
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [totalBudget, setTotalBudget] = useState<number>(23402)
-  const [customNonWorkdays, setCustomNonWorkdays] = useState<CustomNonWorkday[]>([])
+  // 1. Universal Sync Hooks (Replaces all custom load and cloud logic!)
+  const [expenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
+  const [totalBudget] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
+  const [customNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", [])
+  const [punchList, setPunchList] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
   
-  const [punchList, setPunchList] = useState<PunchItem[]>([])
   const [newPunchText, setNewPunchText] = useState("")
-  
   const [editingPunch, setEditingPunch] = useState<PunchItem | null>(null)
   const [emailInput, setEmailInput] = useState("")
 
-  const loadDashboardData = async () => {
-    try {
-      const savedExpenses = await get<Expense[]>("builderlite_expenses")
-      const savedBudget = await get<number>("builderlite_total_budget")
-      const savedCustomNonWorkdays = await get<CustomNonWorkday[]>("jobflow_custom_nonworkdays")
-      const savedPunch = await get<PunchItem[]>("jobflow_punch_list")
-
-      if (savedExpenses) setExpenses(savedExpenses)
-      else setExpenses(INITIAL_EXPENSES)
-
-      if (savedPunch) setPunchList(savedPunch)
-      else setPunchList(INITIAL_PUNCH_LIST)
-
-      if (savedBudget !== undefined) setTotalBudget(savedBudget)
-      if (savedCustomNonWorkdays) setCustomNonWorkdays(savedCustomNonWorkdays)
-
-      const cloudPunch = await syncManager.pullFromCloud("jobflow_punch_list")
-      const cloudExpenses = await syncManager.pullFromCloud("builderlite_expenses")
-      const cloudBudget = await syncManager.pullFromCloud("builderlite_total_budget")
-      const cloudCustomNonWorkdays = await syncManager.pullFromCloud("jobflow_custom_nonworkdays")
-
-      if (cloudPunch) setPunchList(cloudPunch)
-      if (cloudExpenses) setExpenses(cloudExpenses)
-      if (cloudBudget !== undefined && cloudBudget !== null) setTotalBudget(cloudBudget)
-      if (cloudCustomNonWorkdays) setCustomNonWorkdays(cloudCustomNonWorkdays)
-
-    } catch (e) {
-      console.error("Error loading dashboard data:", e)
-    }
-  }
-
-  useEffect(() => {
-    loadDashboardData()
-
-    const handleSync = () => loadDashboardData()
-    window.addEventListener("expenses-updated", handleSync)
-
-    return () => {
-      window.removeEventListener("expenses-updated", handleSync)
-    }
-  }, [])
-
+  // --- PUNCH LIST LOGIC ---
   const handleAddPunchItem = async () => {
     if (!newPunchText.trim()) return
     const newItem: PunchItem = { 
@@ -126,31 +86,28 @@ export default function DashboardPage() {
       assignedEmails: []
     }
     const updated = [...punchList, newItem]
-    setPunchList(updated)
-    setNewPunchText("")
     
-    await set("jobflow_punch_list", updated)
-    await syncManager.pushToCloud("jobflow_punch_list", updated)
+    // Auto-syncs to IndexedDB and Supabase
+    await setPunchList(updated)
+    setNewPunchText("")
   }
 
   const handleTogglePunch = async (id: number) => {
     const updated = punchList.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
-    setPunchList(updated)
-    
-    await set("jobflow_punch_list", updated)
-    await syncManager.pushToCloud("jobflow_punch_list", updated)
+    // Auto-syncs to IndexedDB and Supabase
+    await setPunchList(updated)
   }
 
   const handleDeletePunch = async (id: number) => {
     const updated = punchList.filter((item) => item.id !== id)
-    setPunchList(updated)
-    
-    await set("jobflow_punch_list", updated)
-    await syncManager.pushToCloud("jobflow_punch_list", updated)
+    // Auto-syncs to IndexedDB and Supabase
+    await setPunchList(updated)
   }
 
+  // Edit Modal Handlers
   const handleOpenEditModal = (item: PunchItem) => {
     let emails = item.assignedEmails || []
+    // Silently migrate old single-string emails if they exist
     if ((item as any).assignedEmail && emails.length === 0) {
       emails = [(item as any).assignedEmail]
     }
@@ -183,13 +140,13 @@ export default function DashboardPage() {
   const handleSavePunchEdit = async () => {
     if (!editingPunch) return
     const updated = punchList.map(item => item.id === editingPunch.id ? editingPunch : item)
-    setPunchList(updated)
     
-    await set("jobflow_punch_list", updated)
-    await syncManager.pushToCloud("jobflow_punch_list", updated)
+    // Auto-syncs to IndexedDB and Supabase
+    await setPunchList(updated)
     setEditingPunch(null)
   }
 
+  // Determine Alert Status for Badges
   const getAlertStatus = (dueDate?: string, completed?: boolean) => {
     if (!dueDate || completed) return null
     const today = getLocalTodayStr()
@@ -198,6 +155,7 @@ export default function DashboardPage() {
     return "upcoming"
   }
 
+  // Metrics Calculations
   const totalPunchItems = punchList.length
   const completedPunchItems = punchList.filter((item) => item.completed).length
   const percentPunchCompleted = totalPunchItems > 0 ? Math.round((completedPunchItems / totalPunchItems) * 100) : 0
@@ -218,6 +176,7 @@ export default function DashboardPage() {
   const currentDay = Math.min(totalDays, Math.max(1, Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1))
   const percentTimeUsed = Math.min(100, Math.max(0, Math.round((currentDay / totalDays) * 100)))
 
+  // --- SYSTEM CONTROLS (Manual Sync Required to clear entire app) ---
   const handleRestoreTutorial = async () => {
     const isConfirmed = window.confirm(
       "This will replace your current data with the tutorial examples. Continue?"
@@ -226,8 +185,10 @@ export default function DashboardPage() {
     if (!isConfirmed) return
 
     try {
+      // 1. Wipe the offline browser database entirely
       await clear()
 
+      // 2. Delete the user's cloud rows so the database thinks they are brand new
       const { data: userData } = await supabase.auth.getUser()
       if (userData?.user?.id) {
         await supabase
@@ -236,6 +197,7 @@ export default function DashboardPage() {
           .eq("user_id", userData.user.id)
       }
 
+      // 3. Hard refresh to naturally spawn the examples
       window.location.reload()
     } catch (error) {
       console.error("Failed to restore tutorial:", error)
@@ -251,22 +213,25 @@ export default function DashboardPage() {
     if (!isConfirmed) return
 
     try {
-      await set("builderlite_expenses", [])
-      await set("jobflow_punch_list", [])
-      await set("jobflow_calendar_tasks", [])
-      await set("jobflow_custom_nonworkdays", [])
-      await set("jobflow_vision_board", [])
-      await set("jobflow_selections", [])
-      await set("jobflow_contacts", [])
+      // 1. Overwrite the offline database with empty arrays
+      await set("cleanbuild_expenses", [])
+      await set("cleanbuild_punch_list", [])
+      await set("cleanbuild_calendar_tasks", [])
+      await set("cleanbuild_custom_nonworkdays", [])
+      await set("cleanbuild_vision_board", [])
+      await set("cleanbuild_selections", [])
+      await set("cleanbuild_contacts", [])
 
-      await syncManager.pushToCloud("builderlite_expenses", [])
-      await syncManager.pushToCloud("jobflow_punch_list", [])
-      await syncManager.pushToCloud("jobflow_calendar_tasks", [])
-      await syncManager.pushToCloud("jobflow_custom_nonworkdays", [])
-      await syncManager.pushToCloud("jobflow_vision_board", [])
-      await syncManager.pushToCloud("jobflow_selections", [])
-      await syncManager.pushToCloud("jobflow_contacts", [])
+      // 2. Overwrite the Cloud Database with empty arrays
+      await syncManager.pushToCloud("cleanbuild_expenses", [])
+      await syncManager.pushToCloud("cleanbuild_punch_list", [])
+      await syncManager.pushToCloud("cleanbuild_calendar_tasks", [])
+      await syncManager.pushToCloud("cleanbuild_custom_nonworkdays", [])
+      await syncManager.pushToCloud("cleanbuild_vision_board", [])
+      await syncManager.pushToCloud("cleanbuild_selections", [])
+      await syncManager.pushToCloud("cleanbuild_contacts", [])
 
+      // 3. Hard refresh to show the clean slate
       window.location.reload()
     } catch (error) {
       console.error("Failed to wipe data:", error)

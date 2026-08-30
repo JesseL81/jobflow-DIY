@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { useState } from "react"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
+import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,11 +55,13 @@ const INITIAL_CONTACTS: Contact[] = [
 ]
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>([])
+  // 1. Universal Sync Hook (Replaces all custom DB and Cloud logic!)
+  const [contacts, setContacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", INITIAL_CONTACTS)
+  
   const [activeContactId, setActiveContactId] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [newName, setNewName] = useState("")
   const [newCompany, setNewCompany] = useState("")
@@ -71,62 +72,6 @@ export default function ContactsPage() {
   const [newNotes, setNewNotes] = useState("")
   const [newStatus, setNewStatus] = useState<"Active" | "Preferred" | "On Hold">("Active")
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const savedContacts = await get<Contact[]>("jobflow_contacts")
-        
-        // FIX: If savedContacts is defined (even if empty), use it. 
-        // Only load INITIAL_CONTACTS if it is strictly undefined.
-        if (savedContacts) {
-          setContacts(savedContacts)
-          setActiveContactId(savedContacts.length > 0 ? savedContacts[0].id : "")
-        } else {
-          setContacts(INITIAL_CONTACTS)
-          setActiveContactId(INITIAL_CONTACTS[0].id)
-        }
-
-        setIsLoaded(true)
-
-        const cloudContacts = await syncManager.pullFromCloud("jobflow_contacts")
-        // FIX: Also apply the same logic to the cloud pull
-        if (cloudContacts) {
-          setContacts(cloudContacts)
-          if (cloudContacts.length > 0) {
-            setActiveContactId((currentId) => {
-              if (!cloudContacts.find((c: Contact) => c.id === currentId)) {
-                return cloudContacts[0].id
-              }
-              return currentId
-            })
-          } else {
-            setActiveContactId("")
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load contacts:", err)
-        setContacts(INITIAL_CONTACTS)
-        setActiveContactId(INITIAL_CONTACTS[0].id)
-        setIsLoaded(true)
-      }
-    }
-    loadData()
-  }, [])
-
-  useEffect(() => {
-    if (isLoaded) {
-      const syncData = async () => {
-        try {
-          await set("jobflow_contacts", contacts)
-          await syncManager.pushToCloud("jobflow_contacts", contacts)
-        } catch (e) {
-          console.error("Failed to sync contacts:", e)
-        }
-      }
-      syncData()
-    }
-  }, [contacts, isLoaded])
-
   const filteredContacts = contacts.filter((c) => {
     const term = searchTerm.toLowerCase()
     return (
@@ -136,38 +81,47 @@ export default function ContactsPage() {
     )
   })
 
+  // Automatically select the first contact in the filtered list if none is active
   const activeContact =
     filteredContacts.find((c) => c.id === activeContactId) || filteredContacts[0] || null
 
-  const handleAddContact = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!newName || !newCompany) return
+    if (!newName || !newCompany || isSubmitting) return
 
-    const newContact: Contact = {
-      id: `c-${Date.now()}`,
-      name: newName,
-      company: newCompany,
-      trade: newTrade || "General Subcontractor",
-      phone: newPhone || "(555) 000-0000",
-      email: newEmail || "contact@example.com",
-      address: newAddress || "N/A",
-      notes: newNotes || "No notes added.",
-      status: newStatus,
+    setIsSubmitting(true)
+
+    try {
+      const newContact: Contact = {
+        id: `c-${Date.now()}`,
+        name: newName,
+        company: newCompany,
+        trade: newTrade || "General Subcontractor",
+        phone: newPhone || "(555) 000-0000",
+        email: newEmail || "contact@example.com",
+        address: newAddress || "N/A",
+        notes: newNotes || "No notes added.",
+        status: newStatus,
+      }
+
+      const updatedContacts = [newContact, ...contacts]
+      
+      // Auto-syncs to IndexedDB and Supabase
+      await setContacts(updatedContacts)
+      
+      setActiveContactId(newContact.id)
+      setNewName("")
+      setNewCompany("")
+      setNewTrade("General Subcontractor")
+      setNewPhone("")
+      setNewEmail("")
+      setNewAddress("")
+      setNewNotes("")
+      setNewStatus("Active")
+      setIsDialogOpen(false)
+    } finally {
+      setIsSubmitting(false)
     }
-
-    const updatedContacts = [newContact, ...contacts]
-    setContacts(updatedContacts)
-    setActiveContactId(newContact.id)
-
-    setNewName("")
-    setNewCompany("")
-    setNewTrade("General Subcontractor")
-    setNewPhone("")
-    setNewEmail("")
-    setNewAddress("")
-    setNewNotes("")
-    setNewStatus("Active")
-    setIsDialogOpen(false)
   }
 
   return (
@@ -312,8 +266,12 @@ export default function ContactsPage() {
                 </div>
 
                 <DialogFooter className="pt-2 border-t border-slate-100">
-                  <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4">
-                    Save Contact
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Saving..." : "Save Contact"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -461,7 +419,7 @@ export default function ContactsPage() {
       </div>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.00
+        CleanBuild v1.01
       </div>
       
     </main>

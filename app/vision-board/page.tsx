@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,8 +16,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager"
 import html2canvas from "html2canvas-pro"
 import jsPDF from "jspdf"
 import JSZip from "jszip"
@@ -52,8 +51,6 @@ const INITIAL_BOARD: VisionBoardItem[] = [
   }
 ]
 
-
-
 const formatDisplayDate = (dateStr: string) => {
   if (!dateStr) return ""
   const cleanDate = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr
@@ -73,8 +70,10 @@ const getTodayInputDate = () => {
 export default function VisionBoardPage() {
   const [isMounted, setIsMounted] = useState(false)
   
-  const [boardItems, setBoardItems] = useState<VisionBoardItem[]>([])
-  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES)
+  // 1. Universal Sync Hooks (Replaces all custom DB and Cloud logic!)
+  const [boardItems, setBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", INITIAL_BOARD)
+  const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_vision_board_categories", DEFAULT_CATEGORIES)
+  
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
@@ -98,52 +97,7 @@ export default function VisionBoardPage() {
 
   useEffect(() => {
     setIsMounted(true)
-
-    async function loadData() {
-      try {
-        // 1. Instant Offline Load (Now accepts empty arrays)
-        const savedData = await get<VisionBoardItem[]>("jobflow_vision_board") 
-        if (savedData) {
-          const sanitizedData = savedData.map(item => ({
-            ...item, photos: Array.isArray(item?.photos) ? item.photos : []
-          }))
-          setBoardItems(sanitizedData)
-        } else {
-          setBoardItems(INITIAL_BOARD)
-        }
-
-        const savedCategories = await get<string[]>("jobflow_vision_board_categories")
-        if (savedCategories) {
-          setCategories(savedCategories)
-        } else {
-          setCategories(DEFAULT_CATEGORIES)
-        }
-
-        // 2. Silent Cloud Pull
-        const cloudData = await syncManager.pullFromCloud("jobflow_vision_board")
-        if (cloudData) setBoardItems(cloudData)
-
-        const cloudCategories = await syncManager.pullFromCloud("jobflow_vision_board_categories")
-        if (cloudCategories) setCategories(cloudCategories)
-
-      } catch (e) {
-        console.error("Error loading Vision Board:", e)
-        setBoardItems(INITIAL_BOARD)
-        setCategories(DEFAULT_CATEGORIES)
-      }
-    }
-    loadData()
   }, [])
-
-  const saveAndSync = async (updatedItems: VisionBoardItem[]) => {
-    setBoardItems(updatedItems || [])
-    try {
-      await set("jobflow_vision_board", updatedItems || [])
-      await syncManager.pushToCloud("jobflow_vision_board", updatedItems || [])
-    } catch (e) {
-      console.error("Failed to sync Vision Board:", e)
-    }
-  }
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return
@@ -156,14 +110,9 @@ export default function VisionBoardPage() {
     }
 
     const updatedCategories = [...(categories || []), trimmed]
-    setCategories(updatedCategories)
     
-    try {
-      await set("jobflow_vision_board_categories", updatedCategories)
-      await syncManager.pushToCloud("jobflow_vision_board_categories", updatedCategories)
-    } catch (e) {
-      console.error("Failed to save categories:", e)
-    }
+    // Auto-syncs to IndexedDB and Supabase
+    await setCategories(updatedCategories)
 
     setNewCategoryName("")
     setIsAddingCategory(false)
@@ -418,7 +367,8 @@ export default function VisionBoardPage() {
         ]
       }
 
-      await saveAndSync(updatedItems)
+      // Auto-syncs to IndexedDB and Supabase
+      await setBoardItems(updatedItems)
       setIsModalOpen(false)
     } finally {
       setIsSubmitting(false)
@@ -427,7 +377,8 @@ export default function VisionBoardPage() {
 
   const handleDeleteItem = async (id: number) => {
     const updatedItems = (boardItems || []).filter((l) => l.id !== id)
-    await saveAndSync(updatedItems)
+    // Auto-syncs to IndexedDB and Supabase
+    await setBoardItems(updatedItems)
   }
 
   if (!isMounted) return null;
@@ -883,10 +834,6 @@ export default function VisionBoardPage() {
           )}
         </DialogContent>
       </Dialog>
-
-      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
-      </div>
     </main>
   )
 }

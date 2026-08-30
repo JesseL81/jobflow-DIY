@@ -94,9 +94,9 @@ export default function TemplatesPage() {
     let customNonWorkdays: string[] = []
 
     if (typeof window !== "undefined") {
-      const savedSat = localStorage.getItem("jobflow_saturdays_off")
-      const savedSun = localStorage.getItem("jobflow_sundays_off")
-      const savedWeekends = localStorage.getItem("jobflow_weekends_off")
+      const savedSat = localStorage.getItem("cleanbuild_saturdays_off")
+      const savedSun = localStorage.getItem("cleanbuild_sundays_off")
+      const savedWeekends = localStorage.getItem("cleanbuild_weekends_off")
 
       if (savedSat !== null) saturdaysOff = savedSat === "true"
       else if (savedWeekends !== null) saturdaysOff = savedWeekends === "true"
@@ -105,7 +105,7 @@ export default function TemplatesPage() {
       else if (savedWeekends !== null) sundaysOff = savedWeekends === "true"
 
       try {
-        const savedCustom = localStorage.getItem("jobflow_custom_nonworkdays")
+        const savedCustom = localStorage.getItem("cleanbuild_custom_nonworkdays")
         if (savedCustom) {
           const parsed = JSON.parse(savedCustom)
           if (Array.isArray(parsed)) {
@@ -256,7 +256,7 @@ export default function TemplatesPage() {
 
     let existingTasks = []
     try {
-      const savedSchedule = localStorage.getItem("jobflow_calendar_tasks")
+      const savedSchedule = localStorage.getItem("cleanbuild_calendar_tasks")
       if (savedSchedule) {
         const parsed = JSON.parse(savedSchedule)
         if (Array.isArray(parsed)) {
@@ -268,7 +268,7 @@ export default function TemplatesPage() {
     }
 
     const updatedTasks = [...existingTasks, ...newTasksToImport]
-    localStorage.setItem("jobflow_calendar_tasks", JSON.stringify(updatedTasks))
+    localStorage.setItem("cleanbuild_calendar_tasks", JSON.stringify(updatedTasks))
 
     setTimeout(() => {
       setIsImporting(false)

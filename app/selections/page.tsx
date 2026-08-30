@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { get, set } from "idb-keyval"
 import { syncManager } from "@/lib/syncManager"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -95,16 +96,18 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
 ]
 
 export default function SelectionsPage() {
-  const [items, setItems] = useState<SelectionItem[]>([])
-  const [categoryBudgets, setCategoryBudgets] = useState<Record<string, number>>({
+  // 1. Universal Sync Hooks (Replaces all custom DB and Cloud logic!)
+  const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
+  const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
     "Plumbing Fixtures": 500,
     "Tile & Flooring": 800,
     "Lighting & Electrical": 300,
     "Cabinetry & Hardware": 1200,
   })
+
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
-  const [isLoaded, setIsLoaded] = useState<boolean>(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Budget Allowance Modal
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
@@ -123,58 +126,6 @@ export default function SelectionsPage() {
   const [formNotes, setFormNotes] = useState("")
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Selected")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const savedItems = await get<SelectionItem[]>("jobflow_selections_items")
-        const savedBudgets = await get<Record<string, number>>("jobflow_selections_budgets")
-
-        if (savedItems && Array.isArray(savedItems) && savedItems.length > 0) {
-          setItems(savedItems)
-        } else {
-          setItems(INITIAL_SELECTIONS)
-        }
-
-        if (savedBudgets) {
-          setCategoryBudgets(savedBudgets)
-        }
-
-        setIsLoaded(true)
-
-        const cloudItems = await syncManager.pullFromCloud("jobflow_selections_items")
-        const cloudBudgets = await syncManager.pullFromCloud("jobflow_selections_budgets")
-
-        if (cloudItems && Array.isArray(cloudItems)) {
-          setItems(cloudItems)
-        }
-        if (cloudBudgets) {
-          setCategoryBudgets(cloudBudgets)
-        }
-      } catch (e) {
-        console.error("Error loading selections:", e)
-        setIsLoaded(true)
-      }
-    }
-    loadData()
-  }, [])
-
-  useEffect(() => {
-    if (isLoaded) {
-      const syncData = async () => {
-        try {
-          await set("jobflow_selections_items", items)
-          await syncManager.pushToCloud("jobflow_selections_items", items)
-
-          await set("jobflow_selections_budgets", categoryBudgets)
-          await syncManager.pushToCloud("jobflow_selections_budgets", categoryBudgets)
-        } catch (e) {
-          console.error("Failed to sync selections:", e)
-        }
-      }
-      syncData()
-    }
-  }, [items, categoryBudgets, isLoaded])
 
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items])
 
@@ -195,8 +146,8 @@ export default function SelectionsPage() {
     }, 0)
   }, [items, selectedCategory, totalCost])
 
-  const handleToggleCheck = (id: string) => {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)))
+  const handleToggleCheck = async (id: string) => {
+    await setItems((prev) => prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)))
   }
 
   const filteredItems = useMemo(() => {
@@ -210,13 +161,14 @@ export default function SelectionsPage() {
     })
   }, [items, selectedCategory, searchQuery])
 
-  const handleSaveBudget = () => {
+  const handleSaveBudget = async () => {
     const num = parseFloat(tempBudgetVal) || 0
-    setCategoryBudgets((prev) => ({ ...prev, [selectedCategory]: num }))
+    await setCategoryBudgets((prev) => ({ ...prev, [selectedCategory]: num }))
     setIsBudgetModalOpen(false)
   }
 
   const handleOpenAdd = () => {
+    setIsSubmitting(false)
     setEditingItem(null)
     setFormTitle("")
     setFormCategory(selectedCategory !== "All Categories" ? selectedCategory : "Plumbing Fixtures")
@@ -230,6 +182,7 @@ export default function SelectionsPage() {
   }
 
   const handleOpenEdit = (item: SelectionItem) => {
+    setIsSubmitting(false)
     setEditingItem(item)
     setFormTitle(item.title)
     setFormCategory(item.category)
@@ -243,76 +196,84 @@ export default function SelectionsPage() {
   }
 
   const handleSaveItem = async () => {
-    if (!formTitle.trim()) return
-    const itemPriceNumber = parseFloat(formPrice.replace(/[^0-9.]/g, "")) || 0
-    let updatedItem: SelectionItem
+    if (!formTitle.trim() || isSubmitting) return
+    setIsSubmitting(true)
 
-    if (editingItem) {
-      updatedItem = {
-        ...editingItem,
-        title: formTitle.trim(),
-        category: formCategory,
-        vendorUrl: formUrl.trim(),
-        price: formPrice.trim(),
-        modelNumber: formModel.trim(),
-        notes: formNotes.trim(),
-        status: formStatus,
-        checked: formSyncToExpenses ? true : editingItem.checked,
-        syncToExpenses: formSyncToExpenses,
-      }
-      setItems((prev) => prev.map((i) => (i.id === editingItem.id ? updatedItem : i)))
-    } else {
-      updatedItem = {
-        id: Date.now().toString(),
-        title: formTitle.trim(),
-        category: formCategory,
-        vendorUrl: formUrl.trim(),
-        price: formPrice.trim(),
-        modelNumber: formModel.trim(),
-        notes: formNotes.trim(),
-        status: formStatus,
-        checked: true,
-        syncToExpenses: formSyncToExpenses,
-      }
-      setItems((prev) => [updatedItem, ...prev])
-    }
+    try {
+      const itemPriceNumber = parseFloat(formPrice.replace(/[^0-9.]/g, "")) || 0
+      let updatedItem: SelectionItem
 
-    if (formSyncToExpenses) {
-      try {
-        const existingExpenses = (await get<ExpenseItem[]>("builderlite_expenses")) || []
-        const filteredExpenses = editingItem
-          ? existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
-          : existingExpenses
-
-        const newExpenseRecord: ExpenseItem = {
-          id: parseInt(updatedItem.id) || Date.now(),
-          description: `Selection: ${updatedItem.title} (${updatedItem.category})`,
-          materials: itemPriceNumber,
-          labor: 0,
-          date: new Date().toISOString().split("T")[0],
+      if (editingItem) {
+        updatedItem = {
+          ...editingItem,
+          title: formTitle.trim(),
+          category: formCategory,
+          vendorUrl: formUrl.trim(),
+          price: formPrice.trim(),
+          modelNumber: formModel.trim(),
+          notes: formNotes.trim(),
+          status: formStatus,
+          checked: formSyncToExpenses ? true : editingItem.checked,
+          syncToExpenses: formSyncToExpenses,
         }
-
-        const newExpenseList = [newExpenseRecord, ...filteredExpenses]
-        await set("builderlite_expenses", newExpenseList)
-        await syncManager.pushToCloud("builderlite_expenses", newExpenseList)
-        window.dispatchEvent(new Event("expenses-updated"))
-      } catch (err) {
-        console.error(err)
+        await setItems((prev) => prev.map((i) => (i.id === editingItem.id ? updatedItem : i)))
+      } else {
+        updatedItem = {
+          id: Date.now().toString(),
+          title: formTitle.trim(),
+          category: formCategory,
+          vendorUrl: formUrl.trim(),
+          price: formPrice.trim(),
+          modelNumber: formModel.trim(),
+          notes: formNotes.trim(),
+          status: formStatus,
+          checked: true,
+          syncToExpenses: formSyncToExpenses,
+        }
+        await setItems((prev) => [updatedItem, ...prev])
       }
-    }
 
-    setIsModalOpen(false)
+      // Cross-tab interaction: Send this expense to the Expenses Store if toggled
+      if (formSyncToExpenses) {
+        try {
+          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+          const filteredExpenses = editingItem
+            ? existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
+            : existingExpenses
+
+          const newExpenseRecord: ExpenseItem = {
+            id: parseInt(updatedItem.id) || Date.now(),
+            description: `Selection: ${updatedItem.title} (${updatedItem.category})`,
+            materials: itemPriceNumber,
+            labor: 0,
+            date: new Date().toISOString().split("T")[0],
+          }
+
+          const newExpenseList = [newExpenseRecord, ...filteredExpenses]
+          await set("cleanbuild_expenses", newExpenseList)
+          await syncManager.pushToCloud("cleanbuild_expenses", newExpenseList)
+          window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {
+          console.error(err)
+        }
+      }
+
+      setIsModalOpen(false)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleDeleteItem = async () => {
     if (!editingItem) return
-    setItems((prev) => prev.filter((i) => i.id !== editingItem.id))
+    await setItems((prev) => prev.filter((i) => i.id !== editingItem.id))
     
+    // Cross-tab interaction: Remove from expenses if it was linked
     try {
-      const existingExpenses = (await get<ExpenseItem[]>("builderlite_expenses")) || []
+      const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
       const filteredExpenses = existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
-      await set("builderlite_expenses", filteredExpenses)
-      await syncManager.pushToCloud("builderlite_expenses", filteredExpenses)
+      await set("cleanbuild_expenses", filteredExpenses)
+      await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
       window.dispatchEvent(new Event("expenses-updated"))
     } catch (err) {
       console.error(err)
@@ -351,7 +312,6 @@ export default function SelectionsPage() {
           </p>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
         <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
           <div className="bg-slate-800/80 border border-slate-700 py-1.5 px-3 rounded-lg text-right">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Checked Total</span>
@@ -680,8 +640,12 @@ export default function SelectionsPage() {
               <Button variant="outline" onClick={() => setIsModalOpen(false)}>
                 Cancel
               </Button>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveItem}>
-                {editingItem ? "Save Changes" : "Add Selection"}
+              <Button 
+                className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50" 
+                onClick={handleSaveItem}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Saving..." : editingItem ? "Save Changes" : "Add Selection"}
               </Button>
             </div>
           </DialogFooter>
@@ -689,7 +653,7 @@ export default function SelectionsPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.00
+        CleanBuild v1.01
       </div>
     </main>
   )

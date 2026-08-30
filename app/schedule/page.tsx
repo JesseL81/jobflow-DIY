@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager"
+import { get } from "idb-keyval"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -79,118 +79,37 @@ export default function SchedulePage() {
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
   const [dragOverDate, setDragOverDate] = useState<string | null>(null)
 
-  const [customNonWorkdays, setCustomNonWorkdays] = useState<CustomNonWorkday[]>([])
-  const [explicitWorkingDays, setExplicitWorkingDays] = useState<string[]>([]) 
-  const [logNonWorkdays, setLogNonWorkdays] = useState<CustomNonWorkday[]>([])
+  // Universal Auto-Sync Hooks (Replaces all custom load and cloud logic!)
+  const [tasks, setTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", INITIAL_TASKS)
+  const [customNonWorkdays, setCustomNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", [])
+  const [explicitWorkingDays, setExplicitWorkingDays] = useOfflineSync<string[]>("cleanbuild_explicit_working_days", [])
+  const [saturdaysOff, setSaturdaysOff] = useOfflineSync<boolean>("cleanbuild_saturdays_off", true)
+  const [sundaysOff, setSundaysOff] = useOfflineSync<boolean>("cleanbuild_sundays_off", true)
+  const [nonWorkdaysMap, setNonWorkdaysMap] = useOfflineSync<Record<string, string>>("non_workdays_map", {})
+
   const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
-  const [saturdaysOff, setSaturdaysOff] = useState<boolean>(true)
-  const [sundaysOff, setSundaysOff] = useState<boolean>(true)
   const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
-
-  const [tasks, setTasks] = useState<CalendarTask[]>(INITIAL_TASKS)
-  const [isLoaded, setIsLoaded] = useState(false)
-
-  // --- LOCAL STORAGE -> CLOUD SYNC: READ ON MOUNT ---
-  useEffect(() => {
-    const loadScheduleData = async () => {
-      try {
-        // 1. Instant Offline Load (from IndexedDB)
-        const savedTasks = await get<CalendarTask[]>("jobflow_calendar_tasks")
-        const savedCustom = await get<CustomNonWorkday[]>("jobflow_custom_nonworkdays")
-        const savedExplicit = await get<string[]>("jobflow_explicit_working_days")
-        const savedSatOff = await get<boolean>("jobflow_saturdays_off")
-        const savedSunOff = await get<boolean>("jobflow_sundays_off")
-        const savedLogMap = await get<Record<string, string>>("non_workdays_map")
-
-        if (savedTasks) setTasks(savedTasks)
-        if (savedCustom) setCustomNonWorkdays(savedCustom)
-        if (savedExplicit) setExplicitWorkingDays(savedExplicit)
-        if (savedSatOff !== undefined) setSaturdaysOff(savedSatOff)
-        if (savedSunOff !== undefined) setSundaysOff(savedSunOff)
-        if (savedLogMap) {
-          const formatted = Object.entries(savedLogMap).map(([date, reason]) => ({
-            date, title: reason ? `${reason}` : "Non-Workday (Log)", isFromLog: true
-          }))
-          setLogNonWorkdays(formatted)
-        }
-
-        setIsLoaded(true) // UI renders instantly
-
-        // 2. Silent Cloud Pull
-        const cloudTasks = await syncManager.pullFromCloud("jobflow_calendar_tasks")
-        const cloudCustom = await syncManager.pullFromCloud("jobflow_custom_nonworkdays")
-        const cloudExplicit = await syncManager.pullFromCloud("jobflow_explicit_working_days")
-        const cloudSatOff = await syncManager.pullFromCloud("jobflow_saturdays_off")
-        const cloudSunOff = await syncManager.pullFromCloud("jobflow_sundays_off")
-        const cloudLogMap = await syncManager.pullFromCloud("non_workdays_map")
-
-        if (cloudTasks) setTasks(cloudTasks)
-        if (cloudCustom) setCustomNonWorkdays(cloudCustom)
-        if (cloudExplicit) setExplicitWorkingDays(cloudExplicit)
-        if (cloudSatOff !== undefined && cloudSatOff !== null) setSaturdaysOff(cloudSatOff)
-        if (cloudSunOff !== undefined && cloudSunOff !== null) setSundaysOff(cloudSunOff)
-        if (cloudLogMap) {
-          const formatted = Object.entries(cloudLogMap).map(([date, reason]) => ({
-            date, title: (reason as string) || "Non-Workday (Log)", isFromLog: true
-          }))
-          setLogNonWorkdays(formatted)
-        }
-
-      } catch (e) {
-        console.error("Error loading schedule data:", e)
-        setIsLoaded(true)
-      }
-    }
-    loadScheduleData()
-  }, [])
-
-  // --- AUTOMATIC CLOUD PUSH ON CHANGE ---
-  useEffect(() => {
-    if (isLoaded) {
-      set("jobflow_calendar_tasks", tasks)
-      syncManager.pushToCloud("jobflow_calendar_tasks", tasks)
-    }
-  }, [tasks, isLoaded])
-
-  useEffect(() => {
-    if (isLoaded) {
-      set("jobflow_custom_nonworkdays", customNonWorkdays)
-      syncManager.pushToCloud("jobflow_custom_nonworkdays", customNonWorkdays)
-    }
-  }, [customNonWorkdays, isLoaded])
-
-  useEffect(() => {
-    if (isLoaded) {
-      set("jobflow_explicit_working_days", explicitWorkingDays)
-      syncManager.pushToCloud("jobflow_explicit_working_days", explicitWorkingDays)
-    }
-  }, [explicitWorkingDays, isLoaded])
-
-  useEffect(() => {
-    if (isLoaded) {
-      set("jobflow_saturdays_off", saturdaysOff)
-      set("jobflow_sundays_off", sundaysOff)
-      syncManager.pushToCloud("jobflow_saturdays_off", saturdaysOff)
-      syncManager.pushToCloud("jobflow_sundays_off", sundaysOff)
-    }
-  }, [saturdaysOff, sundaysOff, isLoaded])
 
   // Keep Log Non-Workdays mapped if updated from another tab
   useEffect(() => {
     const handleSync = async () => {
       const map = await get<Record<string, string>>("non_workdays_map")
       if (map) {
-        const formatted: CustomNonWorkday[] = Object.entries(map).map(([date, reason]) => ({
-          date,
-          title: reason ? `${reason}` : "Non-Workday (Log)",
-          isFromLog: true,
-        }))
-        setLogNonWorkdays(formatted)
+        setNonWorkdaysMap(map)
       }
     }
     window.addEventListener("logs-updated", handleSync)
     return () => window.removeEventListener("logs-updated", handleSync)
-  }, [])
+  }, [setNonWorkdaysMap])
+
+  // Automatically parse the logs map into the array format the calendar needs
+  const logNonWorkdays = useMemo(() => {
+    return Object.entries(nonWorkdaysMap).map(([date, reason]) => ({
+      date,
+      title: reason ? `${reason}` : "Non-Workday (Log)",
+      isFromLog: true,
+    }))
+  }, [nonWorkdaysMap])
 
   const allNonWorkdays = useMemo(() => {
     return [...customNonWorkdays, ...logNonWorkdays]
@@ -363,14 +282,12 @@ export default function SchedulePage() {
     setDragOverDate(null)
     if (!draggedTaskId) return
 
-    // Helper to check if a specific date string is a non-workday
     const isNonWork = (dStr: string) => 
       isDateNonWorkdayCheck(dStr, allNonWorkdays, saturdaysOff, sundaysOff, explicitWorkingDays)
 
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
         if (task.id === draggedTaskId) {
-          // 1. Find out how many WORKING days the original task took
           let workingDays = 0
           let currCountDate = new Date(task.startDate + "T00:00:00")
           const oldEnd = new Date(task.endDate + "T00:00:00")
@@ -381,19 +298,17 @@ export default function SchedulePage() {
             currCountDate.setDate(currCountDate.getDate() + 1)
           }
 
-          if (workingDays === 0) workingDays = 1 // Safety fallback
+          if (workingDays === 0) workingDays = 1
 
-          // 2. If dropped on a weekend/holiday, push the start date to the next available working day
           let newStart = new Date(newDropDate + "T00:00:00")
           while (isNonWork(newStart.toISOString().split("T")[0])) {
             newStart.setDate(newStart.getDate() + 1)
           }
           const finalStartStr = newStart.toISOString().split("T")[0]
 
-          // 3. Add the working days to find the true end date
           let finalEndStr = finalStartStr
           let currAddDate = new Date(finalStartStr + "T00:00:00")
-          let daysAdded = 1 // The start date itself counts as Day 1
+          let daysAdded = 1
 
           while (daysAdded < workingDays) {
             currAddDate.setDate(currAddDate.getDate() + 1)
@@ -450,7 +365,6 @@ export default function SchedulePage() {
 
     let updatedCustomNonWorkdays = [...customNonWorkdays]
     let updatedExplicitWorkingDays = [...explicitWorkingDays]
-    let updatedLogNonWorkdays = [...logNonWorkdays]
 
     const start = new Date(selectedDate + "T00:00:00")
     const end = new Date((modalEndDate || selectedDate) + "T00:00:00")
@@ -473,21 +387,17 @@ export default function SchedulePage() {
       }
     } else {
       let curr = new Date(start)
-      let currentLogMap: Record<string, string> = {}
-      try {
-        const existingMap = await get<Record<string, string>>("non_workdays_map")
-        if (existingMap) currentLogMap = { ...existingMap }
-      } catch (e) { console.error(e) }
-
+      let currentLogMap: Record<string, string> = { ...nonWorkdaysMap }
       let logMapChanged = false
+
       while (curr <= end) {
         const dStr = curr.toISOString().split("T")[0]
         updatedCustomNonWorkdays = updatedCustomNonWorkdays.filter((d) => d.date !== dStr)
-        updatedLogNonWorkdays = updatedLogNonWorkdays.filter((d) => d.date !== dStr)
 
         const dObj = new Date(dStr + "T00:00:00")
         const dayOfWeek = dObj.getDay()
         const isDefaultWeekend = (saturdaysOff && dayOfWeek === 6) || (sundaysOff && dayOfWeek === 0)
+        
         if (isDefaultWeekend && !updatedExplicitWorkingDays.includes(dStr)) {
           updatedExplicitWorkingDays.push(dStr)
         }
@@ -500,17 +410,13 @@ export default function SchedulePage() {
       }
 
       if (logMapChanged) {
-        try {
-          await set("non_workdays_map", currentLogMap)
-          await syncManager.pushToCloud("non_workdays_map", currentLogMap)
-          window.dispatchEvent(new Event("logs-updated"))
-        } catch (e) { console.error(e) }
+        setNonWorkdaysMap(currentLogMap)
+        window.dispatchEvent(new Event("logs-updated"))
       }
     }
 
     setCustomNonWorkdays(updatedCustomNonWorkdays)
     setExplicitWorkingDays(updatedExplicitWorkingDays)
-    setLogNonWorkdays(updatedLogNonWorkdays)
 
     let updatedTasks = [...tasks]
     if (editingTask) {
@@ -551,7 +457,7 @@ export default function SchedulePage() {
 
   const handleDeleteTask = () => {
     if (!editingTask) return
-    setTasks(tasks.filter((t) => t.id !== editingTask.id))
+    setTasks((prev) => prev.filter((t) => t.id !== editingTask.id))
     setIsDialogOpen(false)
     setEditingTask(null)
   }
@@ -612,7 +518,6 @@ export default function SchedulePage() {
           </Button>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
         {/* Right Column */}
         <div className="flex items-center justify-center md:justify-end w-full gap-3">
           <Button
@@ -637,13 +542,11 @@ export default function SchedulePage() {
       {/* Schedule Main Card Wrapper */}
       <Card className="overflow-hidden border shadow-sm bg-white flex-1 flex flex-col">
         
-        {/* Days Header - Colored Orange to match Theme */}
+        {/* Days Header */}
         <div className="grid grid-cols-7 border-b text-center text-[11px] font-bold text-orange-600 uppercase tracking-wider bg-slate-50 py-2.5 shrink-0 shadow-sm z-10">
           {daysOfWeek.map((day) => (
             <div key={day.full}>
-              {/* Shows full word on screens larger than mobile */}
               <span className="hidden sm:inline">{day.full}</span>
-              {/* Shows 3-letter abbreviation on mobile screens */}
               <span className="sm:hidden">{day.short}</span>
             </div>
           ))}
@@ -739,11 +642,10 @@ export default function SchedulePage() {
                             ? "bg-slate-300 bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:8px_8px]" 
                             : day.isCurrentMonth
                               ? "bg-white hover:bg-slate-50"
-                              : "bg-slate-100 hover:bg-slate-200" // Grey background for non-current month
+                              : "bg-slate-100 hover:bg-slate-200"
                       } ${!day.isCurrentMonth ? "opacity-50" : ""}`}
                       style={{ minHeight: `${dynamicWeekHeight}px` }}
                     >
-                      {/* Date Header */}
                       <div className="flex justify-between items-start mb-1 px-1 pointer-events-none">
                         <span
                           className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
@@ -828,10 +730,8 @@ export default function SchedulePage() {
           {/* SCROLLABLE INNER BODY */}
           <div className="flex-1 overflow-y-auto space-y-5 py-3 pr-1">
             
-            {/* GREY UPPER SECTION: Non-Workdays & Rules */}
             <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 space-y-4">
               
-              {/* Weekend Schedule Rules */}
               <div className="space-y-2">
                 <Label className="font-bold text-slate-500 block text-[10px] uppercase tracking-wider">
                   Global Weekend Rules
@@ -868,7 +768,6 @@ export default function SchedulePage() {
                 </p>
               </div>
 
-              {/* Custom Non-Workday Toggle & Title Input with Multi-Day Range */}
               <div className="space-y-3 pt-3 border-t border-slate-200">
                 <div className="flex items-center justify-between">
                   <div>
@@ -930,7 +829,6 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            {/* LOWER SECTION: Task Scheduling */}
             <div className="space-y-4 px-1">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 {editingTask ? "Update Task Details" : "Schedule New Task"}
@@ -947,7 +845,6 @@ export default function SchedulePage() {
                 />
               </div>
 
-              {/* Task Start and End Date Pickers */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1">
                   <Label htmlFor="task-start-input" className="text-xs font-semibold text-slate-700">Task Start Date</Label>
@@ -971,7 +868,6 @@ export default function SchedulePage() {
                 </div>
               </div>
 
-              {/* 16-Color Palette Grid */}
               <div className="grid gap-2">
                 <Label className="text-xs font-semibold text-slate-700">Select Timeline Color</Label>
                 <div className="grid grid-cols-8 gap-2 p-2.5 bg-slate-50 rounded-lg border shadow-sm">
@@ -996,7 +892,6 @@ export default function SchedulePage() {
 
           </div>
 
-          {/* FIXED ALWAYS-VISIBLE FOOTER */}
           <DialogFooter className="pt-3 border-t shrink-0 flex justify-between items-center sm:justify-between">
             {editingTask ? (
               <Button variant="destructive" size="sm" onClick={handleDeleteTask} className="shadow-sm">
