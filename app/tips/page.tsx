@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
@@ -65,8 +65,20 @@ const TOPICS = [
 
 export default function TipsPage() {
   const [activeTopicId, setActiveTopicId] = useState<string>("budgeting")
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const activeTopic = TOPICS.find((t) => t.id === activeTopicId) || TOPICS[0]
+
+  const handleTopicClick = (id: string) => {
+    setActiveTopicId(id)
+    
+    // Smoothly scroll to the content area only on mobile devices
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setTimeout(() => {
+        contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      }, 50)
+    }
+  }
 
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
@@ -104,7 +116,7 @@ export default function TipsPage() {
               <button
                 key={topic.id}
                 onMouseEnter={() => setActiveTopicId(topic.id)}
-                onClick={() => setActiveTopicId(topic.id)}
+                onClick={() => handleTopicClick(topic.id)}
                 className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between ${
                   isActive
                     ? "bg-slate-900 text-white border-slate-900 shadow-md font-semibold"
@@ -129,7 +141,7 @@ export default function TipsPage() {
         </div>
 
         {/* Right Side: Detailed Content Card (8 Columns) */}
-        <div className="md:col-span-8">
+        <div className="md:col-span-8 scroll-mt-6" ref={contentRef}>
           <Card className="bg-white border shadow-xs min-h-[380px]">
             <CardHeader className="pb-4 border-b border-slate-100">
               <div className="flex items-center justify-between gap-3 mb-1">
@@ -179,7 +191,7 @@ export default function TipsPage() {
 
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.00
+        CleanBuild v1.01
       </div>
       
     </main>
