@@ -61,3 +61,15 @@ body {
   background-color: var(--background);
   color: var(--foreground);
 }
+
+/* Custom Scrollbar for Dashboard Lists */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* slate-300 */
+  border-radius: 10px;
+}

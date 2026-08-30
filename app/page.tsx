@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { get, set, clear } from "idb-keyval"
-import { supabase } from "@/lib/supabase" // Make sure this path matches your setup
+import { supabase } from "@/lib/supabase"
 import { syncManager } from "@/lib/syncManager"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,7 +19,6 @@ interface Expense {
   labor: number
 }
 
-// Add these exact onboarding arrays to the Dashboard
 const INITIAL_EXPENSES = [
   { id: 1, title: "Foundation Concrete", category: "Foundation", materials: 2770, labor: 750 },
   { id: 2, title: "👋 Welcome to Expenses! Log your costs here.", category: "General", materials: 0, labor: 0 },
@@ -69,11 +68,9 @@ export default function DashboardPage() {
   const [totalBudget, setTotalBudget] = useState<number>(23402)
   const [customNonWorkdays, setCustomNonWorkdays] = useState<CustomNonWorkday[]>([])
   
-  // Punch List State
   const [punchList, setPunchList] = useState<PunchItem[]>([])
   const [newPunchText, setNewPunchText] = useState("")
   
-  // Edit Punch Item Modal State
   const [editingPunch, setEditingPunch] = useState<PunchItem | null>(null)
   const [emailInput, setEmailInput] = useState("")
 
@@ -84,7 +81,6 @@ export default function DashboardPage() {
       const savedCustomNonWorkdays = await get<CustomNonWorkday[]>("jobflow_custom_nonworkdays")
       const savedPunch = await get<PunchItem[]>("jobflow_punch_list")
 
-      // If undefined, inject the onboarding data!
       if (savedExpenses) setExpenses(savedExpenses)
       else setExpenses(INITIAL_EXPENSES)
 
@@ -94,13 +90,11 @@ export default function DashboardPage() {
       if (savedBudget !== undefined) setTotalBudget(savedBudget)
       if (savedCustomNonWorkdays) setCustomNonWorkdays(savedCustomNonWorkdays)
 
-      // Cloud Pull
       const cloudPunch = await syncManager.pullFromCloud("jobflow_punch_list")
       const cloudExpenses = await syncManager.pullFromCloud("builderlite_expenses")
       const cloudBudget = await syncManager.pullFromCloud("builderlite_total_budget")
       const cloudCustomNonWorkdays = await syncManager.pullFromCloud("jobflow_custom_nonworkdays")
 
-      // Only override if the cloud actually returned an array
       if (cloudPunch) setPunchList(cloudPunch)
       if (cloudExpenses) setExpenses(cloudExpenses)
       if (cloudBudget !== undefined && cloudBudget !== null) setTotalBudget(cloudBudget)
@@ -122,7 +116,6 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // --- PUNCH LIST LOGIC ---
   const handleAddPunchItem = async () => {
     if (!newPunchText.trim()) return
     const newItem: PunchItem = { 
@@ -156,10 +149,8 @@ export default function DashboardPage() {
     await syncManager.pushToCloud("jobflow_punch_list", updated)
   }
 
-  // Edit Modal Handlers
   const handleOpenEditModal = (item: PunchItem) => {
     let emails = item.assignedEmails || []
-    // Silently migrate old single-string emails if they exist
     if ((item as any).assignedEmail && emails.length === 0) {
       emails = [(item as any).assignedEmail]
     }
@@ -199,7 +190,6 @@ export default function DashboardPage() {
     setEditingPunch(null)
   }
 
-  // Determine Alert Status for Badges
   const getAlertStatus = (dueDate?: string, completed?: boolean) => {
     if (!dueDate || completed) return null
     const today = getLocalTodayStr()
@@ -208,7 +198,6 @@ export default function DashboardPage() {
     return "upcoming"
   }
 
-  // Metrics Calculations
   const totalPunchItems = punchList.length
   const completedPunchItems = punchList.filter((item) => item.completed).length
   const percentPunchCompleted = totalPunchItems > 0 ? Math.round((completedPunchItems / totalPunchItems) * 100) : 0
@@ -237,10 +226,8 @@ export default function DashboardPage() {
     if (!isConfirmed) return
 
     try {
-      // 1. Wipe the offline browser database entirely
       await clear()
 
-      // 2. Delete the user's cloud rows so the database thinks they are brand new
       const { data: userData } = await supabase.auth.getUser()
       if (userData?.user?.id) {
         await supabase
@@ -249,7 +236,6 @@ export default function DashboardPage() {
           .eq("user_id", userData.user.id)
       }
 
-      // 3. Hard refresh to naturally spawn the examples
       window.location.reload()
     } catch (error) {
       console.error("Failed to restore tutorial:", error)
@@ -265,35 +251,32 @@ export default function DashboardPage() {
     if (!isConfirmed) return
 
     try {
-      // 1. Overwrite the offline database with empty arrays (prevents tutorial respawning)
       await set("builderlite_expenses", [])
       await set("jobflow_punch_list", [])
       await set("jobflow_calendar_tasks", [])
       await set("jobflow_custom_nonworkdays", [])
       await set("jobflow_vision_board", [])
       await set("jobflow_selections", [])
-      await set("jobflow_contacts", []) // ADDED CONTACTS
+      await set("jobflow_contacts", [])
 
-      // 2. Overwrite the Cloud Database with empty arrays
       await syncManager.pushToCloud("builderlite_expenses", [])
       await syncManager.pushToCloud("jobflow_punch_list", [])
       await syncManager.pushToCloud("jobflow_calendar_tasks", [])
       await syncManager.pushToCloud("jobflow_custom_nonworkdays", [])
       await syncManager.pushToCloud("jobflow_vision_board", [])
       await syncManager.pushToCloud("jobflow_selections", [])
-      await syncManager.pushToCloud("jobflow_contacts", []) // ADDED CONTACTS
+      await syncManager.pushToCloud("jobflow_contacts", [])
 
-      // 3. Hard refresh to show the clean slate
       window.location.reload()
     } catch (error) {
       console.error("Failed to wipe data:", error)
       alert("An error occurred while trying to clear your data.")
     }
   }
+  
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      {/* HEADER BUBBLE */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -308,7 +291,6 @@ export default function DashboardPage() {
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         <div className="p-6 space-y-6">
           
-          {/* Quick Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-2">
@@ -343,7 +325,6 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Progress Bars */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-3">
@@ -384,10 +365,8 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* PUNCH LIST & DELAYS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* Punch List */}
             <Card className="bg-white border shadow-2xs md:col-span-2">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -454,7 +433,6 @@ export default function DashboardPage() {
                                 {item.text}
                               </span>
                               
-                              {/* Sub-Text Details */}
                               {(!item.completed && (item.dueDate || emailsToDisplay.length > 0)) && (
                                 <div className="flex flex-wrap items-center gap-2 mt-1">
                                   {item.dueDate && (
@@ -495,7 +473,6 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Flagged Delays */}
             <Card className="bg-white border shadow-2xs md:col-span-1">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -506,19 +483,31 @@ export default function DashboardPage() {
                 </div>
                 <CardDescription className="text-xs">Days flagged as off from the calendar.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {customNonWorkdays.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic py-4 text-center border-2 border-dashed rounded-md">
-                    No non-workdays recorded.
-                  </p>
-                ) : (
-                  customNonWorkdays.map((nonWorkday) => (
-                    <div key={nonWorkday.date} className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs">
-                      <div className="font-bold text-rose-900">{formatDisplayDate(nonWorkday.date)}</div>
-                      <div className="text-rose-700 truncate mt-0.5">{nonWorkday.title || "Non-Workday"}</div>
-                    </div>
-                  ))
-                )}
+              <CardContent>
+                <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
+                  {[...customNonWorkdays]
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .map((day, idx) => (
+                      <div key={idx} className="bg-rose-50 border border-rose-100 rounded-lg p-3">
+                        <div className="text-sm font-bold text-rose-900">
+                          {new Date(day.date + "T00:00:00").toLocaleDateString("en-US", {
+                            month: "numeric",
+                            day: "numeric",
+                            year: "2-digit"
+                          })}
+                        </div>
+                        <div className="text-xs text-rose-700 mt-0.5">
+                          {day.title || "Non-workday"}
+                        </div>
+                      </div>
+                    ))}
+                    
+                  {customNonWorkdays.length === 0 && (
+                    <p className="text-xs text-slate-400 italic text-center py-6 border-2 border-dashed border-slate-100 rounded-lg mt-2">
+                      No delays logged.
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -526,7 +515,6 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* EDIT / NOTIFY MODAL */}
       <Dialog open={!!editingPunch} onOpenChange={(open) => !open && setEditingPunch(null)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -578,7 +566,6 @@ export default function DashboardPage() {
                   </Button>
                 </div>
                 
-                {/* Email Tag List */}
                 {(editingPunch.assignedEmails || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
                     {editingPunch.assignedEmails?.map((email, idx) => (
@@ -606,10 +593,8 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-{/* SYSTEM CONTROLS */}
       <div className="mt-8 border border-slate-200 bg-white rounded-xl p-6 flex flex-col gap-6">
         
-        {/* Tutorial Option */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
           <div>
             <h3 className="text-slate-900 font-bold text-sm">Load Onboarding Tutorial</h3>
@@ -624,7 +609,6 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* Clear All Option */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <h3 className="text-rose-900 font-bold text-sm">Start Real Project (Clear Data)</h3>
@@ -641,7 +625,6 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
         CleanBuild v1.01
       </div>
