@@ -35,7 +35,7 @@ const formatDisplayDate = (dateStr: string) => {
 }
 
 export default function ExpenseTracker() {
-  // 1. Universal Sync Hooks (Replaces 60+ lines of custom DB logic)
+  // Universal Sync Hooks
   const [expenses, setExpenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
   const [totalBudget, setTotalBudget] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
   
@@ -336,7 +336,13 @@ export default function ExpenseTracker() {
 
           <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
             <CardHeader className="p-6 pb-2">
-              <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
+              <div className="flex items-center justify-between">
+  <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
+  {/* SWIPE INDICATOR: Matches Top Header */}
+  <div className="md:hidden flex items-center text-[10px] font-bold text-orange-400 uppercase tracking-wider bg-slate-900 px-2.5 py-1 rounded border border-slate-800 shadow-sm">
+    ← Swipe →
+  </div>
+</div>
             </CardHeader>
             <CardContent className="p-6 pt-2">
               {expenses.length === 0 ? (
@@ -562,7 +568,7 @@ export default function ExpenseTracker() {
       </Dialog>
       
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.00
+        CleanBuild v1.01
       </div>
     </main>
   )

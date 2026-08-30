@@ -213,23 +213,29 @@ export default function DashboardPage() {
     if (!isConfirmed) return
 
     try {
-      // 1. Overwrite the offline database with empty arrays
+      // 1. Overwrite the offline database with empty arrays (and 0 for budget)
+      await set("cleanbuild_total_budget", 0) 
       await set("cleanbuild_expenses", [])
       await set("cleanbuild_punch_list", [])
       await set("cleanbuild_calendar_tasks", [])
       await set("cleanbuild_custom_nonworkdays", [])
       await set("cleanbuild_vision_board", [])
-      await set("cleanbuild_selections", [])
-      await set("cleanbuild_contacts", [])
+      await set("cleanbuild_vision_board_categories", [])
+      await set("cleanbuild_selections_items", [])
+      await set("cleanbuild_selections_budgets", {})
+      await set("cleanbuild_contacts", []) // ADDED CONTACTS
 
-      // 2. Overwrite the Cloud Database with empty arrays
+      // 2. Overwrite the Cloud Database
+      await syncManager.pushToCloud("cleanbuild_total_budget", 0) 
       await syncManager.pushToCloud("cleanbuild_expenses", [])
       await syncManager.pushToCloud("cleanbuild_punch_list", [])
       await syncManager.pushToCloud("cleanbuild_calendar_tasks", [])
       await syncManager.pushToCloud("cleanbuild_custom_nonworkdays", [])
       await syncManager.pushToCloud("cleanbuild_vision_board", [])
-      await syncManager.pushToCloud("cleanbuild_selections", [])
-      await syncManager.pushToCloud("cleanbuild_contacts", [])
+      await syncManager.pushToCloud("cleanbuild_vision_board_categories", [])
+      await syncManager.pushToCloud("cleanbuild_selections_items", [])
+      await syncManager.pushToCloud("cleanbuild_selections_budgets", {})
+      await syncManager.pushToCloud("cleanbuild_contacts", []) // ADDED CONTACTS
 
       // 3. Hard refresh to show the clean slate
       window.location.reload()

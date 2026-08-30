@@ -47,7 +47,7 @@ const INITIAL_BOARD: VisionBoardItem[] = [
     category: "Inspiration & Ideas",
     notes: "👋 Welcome to the Vision Board! Click '+ Add Photos / Idea' to upload your own.",
     url: "https://diy.cleanbuild.us",
-    photos: ["https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=800&auto=format&fit=crop&q=80"],
+    photos: ["/Gemini_bathroom.jpeg"],
   }
 ]
 
