@@ -80,6 +80,7 @@ export default function VisionBoardPage() {
   const [newCategoryName, setNewCategoryName] = useState("")
   
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingItem, setEditingItem] = useState<VisionBoardItem | null>(null)
 
   const [itemDate, setItemDate] = useState("")
@@ -100,8 +101,9 @@ export default function VisionBoardPage() {
 
     async function loadData() {
       try {
+        // 1. Instant Offline Load (Now accepts empty arrays)
         const savedData = await get<VisionBoardItem[]>("jobflow_vision_board") 
-        if (savedData && Array.isArray(savedData) && savedData.length > 0) {
+        if (savedData) {
           const sanitizedData = savedData.map(item => ({
             ...item, photos: Array.isArray(item?.photos) ? item.photos : []
           }))
@@ -111,12 +113,13 @@ export default function VisionBoardPage() {
         }
 
         const savedCategories = await get<string[]>("jobflow_vision_board_categories")
-        if (savedCategories && Array.isArray(savedCategories) && savedCategories.length > 0) {
+        if (savedCategories) {
           setCategories(savedCategories)
         } else {
           setCategories(DEFAULT_CATEGORIES)
         }
 
+        // 2. Silent Cloud Pull
         const cloudData = await syncManager.pullFromCloud("jobflow_vision_board")
         if (cloudData) setBoardItems(cloudData)
 
@@ -340,6 +343,7 @@ export default function VisionBoardPage() {
   }
 
   const handleOpenModal = (itemToEdit?: VisionBoardItem) => {
+    setIsSubmitting(false)
     if (itemToEdit) {
       setEditingItem(itemToEdit)
       setItemDate(itemToEdit.date || getTodayInputDate())
@@ -380,38 +384,45 @@ export default function VisionBoardPage() {
 
   const handleSaveItem = async () => {
     if (!itemNotes.trim() && (itemPhotos || []).length === 0 && !itemUrl.trim()) return
+    if (isSubmitting) return
 
-    let updatedItems: VisionBoardItem[] = []
+    setIsSubmitting(true)
 
-    if (editingItem) {
-      updatedItems = (boardItems || []).map((l) =>
-        l.id === editingItem.id
-          ? {
-              ...l,
-              date: itemDate,
-              category: itemCategory,
-              notes: itemNotes,
-              url: itemUrl.trim(),
-              photos: itemPhotos || [],
-            }
-          : l
-      )
-    } else {
-      updatedItems = [
-        {
-          id: Date.now(),
-          date: itemDate,
-          category: itemCategory,
-          notes: itemNotes,
-          url: itemUrl.trim(),
-          photos: itemPhotos || [],
-        },
-        ...(boardItems || []),
-      ]
+    try {
+      let updatedItems: VisionBoardItem[] = []
+
+      if (editingItem) {
+        updatedItems = (boardItems || []).map((l) =>
+          l.id === editingItem.id
+            ? {
+                ...l,
+                date: itemDate,
+                category: itemCategory,
+                notes: itemNotes,
+                url: itemUrl.trim(),
+                photos: itemPhotos || [],
+              }
+            : l
+        )
+      } else {
+        updatedItems = [
+          {
+            id: Date.now(),
+            date: itemDate,
+            category: itemCategory,
+            notes: itemNotes,
+            url: itemUrl.trim(),
+            photos: itemPhotos || [],
+          },
+          ...(boardItems || []),
+        ]
+      }
+
+      await saveAndSync(updatedItems)
+      setIsModalOpen(false)
+    } finally {
+      setIsSubmitting(false)
     }
-
-    await saveAndSync(updatedItems)
-    setIsModalOpen(false)
   }
 
   const handleDeleteItem = async (id: number) => {
@@ -739,8 +750,13 @@ export default function VisionBoardPage() {
             <Button variant="outline" size="sm" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm" onClick={handleSaveItem}>
-              {editingItem ? "Update Entry" : "Save to Board"}
+            <Button 
+              size="sm" 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm disabled:opacity-50" 
+              onClick={handleSaveItem}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Saving..." : editingItem ? "Update Entry" : "Save to Board"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -801,7 +817,6 @@ export default function VisionBoardPage() {
       </div>
 
       <Dialog open={selectedPhotoIndex !== null} onOpenChange={() => setSelectedPhotoIndex(null)}>
-        {/* FIX: ADDED onKeyDown LISTENER DIRECTLY TO THE MODAL CONTENT */}
         <DialogContent 
           className="max-w-[95vw] md:max-w-5xl h-[85vh] p-4 bg-slate-950 text-white border-slate-800 flex flex-col justify-between outline-none"
           onKeyDown={(e) => {
