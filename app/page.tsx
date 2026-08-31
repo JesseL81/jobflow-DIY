@@ -68,7 +68,7 @@ export default function DashboardPage() {
   // 1. Universal Sync Hooks (Replaces all custom load and cloud logic!)
   const [expenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
   const [totalBudget] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
-  const [customNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", [])
+  const [customNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", []) 
   const [punchList, setPunchList] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
   
   const [newPunchText, setNewPunchText] = useState("")

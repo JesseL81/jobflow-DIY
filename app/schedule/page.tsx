@@ -85,7 +85,7 @@ export default function SchedulePage() {
   const [explicitWorkingDays, setExplicitWorkingDays] = useOfflineSync<string[]>("cleanbuild_explicit_working_days", [])
   const [saturdaysOff, setSaturdaysOff] = useOfflineSync<boolean>("cleanbuild_saturdays_off", true)
   const [sundaysOff, setSundaysOff] = useOfflineSync<boolean>("cleanbuild_sundays_off", true)
-  const [nonWorkdaysMap, setNonWorkdaysMap] = useOfflineSync<Record<string, string>>("non_workdays_map", {})
+  const [nonWorkdaysMap, setNonWorkdaysMap] = useOfflineSync<Record<string, string>>("cleanbuild_non_workdays_map", {}) // UPDATED KEY
 
   const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
   const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
@@ -93,7 +93,7 @@ export default function SchedulePage() {
   // Keep Log Non-Workdays mapped if updated from another tab
   useEffect(() => {
     const handleSync = async () => {
-      const map = await get<Record<string, string>>("non_workdays_map")
+      const map = await get<Record<string, string>>("cleanbuild_non_workdays_map") // UPDATED KEY
       if (map) {
         setNonWorkdaysMap(map)
       }

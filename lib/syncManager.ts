@@ -7,9 +7,13 @@ export const ALL_STORE_KEYS = [
   "cleanbuild_punch_list",
   "cleanbuild_calendar_tasks",
   "cleanbuild_custom_nonworkdays",
+  "cleanbuild_saturdays_off",
+  "cleanbuild_sundays_off",
+  "cleanbuild_explicit_working_days",
   "cleanbuild_vision_board",
   "cleanbuild_vision_board_categories",
-  "cleanbuild_selections",
+  "cleanbuild_selections_items",
+  "cleanbuild_selections_budgets",
   "cleanbuild_contacts",
 ] as const
 
