@@ -78,22 +78,22 @@ export default function SchedulePage() {
 
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
   const [dragOverDate, setDragOverDate] = useState<string | null>(null)
+  
+  const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
+  const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
 
-  // Universal Auto-Sync Hooks (Replaces all custom load and cloud logic!)
+  // 1. Universal Auto-Sync Hooks (Replaces all custom load and cloud logic!)
   const [tasks, setTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", INITIAL_TASKS)
   const [customNonWorkdays, setCustomNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", [])
   const [explicitWorkingDays, setExplicitWorkingDays] = useOfflineSync<string[]>("cleanbuild_explicit_working_days", [])
   const [saturdaysOff, setSaturdaysOff] = useOfflineSync<boolean>("cleanbuild_saturdays_off", true)
   const [sundaysOff, setSundaysOff] = useOfflineSync<boolean>("cleanbuild_sundays_off", true)
-  const [nonWorkdaysMap, setNonWorkdaysMap] = useOfflineSync<Record<string, string>>("cleanbuild_non_workdays_map", {}) // UPDATED KEY
-
-  const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
-  const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
+  const [nonWorkdaysMap, setNonWorkdaysMap] = useOfflineSync<Record<string, string>>("cleanbuild_non_workdays_map", {})
 
   // Keep Log Non-Workdays mapped if updated from another tab
   useEffect(() => {
     const handleSync = async () => {
-      const map = await get<Record<string, string>>("cleanbuild_non_workdays_map") // UPDATED KEY
+      const map = await get<Record<string, string>>("cleanbuild_non_workdays_map")
       if (map) {
         setNonWorkdaysMap(map)
       }
@@ -282,12 +282,14 @@ export default function SchedulePage() {
     setDragOverDate(null)
     if (!draggedTaskId) return
 
+    // Helper to check if a specific date string is a non-workday
     const isNonWork = (dStr: string) => 
       isDateNonWorkdayCheck(dStr, allNonWorkdays, saturdaysOff, sundaysOff, explicitWorkingDays)
 
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
         if (task.id === draggedTaskId) {
+          // 1. Find out how many WORKING days the original task took
           let workingDays = 0
           let currCountDate = new Date(task.startDate + "T00:00:00")
           const oldEnd = new Date(task.endDate + "T00:00:00")
@@ -298,17 +300,19 @@ export default function SchedulePage() {
             currCountDate.setDate(currCountDate.getDate() + 1)
           }
 
-          if (workingDays === 0) workingDays = 1
+          if (workingDays === 0) workingDays = 1 // Safety fallback
 
+          // 2. If dropped on a weekend/holiday, push the start date to the next available working day
           let newStart = new Date(newDropDate + "T00:00:00")
           while (isNonWork(newStart.toISOString().split("T")[0])) {
             newStart.setDate(newStart.getDate() + 1)
           }
           const finalStartStr = newStart.toISOString().split("T")[0]
 
+          // 3. Add the working days to find the true end date
           let finalEndStr = finalStartStr
           let currAddDate = new Date(finalStartStr + "T00:00:00")
-          let daysAdded = 1
+          let daysAdded = 1 // The start date itself counts as Day 1
 
           while (daysAdded < workingDays) {
             currAddDate.setDate(currAddDate.getDate() + 1)
@@ -457,7 +461,7 @@ export default function SchedulePage() {
 
   const handleDeleteTask = () => {
     if (!editingTask) return
-    setTasks((prev) => prev.filter((t) => t.id !== editingTask.id))
+    setTasks(tasks.filter((t) => t.id !== editingTask.id))
     setIsDialogOpen(false)
     setEditingTask(null)
   }
@@ -518,6 +522,7 @@ export default function SchedulePage() {
           </Button>
         </div>
 
+        {/* MOBILE CENTERED FIX APPLIED HERE */}
         {/* Right Column */}
         <div className="flex items-center justify-center md:justify-end w-full gap-3">
           <Button
@@ -542,11 +547,13 @@ export default function SchedulePage() {
       {/* Schedule Main Card Wrapper */}
       <Card className="overflow-hidden border shadow-sm bg-white flex-1 flex flex-col">
         
-        {/* Days Header */}
+        {/* Days Header - Colored Orange to match Theme */}
         <div className="grid grid-cols-7 border-b text-center text-[11px] font-bold text-orange-600 uppercase tracking-wider bg-slate-50 py-2.5 shrink-0 shadow-sm z-10">
           {daysOfWeek.map((day) => (
             <div key={day.full}>
+              {/* Shows full word on screens larger than mobile */}
               <span className="hidden sm:inline">{day.full}</span>
+              {/* Shows 3-letter abbreviation on mobile screens */}
               <span className="sm:hidden">{day.short}</span>
             </div>
           ))}
@@ -642,10 +649,11 @@ export default function SchedulePage() {
                             ? "bg-slate-300 bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:8px_8px]" 
                             : day.isCurrentMonth
                               ? "bg-white hover:bg-slate-50"
-                              : "bg-slate-100 hover:bg-slate-200"
+                              : "bg-slate-100 hover:bg-slate-200" // Grey background for non-current month
                       } ${!day.isCurrentMonth ? "opacity-50" : ""}`}
                       style={{ minHeight: `${dynamicWeekHeight}px` }}
                     >
+                      {/* Date Header */}
                       <div className="flex justify-between items-start mb-1 px-1 pointer-events-none">
                         <span
                           className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
@@ -730,8 +738,10 @@ export default function SchedulePage() {
           {/* SCROLLABLE INNER BODY */}
           <div className="flex-1 overflow-y-auto space-y-5 py-3 pr-1">
             
+            {/* GREY UPPER SECTION: Non-Workdays & Rules */}
             <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 space-y-4">
               
+              {/* Weekend Schedule Rules */}
               <div className="space-y-2">
                 <Label className="font-bold text-slate-500 block text-[10px] uppercase tracking-wider">
                   Global Weekend Rules
@@ -768,6 +778,7 @@ export default function SchedulePage() {
                 </p>
               </div>
 
+              {/* Custom Non-Workday Toggle & Title Input with Multi-Day Range */}
               <div className="space-y-3 pt-3 border-t border-slate-200">
                 <div className="flex items-center justify-between">
                   <div>
@@ -829,6 +840,7 @@ export default function SchedulePage() {
               </div>
             </div>
 
+            {/* LOWER SECTION: Task Scheduling */}
             <div className="space-y-4 px-1">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 {editingTask ? "Update Task Details" : "Schedule New Task"}
@@ -845,6 +857,7 @@ export default function SchedulePage() {
                 />
               </div>
 
+              {/* Task Start and End Date Pickers */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1">
                   <Label htmlFor="task-start-input" className="text-xs font-semibold text-slate-700">Task Start Date</Label>
@@ -868,6 +881,7 @@ export default function SchedulePage() {
                 </div>
               </div>
 
+              {/* 16-Color Palette Grid */}
               <div className="grid gap-2">
                 <Label className="text-xs font-semibold text-slate-700">Select Timeline Color</Label>
                 <div className="grid grid-cols-8 gap-2 p-2.5 bg-slate-50 rounded-lg border shadow-sm">
@@ -892,6 +906,7 @@ export default function SchedulePage() {
 
           </div>
 
+          {/* FIXED ALWAYS-VISIBLE FOOTER */}
           <DialogFooter className="pt-3 border-t shrink-0 flex justify-between items-center sm:justify-between">
             {editingTask ? (
               <Button variant="destructive" size="sm" onClick={handleDeleteTask} className="shadow-sm">
@@ -915,7 +930,7 @@ export default function SchedulePage() {
       
       {/* Version Tracker Footer */}
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
+        CleanBuild v1.00
       </div>
     </main>
   )
