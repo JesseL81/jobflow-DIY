@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
+import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +18,15 @@ export interface PunchItem {
   completed: boolean
   dueDate?: string 
   assignedEmails?: string[]
+  linkedTaskId?: number
+  linkedTaskOffset?: number // Stores the lead/lag days offset
+}
+
+interface CalendarTask {
+  id: number
+  title: string
+  startDate: string
+  endDate: string
 }
 
 const CATEGORIES = [
@@ -35,12 +45,42 @@ const INITIAL_PUNCH_LIST: PunchItem[] = [
   { id: 3, text: "Delete this task using the 'Edit' menu.", category: "General To-Do", completed: false },
 ]
 
+const getLocalTodayStr = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+const formatDisplayDate = (dateStr: string) => {
+  if (!dateStr) return ""
+  const cleanDate = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr
+  const [year, month, day] = cleanDate.split("-")
+  if (!year || !month || !day) return dateStr
+  return `${parseInt(month, 10)}/${parseInt(day, 10)}/${year.slice(-2)}`
+}
+
 export default function PunchListPage() {
-  // 1. Universal Sync Hook (Replaces all custom DB and Cloud logic!)
+  // 1. Universal Sync Hooks
   const [items, setItems] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
+  const [calendarTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
   
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
+
+  // Fetch logged-in user's email for auto-filling
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+
+  useEffect(() => {
+    const fetchUserEmail = async () => {
+      const { data } = await supabase.auth.getUser()
+      if (data?.user?.email) {
+        setCurrentUserEmail(data.user.email)
+      }
+    }
+    fetchUserEmail()
+  }, [])
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
@@ -52,6 +92,11 @@ export default function PunchListPage() {
   const [formNotes, setFormNotes] = useState("")
   const [formDueDate, setFormDueDate] = useState("")
   
+  // Link to Schedule State
+  const [isLinked, setIsLinked] = useState<boolean>(false)
+  const [linkedTaskId, setLinkedTaskId] = useState<number | "">("")
+  const [linkedTaskOffset, setLinkedTaskOffset] = useState<number>(0)
+  
   // Multi-Email State
   const [formEmails, setFormEmails] = useState<string[]>([])
   const [emailInput, setEmailInput] = useState("")
@@ -60,6 +105,14 @@ export default function PunchListPage() {
   const completedCount = useMemo(() => items.filter((i) => i.completed).length, [items])
   const totalCount = items.length
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+
+  const getAlertStatus = (dueDate?: string, completed?: boolean) => {
+    if (!dueDate || completed) return null
+    const today = getLocalTodayStr()
+    if (dueDate === today) return "today"
+    if (dueDate < today) return "overdue"
+    return "upcoming"
+  }
 
   // Filtered Items
   const filteredItems = useMemo(() => {
@@ -99,7 +152,11 @@ export default function PunchListPage() {
     setFormCategory(selectedCategory !== "All Categories" ? selectedCategory : "General To-Do")
     setFormNotes("")
     setFormDueDate("")
-    setFormEmails([])
+    setIsLinked(false)
+    setLinkedTaskId("")
+    setLinkedTaskOffset(0)
+    // Auto-populate the active user's email if we have it
+    setFormEmails(currentUserEmail ? [currentUserEmail.toLowerCase()] : [])
     setEmailInput("")
     setIsModalOpen(true)
   }
@@ -111,6 +168,9 @@ export default function PunchListPage() {
     setFormCategory(item.category || "General To-Do")
     setFormNotes(item.notes || "")
     setFormDueDate(item.dueDate || "")
+    setIsLinked(!!item.linkedTaskId)
+    setLinkedTaskId(item.linkedTaskId || "")
+    setLinkedTaskOffset(item.linkedTaskOffset || 0)
     
     // Silently migrate legacy single-email string if it exists
     let emails = item.assignedEmails || []
@@ -127,6 +187,9 @@ export default function PunchListPage() {
   const handleSaveItem = () => {
     if (!formText.trim()) return
 
+    const finalLinkedTaskId = isLinked && linkedTaskId !== "" ? Number(linkedTaskId) : undefined
+    const finalLinkedTaskOffset = isLinked ? linkedTaskOffset : undefined
+
     if (editingItem) {
       setItems((prev) =>
         prev.map((i) =>
@@ -136,8 +199,10 @@ export default function PunchListPage() {
                 text: formText.trim(), 
                 category: formCategory, 
                 notes: formNotes.trim(),
-                dueDate: formDueDate,
-                assignedEmails: formEmails
+                dueDate: isLinked ? "" : formDueDate, // Clear manual date if linked to calendar
+                assignedEmails: formEmails,
+                linkedTaskId: finalLinkedTaskId,
+                linkedTaskOffset: finalLinkedTaskOffset
               }
             : i
         )
@@ -151,8 +216,10 @@ export default function PunchListPage() {
           category: formCategory,
           notes: formNotes.trim(),
           completed: false,
-          dueDate: formDueDate,
-          assignedEmails: formEmails
+          dueDate: isLinked ? "" : formDueDate,
+          assignedEmails: formEmails,
+          linkedTaskId: finalLinkedTaskId,
+          linkedTaskOffset: finalLinkedTaskOffset
         },
       ])
     }
@@ -253,6 +320,20 @@ export default function PunchListPage() {
                     ? item.assignedEmails 
                     : (legacyEmail ? [legacyEmail] : [])
 
+                  // Resolve Dynamic Due Date from Calendar Task if linked (with offsets)
+                  const linkedTask = item.linkedTaskId ? calendarTasks.find(t => t.id === item.linkedTaskId) : null
+                  let displayDueDate = item.dueDate
+                  
+                  if (linkedTask) {
+                    const baseDate = new Date(linkedTask.endDate + "T00:00:00")
+                    if (item.linkedTaskOffset) {
+                      baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
+                    }
+                    displayDueDate = baseDate.toISOString().split("T")[0]
+                  }
+                  
+                  const alertStatus = getAlertStatus(displayDueDate, item.completed)
+
                   return (
                     <Card key={item.id} className={`transition-all ${cardStyle}`}>
                       <CardContent className="p-4 flex items-start gap-4">
@@ -269,16 +350,27 @@ export default function PunchListPage() {
                                 <Badge variant="outline" className={`text-[10px] font-semibold ${item.completed ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
                                   {item.category}
                                 </Badge>
-                                {item.dueDate && (
-                                  <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200">
-                                    📅 Due: {item.dueDate}
+
+                                {/* Dynamic Due Date Badge */}
+                                {displayDueDate && (
+                                  <Badge variant="outline" className={`text-[10px] ${
+                                    item.linkedTaskId 
+                                      ? "bg-indigo-50 text-indigo-700 border-indigo-200" 
+                                      : "bg-slate-50 text-slate-600 border-slate-200"
+                                  }`}>
+                                    {item.linkedTaskId ? `🔗 Linked: ${linkedTask?.title || "Task"} (Due: ` : "📅 Due: "}
+                                    {formatDisplayDate(displayDueDate)}
+                                    {item.linkedTaskOffset ? ` [${item.linkedTaskOffset > 0 ? '+' : ''}${item.linkedTaskOffset}d]` : ""}
+                                    {item.linkedTaskId ? ")" : ""}
                                   </Badge>
                                 )}
+
                                 {emailsToDisplay.map((email) => (
                                   <Badge key={email} variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200">
                                     ✉️ {email}
                                   </Badge>
                                 ))}
+                                
                                 {item.completed && (
                                   <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
                                     Completed ✓
@@ -359,22 +451,69 @@ export default function PunchListPage() {
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="task-date" className="text-xs font-semibold text-slate-700">Due Date (For Alerts)</Label>
-                <Input 
-                  id="task-date" 
-                  type="date"
-                  value={formDueDate} 
-                  onChange={(e) => setFormDueDate(e.target.value)} 
-                  className="mt-1 shadow-sm h-10 text-sm"
-                />
+            <div className="space-y-4">
+              {/* Due Date with Toggle & Offset */}
+              <div className="bg-white">
+                <Label className="text-xs font-semibold text-slate-700 block mb-2 text-center whitespace-nowrap">
+                  Due Date (For Alerts)
+                </Label>
+                
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    {isLinked ? (
+                      <select
+                        value={linkedTaskId}
+                        onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
+                        className="w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select calendar task...</option>
+                        {calendarTasks.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.title} ({formatDisplayDate(t.endDate)})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Input 
+                        id="task-date" 
+                        type="date"
+                        value={formDueDate} 
+                        onChange={(e) => setFormDueDate(e.target.value)} 
+                        className="shadow-sm h-10 text-sm w-full"
+                      />
+                    )}
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <input 
+                      type="checkbox" 
+                      checked={isLinked}
+                      onChange={(e) => setIsLinked(e.target.checked)}
+                      className="h-4 w-4 accent-blue-600 rounded"
+                    />
+                    <span className="text-xs font-bold text-blue-600">Link to Schedule</span>
+                  </label>
+                </div>
+                
+                {isLinked && linkedTaskId !== "" && (
+                  <div className="flex items-center justify-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200 mt-3">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Offset (Days)</Label>
+                    <Input 
+                      type="number" 
+                      value={linkedTaskOffset} 
+                      onChange={(e) => setLinkedTaskOffset(e.target.value === "" ? 0 : parseInt(e.target.value, 10))}
+                      className="h-7 w-16 text-xs text-center px-1 shadow-sm"
+                    />
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      (- for lead before, + for lag after)
+                    </span>
+                  </div>
+                )}
               </div>
               
-              {/* NEW EMAIL TAG LIST INPUT */}
-              <div>
-                <Label className="text-xs font-semibold text-slate-700">Vendor / Sub Emails</Label>
-                <div className="flex gap-2 mt-1">
+              {/* Email Tag List Input */}
+              <div className="pt-3 border-t border-slate-100">
+                <Label className="text-xs font-semibold text-slate-700 block mb-1.5">Email</Label>
+                <div className="flex gap-2">
                   <Input 
                     type="email"
                     placeholder="name@example.com"
@@ -388,7 +527,7 @@ export default function PunchListPage() {
                     }} 
                     className="shadow-sm h-10 text-sm"
                   />
-                  <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-10">
+                  <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-10 shadow-sm">
                     Add
                   </Button>
                 </div>

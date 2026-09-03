@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 
 interface TemplateTask {
   title: string
@@ -240,8 +242,8 @@ export default function TemplatesPage() {
     return slots
   }, [scheduledTemplateTasks])
 
-  // Import Handler
-  const handleImportToSchedule = () => {
+  // --- REBUILT IMPORT HANDLER ---
+  const handleImportToSchedule = async () => {
     setIsImporting(true)
 
     const newTasksToImport = scheduledTemplateTasks.map((task, index) => ({
@@ -254,26 +256,30 @@ export default function TemplatesPage() {
       endDate: task.endDate,
     }))
 
-    let existingTasks = []
     try {
-      const savedSchedule = localStorage.getItem("cleanbuild_calendar_tasks")
-      if (savedSchedule) {
-        const parsed = JSON.parse(savedSchedule)
-        if (Array.isArray(parsed)) {
-          existingTasks = parsed
-        }
+      // 1. Pull existing tasks properly from IndexedDB
+      const savedSchedule = await get("cleanbuild_calendar_tasks")
+      let existingTasks: any[] = []
+      
+      if (savedSchedule && Array.isArray(savedSchedule)) {
+        existingTasks = savedSchedule
       }
-    } catch (e) {
-      console.error("Error loading existing tasks", e)
-    }
 
-    const updatedTasks = [...existingTasks, ...newTasksToImport]
-    localStorage.setItem("cleanbuild_calendar_tasks", JSON.stringify(updatedTasks))
+      // 2. Merge new template tasks
+      const updatedTasks = [...existingTasks, ...newTasksToImport]
+      
+      // 3. Save to IndexedDB and push to Cloud
+      await set("cleanbuild_calendar_tasks", updatedTasks)
+      await syncManager.pushToCloud("cleanbuild_calendar_tasks", updatedTasks)
 
-    setTimeout(() => {
+      // 4. Send the user safely to the Schedule page
       setIsImporting(false)
       router.push("/schedule")
-    }, 400)
+    } catch (e) {
+      console.error("Error importing tasks:", e)
+      setIsImporting(false)
+      alert("Failed to import template to the schedule. Please try again.")
+    }
   }
 
   const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]

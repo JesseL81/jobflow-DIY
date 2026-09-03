@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { set, clear } from "idb-keyval"
 import { supabase } from "@/lib/supabase"
 import { syncManager } from "@/lib/syncManager"
@@ -8,6 +8,7 @@ import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
@@ -32,10 +33,27 @@ const INITIAL_PUNCH_LIST: PunchItem[] = [
   { id: 3, text: "Delete this task using the 'Edit' menu.", category: "General To-Do", completed: false, assignedEmails: [] },
 ]
 
+const CATEGORIES = [
+  "All Categories",
+  "General To-Do",
+  "Framing & Drywall",
+  "Plumbing & HVAC",
+  "Electrical",
+  "Finishes & Paint",
+  "Exterior & Landscaping",
+]
+
 interface CustomNonWorkday {
   date: string
   title?: string
   isFromLog?: boolean
+}
+
+interface CalendarTask {
+  id: number
+  title: string
+  startDate: string
+  endDate: string
 }
 
 interface PunchItem {
@@ -46,6 +64,8 @@ interface PunchItem {
   completed: boolean
   dueDate?: string 
   assignedEmails?: string[]
+  linkedTaskId?: number
+  linkedTaskOffset?: number
 }
 
 const formatDisplayDate = (dateStr: string) => {
@@ -65,53 +85,72 @@ const getLocalTodayStr = () => {
 }
 
 export default function DashboardPage() {
-  // 1. Universal Sync Hooks (Replaces all custom load and cloud logic!)
-  const [expenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
-  const [totalBudget] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
-  const [customNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", []) 
-  const [punchList, setPunchList] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
+  // 1. Universal Sync Hooks with extracted Load Flags
+  const [expenses, , expensesLoaded] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
+  const [totalBudget, , budgetLoaded] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
+  const [customNonWorkdays, , nonWorkdaysLoaded] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", []) 
+  const [punchList, setPunchList, punchLoaded] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
+  const [calendarTasks, , calendarLoaded] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
   
+  const isAppLoaded = expensesLoaded && budgetLoaded && nonWorkdaysLoaded && punchLoaded && calendarLoaded
+
   const [newPunchText, setNewPunchText] = useState("")
   const [editingPunch, setEditingPunch] = useState<PunchItem | null>(null)
+  
+  // Link to Schedule State for Modal
+  const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+
+  // Fetch logged-in user's email for auto-filling
+  useEffect(() => {
+    const fetchUserEmail = async () => {
+      const { data } = await supabase.auth.getUser()
+      if (data?.user?.email) {
+        setCurrentUserEmail(data.user.email)
+      }
+    }
+    fetchUserEmail()
+  }, [])
 
   // --- PUNCH LIST LOGIC ---
-  const handleAddPunchItem = async () => {
+  const handleOpenAddModal = () => {
     if (!newPunchText.trim()) return
-    const newItem: PunchItem = { 
-      id: Date.now(), 
-      text: newPunchText.trim(), 
-      category: "General To-Do", 
+    setIsLinked(false)
+    setEditingPunch({
+      id: Date.now(),
+      text: newPunchText.trim(),
+      category: "General To-Do",
       completed: false,
-      assignedEmails: []
-    }
-    const updated = [...punchList, newItem]
-    
-    // Auto-syncs to IndexedDB and Supabase
-    await setPunchList(updated)
-    setNewPunchText("")
+      assignedEmails: currentUserEmail ? [currentUserEmail.toLowerCase()] : [],
+      linkedTaskId: undefined,
+      linkedTaskOffset: 0
+    })
+    setEmailInput("")
   }
 
   const handleTogglePunch = async (id: number) => {
     const updated = punchList.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
-    // Auto-syncs to IndexedDB and Supabase
     await setPunchList(updated)
   }
 
   const handleDeletePunch = async (id: number) => {
     const updated = punchList.filter((item) => item.id !== id)
-    // Auto-syncs to IndexedDB and Supabase
     await setPunchList(updated)
   }
 
   // Edit Modal Handlers
   const handleOpenEditModal = (item: PunchItem) => {
     let emails = item.assignedEmails || []
-    // Silently migrate old single-string emails if they exist
     if ((item as any).assignedEmail && emails.length === 0) {
       emails = [(item as any).assignedEmail]
     }
-    setEditingPunch({ ...item, assignedEmails: emails })
+    setIsLinked(!!item.linkedTaskId)
+    setEditingPunch({ 
+      ...item, 
+      assignedEmails: emails,
+      linkedTaskOffset: item.linkedTaskOffset || 0
+    })
     setEmailInput("")
   }
 
@@ -139,14 +178,29 @@ export default function DashboardPage() {
 
   const handleSavePunchEdit = async () => {
     if (!editingPunch) return
-    const updated = punchList.map(item => item.id === editingPunch.id ? editingPunch : item)
     
-    // Auto-syncs to IndexedDB and Supabase
+    // Process final link state overrides before saving
+    const finalPunch = {
+      ...editingPunch,
+      linkedTaskId: isLinked && editingPunch.linkedTaskId ? editingPunch.linkedTaskId : undefined,
+      linkedTaskOffset: isLinked ? (editingPunch.linkedTaskOffset || 0) : undefined,
+      dueDate: isLinked ? "" : editingPunch.dueDate
+    }
+    
+    const exists = punchList.some(item => item.id === finalPunch.id)
+    let updated;
+    
+    if (exists) {
+      updated = punchList.map(item => item.id === finalPunch.id ? finalPunch : item)
+    } else {
+      updated = [...punchList, finalPunch]
+    }
+    
     await setPunchList(updated)
     setEditingPunch(null)
+    setNewPunchText("") // Clear the dashboard input upon success
   }
 
-  // Determine Alert Status for Badges
   const getAlertStatus = (dueDate?: string, completed?: boolean) => {
     if (!dueDate || completed) return null
     const today = getLocalTodayStr()
@@ -176,7 +230,7 @@ export default function DashboardPage() {
   const currentDay = Math.min(totalDays, Math.max(1, Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1))
   const percentTimeUsed = Math.min(100, Math.max(0, Math.round((currentDay / totalDays) * 100)))
 
-  // --- SYSTEM CONTROLS (Manual Sync Required to clear entire app) ---
+  // --- SYSTEM CONTROLS ---
   const handleRestoreTutorial = async () => {
     const isConfirmed = window.confirm(
       "This will replace your current data with the tutorial examples. Continue?"
@@ -185,10 +239,7 @@ export default function DashboardPage() {
     if (!isConfirmed) return
 
     try {
-      // 1. Wipe the offline browser database entirely
       await clear()
-
-      // 2. Delete the user's cloud rows so the database thinks they are brand new
       const { data: userData } = await supabase.auth.getUser()
       if (userData?.user?.id) {
         await supabase
@@ -196,8 +247,6 @@ export default function DashboardPage() {
           .delete()
           .eq("user_id", userData.user.id)
       }
-
-      // 3. Hard refresh to naturally spawn the examples
       window.location.reload()
     } catch (error) {
       console.error("Failed to restore tutorial:", error)
@@ -213,37 +262,38 @@ export default function DashboardPage() {
     if (!isConfirmed) return
 
     try {
-      // 1. Overwrite the offline database with empty arrays (and 0 for budget)
-      await set("cleanbuild_total_budget", 0) 
-      await set("cleanbuild_expenses", [])
-      await set("cleanbuild_punch_list", [])
-      await set("cleanbuild_calendar_tasks", [])
-      await set("cleanbuild_custom_nonworkdays", [])
-      await set("cleanbuild_vision_board", [])
-      await set("cleanbuild_vision_board_categories", [])
-      await set("cleanbuild_selections_items", [])
+      const keysToClear = [
+        "cleanbuild_expenses",
+        "cleanbuild_punch_list",
+        "cleanbuild_calendar_tasks",
+        "cleanbuild_custom_nonworkdays",
+        "cleanbuild_vision_board",
+        "cleanbuild_vision_board_categories",
+        "cleanbuild_selections_items",
+        "cleanbuild_contacts",
+        "cleanbuild_non_workdays_map",
+        "cleanbuild_explicit_working_days"
+      ]
+
+      for (const key of keysToClear) {
+        await set(key, [])
+        await syncManager.pushToCloud(key, [])
+      }
+
+      await set("cleanbuild_total_budget", 0)
+      await syncManager.pushToCloud("cleanbuild_total_budget", 0)
+      
       await set("cleanbuild_selections_budgets", {})
-      await set("cleanbuild_contacts", []) // ADDED CONTACTS
-
-      // 2. Overwrite the Cloud Database
-      await syncManager.pushToCloud("cleanbuild_total_budget", 0) 
-      await syncManager.pushToCloud("cleanbuild_expenses", [])
-      await syncManager.pushToCloud("cleanbuild_punch_list", [])
-      await syncManager.pushToCloud("cleanbuild_calendar_tasks", [])
-      await syncManager.pushToCloud("cleanbuild_custom_nonworkdays", [])
-      await syncManager.pushToCloud("cleanbuild_vision_board", [])
-      await syncManager.pushToCloud("cleanbuild_vision_board_categories", [])
-      await syncManager.pushToCloud("cleanbuild_selections_items", [])
       await syncManager.pushToCloud("cleanbuild_selections_budgets", {})
-      await syncManager.pushToCloud("cleanbuild_contacts", []) // ADDED CONTACTS
 
-      // 3. Hard refresh to show the clean slate
       window.location.reload()
     } catch (error) {
       console.error("Failed to wipe data:", error)
       alert("An error occurred while trying to clear your data.")
     }
   }
+
+  const isNewTask = editingPunch && !punchList.some(p => p.id === editingPunch.id)
   
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
@@ -310,7 +360,7 @@ export default function DashboardPage() {
                 <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                   <div 
                     className="h-full bg-emerald-500 transition-all duration-500" 
-                    style={{ width: `${percentBudgetUsed}%` }} 
+                    style={{ width: isAppLoaded ? `${percentBudgetUsed}%` : "0%" }} 
                   />
                 </div>
               </CardContent>
@@ -329,7 +379,7 @@ export default function DashboardPage() {
                 <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                   <div 
                     className="h-full bg-blue-600 transition-all duration-500" 
-                    style={{ width: `${percentTimeUsed}%` }} 
+                    style={{ width: isAppLoaded ? `${percentTimeUsed}%` : "0%" }} 
                   />
                 </div>
               </CardContent>
@@ -357,7 +407,10 @@ export default function DashboardPage() {
                 {totalPunchItems > 0 && (
                   <div className="pt-2">
                     <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
-                      <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${percentPunchCompleted}%` }} />
+                      <div 
+                        className="h-full bg-blue-600 transition-all duration-500" 
+                        style={{ width: isAppLoaded ? `${percentPunchCompleted}%` : "0%" }} 
+                      />
                     </div>
                   </div>
                 )}
@@ -370,9 +423,22 @@ export default function DashboardPage() {
                     value={newPunchText}
                     onChange={(e) => setNewPunchText(e.target.value)}
                     className="text-xs h-9 shadow-sm"
-                    onKeyDown={(e) => e.key === "Enter" && handleAddPunchItem()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newPunchText.trim()) {
+                        handleOpenAddModal()
+                      }
+                    }}
                   />
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-4 shadow-sm" onClick={handleAddPunchItem}>
+                  <Button 
+                    size="sm" 
+                    disabled={!newPunchText.trim()}
+                    className={`text-xs h-9 px-4 shadow-sm transition-colors ${
+                      newPunchText.trim() 
+                        ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed hover:bg-slate-200"
+                    }`} 
+                    onClick={handleOpenAddModal}
+                  >
                     Add Task
                   </Button>
                 </div>
@@ -384,11 +450,24 @@ export default function DashboardPage() {
                     </p>
                   ) : (
                     punchList.map((item) => {
-                      const alertStatus = getAlertStatus(item.dueDate, item.completed)
                       const legacyEmail = (item as any).assignedEmail
                       const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
                         ? item.assignedEmails 
                         : (legacyEmail ? [legacyEmail] : [])
+
+                      // Resolve Dynamic Due Date from Calendar Task if linked
+                      const linkedTask = item.linkedTaskId ? calendarTasks.find(t => t.id === item.linkedTaskId) : null
+                      let displayDueDate = item.dueDate
+                      
+                      if (linkedTask) {
+                        const baseDate = new Date(linkedTask.endDate + "T00:00:00")
+                        if (item.linkedTaskOffset) {
+                          baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
+                        }
+                        displayDueDate = baseDate.toISOString().split("T")[0]
+                      }
+
+                      const alertStatus = getAlertStatus(displayDueDate, item.completed)
 
                       return (
                         <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg gap-3">
@@ -404,20 +483,28 @@ export default function DashboardPage() {
                                 {item.text}
                               </span>
                               
-                              {(!item.completed && (item.dueDate || emailsToDisplay.length > 0)) && (
+                              {(!item.completed && (displayDueDate || emailsToDisplay.length > 0 || item.category !== "General To-Do")) && (
                                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                                  {item.dueDate && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                                      alertStatus === "overdue" ? "bg-rose-100 text-rose-700 border border-rose-200" :
-                                      alertStatus === "today" ? "bg-orange-100 text-orange-700 border border-orange-200" :
-                                      "bg-slate-200 text-slate-600 border border-slate-300"
-                                    }`}>
-                                      {alertStatus === "overdue" && "⚠️ OVERDUE: "}
-                                      {alertStatus === "today" && "🚨 DUE TODAY: "}
-                                      {alertStatus === "upcoming" && "📅 Due: "}
-                                      {formatDisplayDate(item.dueDate)}
+                                  {item.category !== "General To-Do" && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                      {item.category}
                                     </span>
                                   )}
+                                  
+                                  {/* Dynamic Due Date Badge */}
+                                  {displayDueDate && (
+                                    <Badge variant="outline" className={`text-[10px] ${
+                                      item.linkedTaskId 
+                                        ? "bg-indigo-50 text-indigo-700 border-indigo-200" 
+                                        : "bg-slate-50 text-slate-600 border-slate-200"
+                                    }`}>
+                                      {item.linkedTaskId ? `🔗 Linked: ${linkedTask?.title || "Task"} (Due: ` : "📅 Due: "}
+                                      {formatDisplayDate(displayDueDate)}
+                                      {item.linkedTaskOffset ? ` [${item.linkedTaskOffset > 0 ? '+' : ''}${item.linkedTaskOffset}d]` : ""}
+                                      {item.linkedTaskId ? ")" : ""}
+                                    </Badge>
+                                  )}
+
                                   {emailsToDisplay.map(email => (
                                     <span key={email} className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
                                       ✉️ {email}
@@ -487,79 +574,175 @@ export default function DashboardPage() {
       </Card>
 
       <Dialog open={!!editingPunch} onOpenChange={(open) => !open && setEditingPunch(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Edit Task & Notifications</DialogTitle>
-            <DialogDescription className="text-xs">Set due dates for alerts or assign emails to send reminders.</DialogDescription>
+            <DialogTitle>
+              {isNewTask ? "Add Task Details" : "Edit Task & Notifications"}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Set due dates for alerts or assign emails to trigger automated notifications.
+            </DialogDescription>
           </DialogHeader>
 
           {editingPunch && (
-            <div className="grid gap-4 py-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-task" className="text-xs font-bold text-slate-700">Task Name</Label>
+            <div className="grid gap-4 py-2">
+              <div>
+                <Label htmlFor="edit-task" className="text-xs font-bold text-slate-700">Task Name *</Label>
                 <Input
                   id="edit-task"
                   value={editingPunch.text}
                   onChange={(e) => setEditingPunch({ ...editingPunch, text: e.target.value })}
-                  className="text-sm shadow-sm"
+                  className="mt-1 text-sm shadow-sm h-10"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-date" className="text-xs font-bold text-slate-700">Due Date (For Alerts)</Label>
-                <Input
-                  id="edit-date"
-                  type="date"
-                  value={editingPunch.dueDate || ""}
-                  onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })}
-                  className="text-sm shadow-sm"
-                />
+              <div>
+                <Label htmlFor="task-cat" className="text-xs font-bold text-slate-700">Category</Label>
+                <select
+                  id="task-cat"
+                  value={editingPunch.category || "General To-Do"}
+                  onChange={(e) => setEditingPunch({ ...editingPunch, category: e.target.value })}
+                  className="w-full mt-1 h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {CATEGORIES.filter((c) => c !== "All Categories").map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Vendor / Sub Emails</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    placeholder="name@example.com"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        handleAddEmail()
-                      }
-                    }}
-                    className="text-sm shadow-sm"
-                  />
-                  <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4">
-                    Add
-                  </Button>
+              <div className="space-y-4">
+                {/* Due Date with Toggle & Offset */}
+                <div className="bg-white">
+                  <Label className="text-xs font-semibold text-slate-700 block mb-2 text-center whitespace-nowrap">
+                    Due Date (For Alerts)
+                  </Label>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      {isLinked ? (
+                        <select
+                          value={editingPunch.linkedTaskId || ""}
+                          onChange={(e) => setEditingPunch({ ...editingPunch, linkedTaskId: e.target.value === "" ? undefined : Number(e.target.value) })}
+                          className="w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select calendar task...</option>
+                          {calendarTasks.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.title} ({formatDisplayDate(t.endDate)})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Input 
+                          id="task-date" 
+                          type="date"
+                          value={editingPunch.dueDate || ""}
+                          onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })} 
+                          className="shadow-sm h-10 text-sm w-full"
+                        />
+                      )}
+                    </div>
+                    <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                      <input 
+                        type="checkbox" 
+                        checked={isLinked}
+                        onChange={(e) => setIsLinked(e.target.checked)}
+                        className="h-4 w-4 accent-blue-600 rounded"
+                      />
+                      <span className="text-xs font-bold text-blue-600">Link to Schedule</span>
+                    </label>
+                  </div>
+                  
+                  {isLinked && editingPunch.linkedTaskId && (
+                    <div className="flex items-center justify-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200 mt-3">
+                      <Label className="text-[10px] font-bold text-slate-500 uppercase">Offset (Days)</Label>
+                      <Input 
+                        type="number" 
+                        value={editingPunch.linkedTaskOffset || 0}
+                        onChange={(e) => setEditingPunch({ ...editingPunch, linkedTaskOffset: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })}
+                        className="h-7 w-16 text-xs text-center px-1 shadow-sm"
+                      />
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        (- for lead before, + for lag after)
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
-                {(editingPunch.assignedEmails || []).length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {editingPunch.assignedEmails?.map((email, idx) => (
-                      <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium">
-                        {email}
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveEmail(email)} 
-                          className="hover:text-rose-600 transition-colors"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
+                {/* Email Tag List Input */}
+                <div className="pt-3 border-t border-slate-100">
+                  <Label className="text-xs font-semibold text-slate-700 block mb-1.5">Email</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="email"
+                      placeholder="name@example.com"
+                      value={emailInput} 
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          handleAddEmail()
+                        }
+                      }} 
+                      className="shadow-sm h-10 text-sm"
+                    />
+                    <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-10 shadow-sm">
+                      Add
+                    </Button>
                   </div>
-                )}
+                  
+                  {/* Visual Tags for added emails */}
+                  {(editingPunch.assignedEmails || []).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {editingPunch.assignedEmails?.map((email, idx) => (
+                        <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium">
+                          {email}
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveEmail(email)} 
+                            className="hover:text-rose-600 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-2">
+                <Label htmlFor="task-notes" className="text-xs font-bold text-slate-700">Additional Notes (Optional)</Label>
+                <textarea 
+                  id="task-notes" 
+                  rows={3}
+                  placeholder="Details, measurements, or materials needed..." 
+                  value={editingPunch.notes || ""} 
+                  onChange={(e) => setEditingPunch({ ...editingPunch, notes: e.target.value })} 
+                  className="w-full mt-1 p-2.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                />
               </div>
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingPunch(null)}>Cancel</Button>
-            <Button onClick={handleSavePunchEdit} className="bg-blue-600 hover:bg-blue-700 text-white">Save Changes</Button>
+          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 border-t">
+            {editingPunch && !isNewTask ? (
+              <Button variant="destructive" size="sm" onClick={() => handleDeletePunch(editingPunch.id)} className="shadow-sm">
+                Delete
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditingPunch(null)} className="shadow-sm">
+                Cancel
+              </Button>
+              <Button onClick={handleSavePunchEdit} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                {isNewTask ? "Create Task" : "Save Changes"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
