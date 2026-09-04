@@ -19,7 +19,7 @@ export interface PunchItem {
   dueDate?: string 
   assignedEmails?: string[]
   linkedTaskId?: number
-  linkedTaskOffset?: number // Stores the lead/lag days offset
+  linkedTaskOffset?: number
 }
 
 interface CalendarTask {
@@ -440,14 +440,14 @@ export default function PunchListPage() {
                       <select
                         value={linkedTaskId}
                         onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
-                        className="w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${linkedTaskId === "" ? "text-slate-500" : "text-slate-900"}`}
                       >
-                        <option value="">Select calendar task...</option>
+                        <option value="" disabled>Select calendar task...</option>
                         {calendarTasks.length === 0 && (
                           <option disabled>No calendar tasks found</option>
                         )}
                         {calendarTasks.map(t => (
-                          <option key={t.id} value={t.id}>
+                          <option key={t.id} value={t.id} className="text-slate-900">
                             {t.title} ({formatDisplayDate(t.endDate)})
                           </option>
                         ))}
@@ -456,19 +456,16 @@ export default function PunchListPage() {
                       <div className="relative w-full">
                         <Input 
                           id="task-date" 
-                          type={formDueDate ? "date" : "text"}
-                          onFocus={(e) => (e.target.type = "date")}
-                          onBlur={(e) => {
-                            if (!e.target.value) e.target.type = "text"
-                          }}
-                          placeholder="Select due date..."
+                          type="date"
                           value={formDueDate} 
                           onChange={(e) => setFormDueDate(e.target.value)} 
-                          className="shadow-sm h-10 text-sm w-full appearance-none bg-white pr-8"
+                          className="shadow-sm h-10 text-sm w-full relative z-0 bg-transparent"
                         />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-base">
-                          📅
-                        </span>
+                        {!formDueDate && (
+                          <div className="absolute inset-y-1 left-1 right-10 bg-white flex items-center pl-2 pointer-events-none">
+                            <span className="text-slate-500 text-sm">Due Date...</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -540,7 +537,7 @@ export default function PunchListPage() {
             </div>
 
             <div className="mt-2">
-              <Label htmlFor="task-notes" className="text-xs font-semibold text-slate-700">Additional Notes (Optional)</Label>
+              <Label htmlFor="task-notes" className="text-xs font-bold text-slate-700">Additional Notes (Optional)</Label>
               <textarea 
                 id="task-notes" 
                 rows={3}

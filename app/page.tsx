@@ -614,14 +614,14 @@ export default function DashboardPage() {
                         <select
                           value={editingPunch.linkedTaskId || ""}
                           onChange={(e) => setEditingPunch({ ...editingPunch, linkedTaskId: e.target.value === "" ? undefined : Number(e.target.value) })}
-                          className="w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className={`w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${!editingPunch.linkedTaskId ? "text-slate-500" : "text-slate-900"}`}
                         >
-                          <option value="">Select calendar task...</option>
+                          <option value="" disabled>Select calendar task...</option>
                           {calendarTasks.length === 0 && (
                             <option disabled>No calendar tasks found</option>
                           )}
                           {calendarTasks.map(t => (
-                            <option key={t.id} value={t.id}>
+                            <option key={t.id} value={t.id} className="text-slate-900">
                               {t.title} ({formatDisplayDate(t.endDate)})
                             </option>
                           ))}
@@ -630,19 +630,16 @@ export default function DashboardPage() {
                         <div className="relative w-full">
                           <Input 
                             id="task-date" 
-                            type={editingPunch.dueDate ? "date" : "text"}
-                            onFocus={(e) => (e.target.type = "date")}
-                            onBlur={(e) => {
-                              if (!e.target.value) e.target.type = "text"
-                            }}
-                            placeholder="Due Date..."
+                            type="date"
                             value={editingPunch.dueDate || ""}
                             onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })} 
-                            className="shadow-sm h-10 text-sm w-full appearance-none bg-white pr-8"
+                            className="shadow-sm h-10 text-sm w-full relative z-0 bg-transparent"
                           />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-base">
-                            📅
-                          </span>
+                          {!editingPunch.dueDate && (
+                            <div className="absolute inset-y-1 left-1 right-10 bg-white flex items-center pl-2 pointer-events-none">
+                              <span className="text-slate-500 text-sm">Due Date...</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
