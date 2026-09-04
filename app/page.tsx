@@ -85,7 +85,6 @@ const getLocalTodayStr = () => {
 }
 
 export default function DashboardPage() {
-  // 1. Universal Sync Hooks with extracted Load Flags
   const [expenses, , expensesLoaded] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
   const [totalBudget, , budgetLoaded] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
   const [customNonWorkdays, , nonWorkdaysLoaded] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", []) 
@@ -97,12 +96,10 @@ export default function DashboardPage() {
   const [newPunchText, setNewPunchText] = useState("")
   const [editingPunch, setEditingPunch] = useState<PunchItem | null>(null)
   
-  // Link to Schedule State for Modal
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
 
-  // Fetch logged-in user's email for auto-filling
   useEffect(() => {
     const fetchUserEmail = async () => {
       const { data } = await supabase.auth.getUser()
@@ -113,7 +110,6 @@ export default function DashboardPage() {
     fetchUserEmail()
   }, [])
 
-  // --- PUNCH LIST LOGIC ---
   const handleOpenAddModal = () => {
     if (!newPunchText.trim()) return
     setIsLinked(false)
@@ -139,7 +135,6 @@ export default function DashboardPage() {
     await setPunchList(updated)
   }
 
-  // Edit Modal Handlers
   const handleOpenEditModal = (item: PunchItem) => {
     let emails = item.assignedEmails || []
     if ((item as any).assignedEmail && emails.length === 0) {
@@ -179,7 +174,6 @@ export default function DashboardPage() {
   const handleSavePunchEdit = async () => {
     if (!editingPunch) return
     
-    // Process final link state overrides before saving
     const finalPunch = {
       ...editingPunch,
       linkedTaskId: isLinked && editingPunch.linkedTaskId ? editingPunch.linkedTaskId : undefined,
@@ -198,7 +192,7 @@ export default function DashboardPage() {
     
     await setPunchList(updated)
     setEditingPunch(null)
-    setNewPunchText("") // Clear the dashboard input upon success
+    setNewPunchText("")
   }
 
   const getAlertStatus = (dueDate?: string, completed?: boolean) => {
@@ -209,7 +203,6 @@ export default function DashboardPage() {
     return "upcoming"
   }
 
-  // Metrics Calculations
   const totalPunchItems = punchList.length
   const completedPunchItems = punchList.filter((item) => item.completed).length
   const percentPunchCompleted = totalPunchItems > 0 ? Math.round((completedPunchItems / totalPunchItems) * 100) : 0
@@ -230,7 +223,6 @@ export default function DashboardPage() {
   const currentDay = Math.min(totalDays, Math.max(1, Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1))
   const percentTimeUsed = Math.min(100, Math.max(0, Math.round((currentDay / totalDays) * 100)))
 
-  // --- SYSTEM CONTROLS ---
   const handleRestoreTutorial = async () => {
     const isConfirmed = window.confirm(
       "This will replace your current data with the tutorial examples. Continue?"
@@ -455,7 +447,6 @@ export default function DashboardPage() {
                         ? item.assignedEmails 
                         : (legacyEmail ? [legacyEmail] : [])
 
-                      // Resolve Dynamic Due Date from Calendar Task if linked
                       const linkedTask = item.linkedTaskId ? calendarTasks.find(t => t.id === item.linkedTaskId) : null
                       let displayDueDate = item.dueDate
                       
@@ -491,7 +482,6 @@ export default function DashboardPage() {
                                     </span>
                                   )}
                                   
-                                  {/* Dynamic Due Date Badge */}
                                   {displayDueDate && (
                                     <Badge variant="outline" className={`text-[10px] ${
                                       item.linkedTaskId 
@@ -613,14 +603,13 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-4">
-                {/* Due Date with Toggle & Offset */}
                 <div className="bg-white">
                   <Label className="text-xs font-semibold text-slate-700 block mb-2 text-center whitespace-nowrap">
                     Due Date (For Alerts)
                   </Label>
                   
                   <div className="flex items-center gap-3">
-                    <div className="flex-1">
+                    <div className="flex-1 w-full">
                       {isLinked ? (
                         <select
                           value={editingPunch.linkedTaskId || ""}
@@ -628,6 +617,9 @@ export default function DashboardPage() {
                           className="w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">Select calendar task...</option>
+                          {calendarTasks.length === 0 && (
+                            <option disabled>No calendar tasks found</option>
+                          )}
                           {calendarTasks.map(t => (
                             <option key={t.id} value={t.id}>
                               {t.title} ({formatDisplayDate(t.endDate)})
@@ -635,13 +627,23 @@ export default function DashboardPage() {
                           ))}
                         </select>
                       ) : (
-                        <Input 
-                          id="task-date" 
-                          type="date"
-                          value={editingPunch.dueDate || ""}
-                          onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })} 
-                          className="shadow-sm h-10 text-sm w-full"
-                        />
+                        <div className="relative w-full">
+                          <Input 
+                            id="task-date" 
+                            type={editingPunch.dueDate ? "date" : "text"}
+                            onFocus={(e) => (e.target.type = "date")}
+                            onBlur={(e) => {
+                              if (!e.target.value) e.target.type = "text"
+                            }}
+                            placeholder="Due Date..."
+                            value={editingPunch.dueDate || ""}
+                            onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })} 
+                            className="shadow-sm h-10 text-sm w-full appearance-none bg-white pr-8"
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-base">
+                            📅
+                          </span>
+                        </div>
                       )}
                     </div>
                     <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
@@ -671,7 +673,6 @@ export default function DashboardPage() {
                   )}
                 </div>
                 
-                {/* Email Tag List Input */}
                 <div className="pt-3 border-t border-slate-100">
                   <Label className="text-xs font-semibold text-slate-700 block mb-1.5">Email</Label>
                   <div className="flex gap-2">
@@ -693,7 +694,6 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                   
-                  {/* Visual Tags for added emails */}
                   {(editingPunch.assignedEmails || []).length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3">
                       {editingPunch.assignedEmails?.map((email, idx) => (

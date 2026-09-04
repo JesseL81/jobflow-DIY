@@ -62,14 +62,12 @@ const formatDisplayDate = (dateStr: string) => {
 }
 
 export default function PunchListPage() {
-  // 1. Universal Sync Hooks
   const [items, setItems] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
   const [calendarTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
   
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
 
-  // Fetch logged-in user's email for auto-filling
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
 
   useEffect(() => {
@@ -82,26 +80,21 @@ export default function PunchListPage() {
     fetchUserEmail()
   }, [])
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [editingItem, setEditingItem] = useState<PunchItem | null>(null)
 
-  // Form State
   const [formText, setFormText] = useState("")
   const [formCategory, setFormCategory] = useState("General To-Do")
   const [formNotes, setFormNotes] = useState("")
   const [formDueDate, setFormDueDate] = useState("")
   
-  // Link to Schedule State
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [linkedTaskId, setLinkedTaskId] = useState<number | "">("")
   const [linkedTaskOffset, setLinkedTaskOffset] = useState<number>(0)
   
-  // Multi-Email State
   const [formEmails, setFormEmails] = useState<string[]>([])
   const [emailInput, setEmailInput] = useState("")
 
-  // --- CALCULATIONS ---
   const completedCount = useMemo(() => items.filter((i) => i.completed).length, [items])
   const totalCount = items.length
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
@@ -114,7 +107,6 @@ export default function PunchListPage() {
     return "upcoming"
   }
 
-  // Filtered Items
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesCategory = selectedCategory === "All Categories" || item.category === selectedCategory
@@ -125,12 +117,10 @@ export default function PunchListPage() {
     })
   }, [items, selectedCategory, searchQuery])
 
-  // Toggle Checkbox
   const handleToggleComplete = (id: number) => {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i)))
   }
 
-  // Email Handlers
   const handleAddEmail = () => {
     if (!emailInput.trim()) return
     const trimmed = emailInput.trim().toLowerCase()
@@ -145,7 +135,6 @@ export default function PunchListPage() {
     setFormEmails(formEmails.filter(e => e !== emailToRemove))
   }
 
-  // Open Add Modal
   const handleOpenAdd = () => {
     setEditingItem(null)
     setFormText("")
@@ -155,13 +144,11 @@ export default function PunchListPage() {
     setIsLinked(false)
     setLinkedTaskId("")
     setLinkedTaskOffset(0)
-    // Auto-populate the active user's email if we have it
     setFormEmails(currentUserEmail ? [currentUserEmail.toLowerCase()] : [])
     setEmailInput("")
     setIsModalOpen(true)
   }
 
-  // Open Edit Modal
   const handleOpenEdit = (item: PunchItem) => {
     setEditingItem(item)
     setFormText(item.text)
@@ -172,7 +159,6 @@ export default function PunchListPage() {
     setLinkedTaskId(item.linkedTaskId || "")
     setLinkedTaskOffset(item.linkedTaskOffset || 0)
     
-    // Silently migrate legacy single-email string if it exists
     let emails = item.assignedEmails || []
     if ((item as any).assignedEmail && emails.length === 0) {
       emails = [(item as any).assignedEmail]
@@ -183,7 +169,6 @@ export default function PunchListPage() {
     setIsModalOpen(true)
   }
 
-  // Save Item
   const handleSaveItem = () => {
     if (!formText.trim()) return
 
@@ -199,7 +184,7 @@ export default function PunchListPage() {
                 text: formText.trim(), 
                 category: formCategory, 
                 notes: formNotes.trim(),
-                dueDate: isLinked ? "" : formDueDate, // Clear manual date if linked to calendar
+                dueDate: isLinked ? "" : formDueDate,
                 assignedEmails: formEmails,
                 linkedTaskId: finalLinkedTaskId,
                 linkedTaskOffset: finalLinkedTaskOffset
@@ -226,7 +211,6 @@ export default function PunchListPage() {
     setIsModalOpen(false)
   }
 
-  // Delete Item
   const handleDeleteItem = () => {
     if (!editingItem) return
     setItems((prev) => prev.filter((i) => i.id !== editingItem.id))
@@ -236,7 +220,6 @@ export default function PunchListPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      {/* LOCKED HEIGHT HEADER BUBBLE */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -269,7 +252,6 @@ export default function PunchListPage() {
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
-            {/* Left Category Sidebar */}
             <div className="md:col-span-1 space-y-2">
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
@@ -297,9 +279,7 @@ export default function PunchListPage() {
               </div>
             </div>
 
-            {/* Right Content Area */}
             <div className="md:col-span-3 space-y-4">
-              
               <div className="bg-white p-3 rounded-xl border shadow-xs">
                 <Input
                   placeholder="Search tasks, notes, or categories..."
@@ -320,7 +300,6 @@ export default function PunchListPage() {
                     ? item.assignedEmails 
                     : (legacyEmail ? [legacyEmail] : [])
 
-                  // Resolve Dynamic Due Date from Calendar Task if linked (with offsets)
                   const linkedTask = item.linkedTaskId ? calendarTasks.find(t => t.id === item.linkedTaskId) : null
                   let displayDueDate = item.dueDate
                   
@@ -351,7 +330,6 @@ export default function PunchListPage() {
                                   {item.category}
                                 </Badge>
 
-                                {/* Dynamic Due Date Badge */}
                                 {displayDueDate && (
                                   <Badge variant="outline" className={`text-[10px] ${
                                     item.linkedTaskId 
@@ -413,7 +391,6 @@ export default function PunchListPage() {
         </div>
       </Card>
 
-      {/* Add / Edit Task Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -452,14 +429,13 @@ export default function PunchListPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Due Date with Toggle & Offset */}
               <div className="bg-white">
                 <Label className="text-xs font-semibold text-slate-700 block mb-2 text-center whitespace-nowrap">
                   Due Date (For Alerts)
                 </Label>
                 
                 <div className="flex items-center gap-3">
-                  <div className="flex-1">
+                  <div className="flex-1 w-full">
                     {isLinked ? (
                       <select
                         value={linkedTaskId}
@@ -467,6 +443,9 @@ export default function PunchListPage() {
                         className="w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select calendar task...</option>
+                        {calendarTasks.length === 0 && (
+                          <option disabled>No calendar tasks found</option>
+                        )}
                         {calendarTasks.map(t => (
                           <option key={t.id} value={t.id}>
                             {t.title} ({formatDisplayDate(t.endDate)})
@@ -474,13 +453,23 @@ export default function PunchListPage() {
                         ))}
                       </select>
                     ) : (
-                      <Input 
-                        id="task-date" 
-                        type="date"
-                        value={formDueDate} 
-                        onChange={(e) => setFormDueDate(e.target.value)} 
-                        className="shadow-sm h-10 text-sm w-full"
-                      />
+                      <div className="relative w-full">
+                        <Input 
+                          id="task-date" 
+                          type={formDueDate ? "date" : "text"}
+                          onFocus={(e) => (e.target.type = "date")}
+                          onBlur={(e) => {
+                            if (!e.target.value) e.target.type = "text"
+                          }}
+                          placeholder="Select due date..."
+                          value={formDueDate} 
+                          onChange={(e) => setFormDueDate(e.target.value)} 
+                          className="shadow-sm h-10 text-sm w-full appearance-none bg-white pr-8"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-base">
+                          📅
+                        </span>
+                      </div>
                     )}
                   </div>
                   <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
@@ -510,7 +499,6 @@ export default function PunchListPage() {
                 )}
               </div>
               
-              {/* Email Tag List Input */}
               <div className="pt-3 border-t border-slate-100">
                 <Label className="text-xs font-semibold text-slate-700 block mb-1.5">Email</Label>
                 <div className="flex gap-2">
@@ -532,7 +520,6 @@ export default function PunchListPage() {
                   </Button>
                 </div>
                 
-                {/* Visual Tags for added emails */}
                 {formEmails.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
                     {formEmails.map((email, idx) => (
