@@ -418,7 +418,7 @@ export default function PunchListPage() {
                 id="task-cat"
                 value={formCategory}
                 onChange={(e) => setFormCategory(e.target.value)}
-                className="w-full mt-1 h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
               >
                 {CATEGORIES.filter((c) => c !== "All Categories").map((c) => (
                   <option key={c} value={c}>
@@ -430,46 +430,11 @@ export default function PunchListPage() {
 
             <div className="space-y-4">
               <div className="bg-white">
-                <Label className="text-xs font-semibold text-slate-700 block mb-2 text-center whitespace-nowrap">
-                  Due Date (For Alerts)
-                </Label>
-                
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 w-full">
-                    {isLinked ? (
-                      <select
-                        value={linkedTaskId}
-                        onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
-                        className={`w-full h-10 border rounded-md px-3 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${linkedTaskId === "" ? "text-slate-500" : "text-slate-900"}`}
-                      >
-                        <option value="" disabled>Select calendar task...</option>
-                        {calendarTasks.length === 0 && (
-                          <option disabled>No calendar tasks found</option>
-                        )}
-                        {calendarTasks.map(t => (
-                          <option key={t.id} value={t.id} className="text-slate-900">
-                            {t.title} ({formatDisplayDate(t.endDate)})
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="relative w-full">
-                        <Input 
-                          id="task-date" 
-                          type="date"
-                          value={formDueDate} 
-                          onChange={(e) => setFormDueDate(e.target.value)} 
-                          className="shadow-sm h-10 text-sm w-full relative z-0 bg-transparent"
-                        />
-                        {!formDueDate && (
-                          <div className="absolute inset-y-1 left-1 right-10 bg-white flex items-center pl-2 pointer-events-none">
-                            <span className="text-slate-500 text-sm">Due Date...</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-semibold text-slate-700">
+                    Due Date (For Alerts)
+                  </Label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input 
                       type="checkbox" 
                       checked={isLinked}
@@ -480,6 +445,44 @@ export default function PunchListPage() {
                   </label>
                 </div>
                 
+                <div className="w-full">
+                  {isLinked ? (
+                    <select
+                      value={linkedTaskId}
+                      onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
+                      className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none ${linkedTaskId === "" ? "text-slate-500" : "text-slate-900"}`}
+                    >
+                      <option value="" disabled>Select calendar task...</option>
+                      {calendarTasks.length === 0 && (
+                        <option disabled>No calendar tasks found</option>
+                      )}
+                      {calendarTasks.map(t => (
+                        <option key={t.id} value={t.id} className="text-slate-900">
+                          {t.title} ({formatDisplayDate(t.endDate)})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="relative w-full">
+                      <Input 
+                        id="task-date" 
+                        type="date"
+                        value={formDueDate} 
+                        onChange={(e) => setFormDueDate(e.target.value)} 
+                        className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none pr-8 relative z-10 bg-transparent"
+                      />
+                      {!formDueDate && (
+                        <div className="absolute inset-y-1 left-1 right-10 bg-white flex items-center pl-2 pointer-events-none z-0">
+                          <span className="text-slate-500 text-sm">Due Date...</span>
+                        </div>
+                      )}
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-base z-20">
+                        📅
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
                 {isLinked && linkedTaskId !== "" && (
                   <div className="flex items-center justify-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200 mt-3">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Offset (Days)</Label>
@@ -487,7 +490,7 @@ export default function PunchListPage() {
                       type="number" 
                       value={linkedTaskOffset} 
                       onChange={(e) => setLinkedTaskOffset(e.target.value === "" ? 0 : parseInt(e.target.value, 10))}
-                      className="h-7 w-16 text-xs text-center px-1 shadow-sm"
+                      className="h-7 w-16 text-xs text-center px-1 shadow-sm bg-white"
                     />
                     <span className="text-[10px] text-slate-400 font-medium">
                       (- for lead before, + for lag after)
@@ -570,7 +573,7 @@ export default function PunchListPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.00
+        CleanBuild v1.05
       </div>
     </main>
   )
