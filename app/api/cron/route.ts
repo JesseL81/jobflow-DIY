@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Fetch ALL punch lists and calendar tasks (Removed .single() so it never crashes)
+    // 1. Fetch ALL punch lists and calendar tasks
     const { data: punchListData, error: punchError } = await supabase
       .from("cloud_sync")
       .select("user_id, data")
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       for (const task of punchList) {
         if (task.completed) continue;
 
-        // Calculate the TRUE due date (handles manual dates AND linked calendar offsets)
+        // Calculate the TRUE due date
         let displayDueDate = task.dueDate;
         if (task.linkedTaskId) {
           const linkedTask = calendarTasks.find((t: any) => t.id === task.linkedTaskId);
@@ -57,8 +57,8 @@ export async function GET(request: Request) {
           }
         }
 
-        // 3. If due today, collect the emails (handles the new Array structure)
-        if (displayDueDate === today) {
+        // 3. If due today OR PAST DUE, collect the emails
+        if (displayDueDate && displayDueDate <= today) {
           // Fallback to legacy assignedEmail string just in case
           const emails = task.assignedEmails && task.assignedEmails.length > 0 
             ? task.assignedEmails 
@@ -66,7 +66,9 @@ export async function GET(request: Request) {
 
           for (const email of emails) {
             if (email) {
-              emailsToSend.push({ email: email.toLowerCase().trim(), task });
+              // Pass the calculated date to the task object so we can use it in the email
+              const enrichedTask = { ...task, displayDueDate };
+              emailsToSend.push({ email: email.toLowerCase().trim(), task: enrichedTask });
             }
           }
         }
@@ -74,7 +76,7 @@ export async function GET(request: Request) {
     }
 
     if (emailsToSend.length === 0) {
-      return NextResponse.json({ success: true, message: "No tasks due today." });
+      return NextResponse.json({ success: true, message: "No active tasks due." });
     }
 
     // 4. Group by email so each person only gets ONE digest email
@@ -104,9 +106,16 @@ export async function GET(request: Request) {
           </h3>
         `;
         for (const task of catTasks as any[]) {
+          // Identify if past due to color-code the email alert
+          const isPastDue = task.displayDueDate < today;
+          const dueBadge = isPastDue 
+            ? `<span style="background-color: #ffe4e6; color: #e11d48; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 4px; display: inline-block;">⚠️ PAST DUE</span>`
+            : `<span style="background-color: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 4px; display: inline-block;">DUE TODAY</span>`;
+
           tasksHtml += `
-            <div style="background-color: #f8fafc; padding: 16px; border-left: 4px solid #2563eb; margin-bottom: 12px; border-radius: 0 6px 6px 0;">
-              <strong style="display: block; font-size: 16px; color: #1e293b;">${task.text}</strong>
+            <div style="background-color: #f8fafc; padding: 16px; border-left: 4px solid ${isPastDue ? '#e11d48' : '#2563eb'}; margin-bottom: 12px; border-radius: 0 6px 6px 0;">
+              ${dueBadge}
+              <strong style="display: block; font-size: 16px; color: #1e293b; margin-top: 4px;">${task.text}</strong>
               ${task.notes ? `<p style="color: #475569; font-size: 14px; margin: 8px 0 0 0; line-height: 1.4;"><strong>Notes:</strong> ${task.notes}</p>` : ''}
             </div>
           `;
@@ -116,7 +125,7 @@ export async function GET(request: Request) {
       await resend.emails.send({
         from: "CleanBuild Notifications <alerts@reminder.cleanbuild.us>",
         to: email,
-        subject: `CleanBuild: Action Required Today (${(tasks as any[]).length} tasks)`,
+        subject: `CleanBuild: Action Required (${(tasks as any[]).length} active tasks)`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
             <div style="background-color: #0f172a; padding: 24px; text-align: center;">
@@ -125,7 +134,7 @@ export async function GET(request: Request) {
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #334155; font-size: 16px; margin-top: 0;">Hello,</p>
-              <p style="color: #334155; font-size: 16px;">Here are your assigned tasks required for the project today. Please ensure these are completed by the end of the day.</p>
+              <p style="color: #334155; font-size: 16px;">Here are your assigned tasks. Please ensure these are addressed.</p>
               ${tasksHtml}
               <p style="color: #94a3b8; font-size: 12px; margin-top: 40px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px;">
                 Sent securely via CleanBuild Project Management<br/>
