@@ -316,10 +316,6 @@ export default function PunchListPage() {
 
               <div className="space-y-3">
                 {filteredItems.map((item) => {
-                  const cardStyle = item.completed 
-                    ? "bg-slate-50 border-slate-200 opacity-75" 
-                    : "bg-white border-slate-200 hover:border-slate-300 shadow-xs"
-
                   const legacyEmail = (item as any).assignedEmail
                   const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
                     ? item.assignedEmails 
@@ -337,6 +333,24 @@ export default function PunchListPage() {
                   }
                   
                   const alertStatus = getAlertStatus(displayDueDate, item.completed)
+
+                  // Dynamic Background Tint based on Due Date proximity
+                  let cardStyle = "bg-white border-slate-200 hover:border-slate-300 shadow-xs"
+                  if (item.completed) {
+                    cardStyle = "bg-slate-50 border-slate-200 opacity-60 shadow-none"
+                  } else if (displayDueDate) {
+                    const todayMs = new Date(getLocalTodayStr() + "T00:00:00").getTime()
+                    const dueMs = new Date(displayDueDate + "T00:00:00").getTime()
+                    const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24))
+
+                    if (diffDays < 0) {
+                      cardStyle = "bg-rose-50 border-rose-200 hover:border-rose-300 shadow-xs" // Past Due
+                    } else if (diffDays <= 3) {
+                      cardStyle = "bg-amber-50 border-amber-200 hover:border-amber-300 shadow-xs" // 0-3 Days
+                    } else {
+                      cardStyle = "bg-emerald-50 border-emerald-200 hover:border-emerald-300 shadow-xs" // 4+ Days
+                    }
+                  }
 
                   return (
                     <Card key={item.id} className={`transition-all ${cardStyle}`}>
@@ -356,10 +370,10 @@ export default function PunchListPage() {
                                 </Badge>
 
                                 {displayDueDate && (
-                                  <Badge variant="outline" className={`text-[10px] ${
+                                  <Badge variant="outline" className={`text-[10px] bg-white/60 ${
                                     item.linkedTaskId 
-                                      ? "bg-indigo-50 text-indigo-700 border-indigo-200" 
-                                      : "bg-slate-50 text-slate-600 border-slate-200"
+                                      ? "text-indigo-700 border-indigo-200" 
+                                      : "text-slate-600 border-slate-200"
                                   }`}>
                                     {item.linkedTaskId ? `🔗 Linked: ${linkedTask?.title || "Task"} (Due: ` : "📅 Due: "}
                                     {formatDisplayDate(displayDueDate)}
@@ -369,7 +383,7 @@ export default function PunchListPage() {
                                 )}
 
                                 {emailsToDisplay.map((email) => (
-                                  <Badge key={email} variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200">
+                                  <Badge key={email} variant="outline" className="text-[10px] bg-white/60 text-slate-600 border-slate-200">
                                     ✉️ {email}
                                   </Badge>
                                 ))}
@@ -385,13 +399,13 @@ export default function PunchListPage() {
                               </h3>
                             </div>
 
-                            <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(item)} className="h-7 text-xs text-slate-500 hover:bg-slate-200 shrink-0">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(item)} className="h-7 text-xs text-slate-500 hover:bg-slate-200 shrink-0 bg-white/80">
                               Edit
                             </Button>
                           </div>
                           
                           {item.notes && (
-                            <p className={`text-xs leading-relaxed p-2 rounded border ${item.completed ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-amber-50/60 text-slate-600 border-amber-100"}`}>
+                            <p className={`text-xs leading-relaxed p-2 rounded border ${item.completed ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-white/60 text-slate-600 border-slate-200"}`}>
                               {item.notes}
                             </p>
                           )}
@@ -598,7 +612,7 @@ export default function PunchListPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.00
+        CleanBuild v1.10
       </div>
     </main>
   )

@@ -487,14 +487,32 @@ export default function DashboardPage() {
 
                       const alertStatus = getAlertStatus(displayDueDate, item.completed)
 
+                      // Dynamic Background Tint based on Due Date proximity
+                      let rowStyle = "bg-white border-slate-200 hover:border-slate-300"
+                      if (item.completed) {
+                        rowStyle = "bg-slate-50 border-slate-200 opacity-60"
+                      } else if (displayDueDate) {
+                        const todayMs = new Date(getLocalTodayStr() + "T00:00:00").getTime()
+                        const dueMs = new Date(displayDueDate + "T00:00:00").getTime()
+                        const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24))
+
+                        if (diffDays < 0) {
+                          rowStyle = "bg-rose-50 border-rose-200 hover:border-rose-300" // Past Due
+                        } else if (diffDays <= 3) {
+                          rowStyle = "bg-amber-50 border-amber-200 hover:border-amber-300" // 0-3 Days
+                        } else {
+                          rowStyle = "bg-emerald-50 border-emerald-200 hover:border-emerald-300" // 4+ Days
+                        }
+                      }
+
                       return (
-                        <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg gap-3">
-                          <label className="flex items-start sm:items-center gap-3 cursor-pointer flex-1">
+                        <div key={item.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-3 transition-colors ${rowStyle}`}>
+                          <div className="flex items-start sm:items-center gap-3 flex-1">
                             <input
                               type="checkbox"
                               checked={item.completed}
                               onChange={() => handleTogglePunch(item.id)}
-                              className="h-4 w-4 accent-blue-600 rounded mt-0.5 sm:mt-0"
+                              className="h-4 w-4 accent-blue-600 rounded mt-0.5 sm:mt-0 cursor-pointer shrink-0"
                             />
                             <div className="flex flex-col">
                               <span className={`text-sm font-semibold ${item.completed ? "line-through text-slate-400" : "text-slate-800"}`}>
@@ -510,10 +528,10 @@ export default function DashboardPage() {
                                   )}
                                   
                                   {displayDueDate && (
-                                    <Badge variant="outline" className={`text-[10px] ${
+                                    <Badge variant="outline" className={`text-[10px] bg-white/60 ${
                                       item.linkedTaskId 
-                                        ? "bg-indigo-50 text-indigo-700 border-indigo-200" 
-                                        : "bg-slate-50 text-slate-600 border-slate-200"
+                                        ? "text-indigo-700 border-indigo-200" 
+                                        : "text-slate-600 border-slate-200"
                                     }`}>
                                       {item.linkedTaskId ? `🔗 Linked: ${linkedTask?.title || "Task"} (Due: ` : "📅 Due: "}
                                       {formatDisplayDate(displayDueDate)}
@@ -530,11 +548,11 @@ export default function DashboardPage() {
                                 </div>
                               )}
                             </div>
-                          </label>
+                          </div>
 
                           <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
-                            <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(item)} className="h-7 text-xs px-2 shadow-xs">
-                              ✏️ Edit / Notify
+                            <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(item)} className="h-7 text-xs px-3 shadow-xs bg-white/80 text-slate-700">
+                              Edit
                             </Button>
                             <button onClick={() => handleDeletePunch(item.id)} className="text-slate-400 hover:text-rose-600 h-7 w-7 flex items-center justify-center rounded hover:bg-rose-50 transition-colors">
                               ✕
@@ -766,7 +784,7 @@ export default function DashboardPage() {
               <Button variant="outline" onClick={() => setEditingPunch(null)} className="shadow-sm">
                 Cancel
               </Button>
-              <Button onClick={handleSavePunchEdit} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" onClick={handleSavePunchEdit}>
                 {isNewTask ? "Create Task" : "Save Changes"}
               </Button>
             </div>
@@ -807,7 +825,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.02
+        CleanBuild v1.10
       </div>
 
     </main>
