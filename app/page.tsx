@@ -825,7 +825,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.10
+        CleanBuild v1.11
       </div>
 
     </main>
