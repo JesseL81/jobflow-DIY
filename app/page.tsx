@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { set, clear } from "idb-keyval"
 import { supabase } from "@/lib/supabase"
 import { syncManager } from "@/lib/syncManager"
@@ -202,6 +202,33 @@ export default function DashboardPage() {
     if (dueDate < today) return "overdue"
     return "upcoming"
   }
+
+  // Dashboard Item Sorting
+  const sortedPunchList = useMemo(() => {
+    return [...punchList].sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1
+
+      const getDisplayDate = (item: PunchItem) => {
+        if (item.linkedTaskId) {
+          const linkedTask = calendarTasks.find(t => t.id === item.linkedTaskId)
+          if (linkedTask) {
+            const baseDate = new Date(linkedTask.endDate + "T00:00:00")
+            if (item.linkedTaskOffset) baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
+            return baseDate.toISOString().split("T")[0]
+          }
+        }
+        return item.dueDate || ""
+      }
+
+      const dateA = getDisplayDate(a)
+      const dateB = getDisplayDate(b)
+
+      if (dateA && dateB) return new Date(dateA).getTime() - new Date(dateB).getTime()
+      if (dateA && !dateB) return -1
+      if (!dateA && dateB) return 1
+      return a.id - b.id
+    })
+  }, [punchList, calendarTasks])
 
   const totalPunchItems = punchList.length
   const completedPunchItems = punchList.filter((item) => item.completed).length
@@ -436,12 +463,12 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pt-2">
-                  {punchList.length === 0 ? (
+                  {sortedPunchList.length === 0 ? (
                     <p className="text-xs text-slate-400 italic py-3 text-center border border-dashed rounded">
                       No punch list items yet.
                     </p>
                   ) : (
-                    punchList.map((item) => {
+                    sortedPunchList.map((item) => {
                       const legacyEmail = (item as any).assignedEmail
                       const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
                         ? item.assignedEmails 

@@ -107,15 +107,40 @@ export default function PunchListPage() {
     return "upcoming"
   }
 
+  // Punch List Item Sorting
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const filtered = items.filter((item) => {
       const matchesCategory = selectedCategory === "All Categories" || item.category === selectedCategory
       const matchesSearch =
         item.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()))
       return matchesCategory && matchesSearch
     })
-  }, [items, selectedCategory, searchQuery])
+
+    return filtered.sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1
+
+      const getDisplayDate = (item: PunchItem) => {
+        if (item.linkedTaskId) {
+          const linkedTask = calendarTasks.find(t => t.id === item.linkedTaskId)
+          if (linkedTask) {
+            const baseDate = new Date(linkedTask.endDate + "T00:00:00")
+            if (item.linkedTaskOffset) baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
+            return baseDate.toISOString().split("T")[0]
+          }
+        }
+        return item.dueDate || ""
+      }
+
+      const dateA = getDisplayDate(a)
+      const dateB = getDisplayDate(b)
+
+      if (dateA && dateB) return new Date(dateA).getTime() - new Date(dateB).getTime()
+      if (dateA && !dateB) return -1
+      if (!dateA && dateB) return 1
+      return a.id - b.id
+    })
+  }, [items, selectedCategory, searchQuery, calendarTasks])
 
   const handleToggleComplete = (id: number) => {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i)))
@@ -554,7 +579,7 @@ export default function PunchListPage() {
 
           <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 border-t">
             {editingItem ? (
-              <Button variant="destructive" size="sm" onClick={handleDeleteItem} className="shadow-sm">
+              <Button variant="destructive" size="sm" onClick={() => handleDeleteItem()} className="shadow-sm">
                 Delete
               </Button>
             ) : (
@@ -573,7 +598,7 @@ export default function PunchListPage() {
       </Dialog>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.05
+        CleanBuild v1.00
       </div>
     </main>
   )
