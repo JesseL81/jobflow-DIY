@@ -73,7 +73,7 @@ export function InstallPrompt() {
         </button>
 
         <div className="pr-6">
-          <h3 className="font-bold text-sm text-white">📱 Install CleanBuild</h3>
+          <h3 className="font-bold text-sm text-white">📱 Install CleanBuild!!</h3>
           <p className="text-xs text-slate-300 mt-1 leading-relaxed">
             Install this app to your home screen to enable offline mode and push notifications.
           </p>
@@ -81,7 +81,8 @@ export function InstallPrompt() {
 
         {isIOS ? (
           <div className="bg-slate-800 rounded-lg p-3 border border-slate-700 text-xs text-slate-300">
-            Tap the <span className="font-bold text-blue-400">Share</span> icon at the bottom of Safari, then scroll down and tap <span className="font-bold text-white">"Add to Home Screen"</span>.
+            1: tap the ... on the bottom right of the screen
+            2: Tap the <span className="font-bold text-blue-400">Share</span> icon (box wth the up arrow), then scroll down and tap <span className="font-bold text-white">"Add to Home Screen"</span>.
           </div>
         ) : (
           <Button 
