@@ -97,7 +97,8 @@ export function InstallPrompt() {
         <div className="pr-6">
           <h3 className="font-bold text-sm text-white">📱 Install CleanBuild</h3>
           <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-            Install this app to your home screen to enable offline mode and push notifications.
+            <div>*** Safari only ***</div>
+            <div>Install this app to your home screen to enable offline mode and push notifications.</div>
           </p>
         </div>
 
