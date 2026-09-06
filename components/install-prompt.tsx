@@ -106,13 +106,13 @@ export function InstallPrompt() {
           <div className="bg-slate-800 rounded-lg p-3 border border-slate-700 text-xs text-slate-300 space-y-2">
             <div className="flex items-start gap-1.5">
               <span className="font-bold text-slate-500 mt-0.5">1:</span>
-              <span className="leading-relaxed">Tap the <span className="font-bold text-blue-400">...</span> on the bottom right of the screen.</span>
+              <span className="leading-relaxed">Tap the <span className="font-bold text-orange-400">...</span> on the bottom right of the screen.</span>
             </div>
             
             <div className="flex items-start gap-1.5">
               <span className="font-bold text-slate-500 mt-0.5">2:</span>
               <span className="leading-relaxed flex flex-wrap items-center gap-x-1.5">
-                Tap the <span className="font-bold text-blue-400">Share</span> icon 
+                Tap the <span className="font-bold text-orange-400">Share</span> icon 
                 <span className="bg-slate-700 text-blue-400 p-1 rounded shadow-sm inline-flex"><ShareIcon className="h-3.5 w-3.5" /></span>
               </span>
             </div>
@@ -120,7 +120,7 @@ export function InstallPrompt() {
             <div className="flex items-start gap-1.5">
               <span className="font-bold text-slate-500 mt-0.5">3:</span>
               <span className="leading-relaxed flex flex-wrap items-center gap-x-1.5">
-                Scroll down and tap <span className="font-bold text-white">Add to Home Screen</span> 
+                Scroll down and tap <span className="font-bold text-orange-400">Add to Home Screen</span> 
                 <span className="bg-slate-700 text-white p-1 rounded shadow-sm inline-flex"><AddHomeIcon className="h-3.5 w-3.5" /></span>
               </span>
             </div>
