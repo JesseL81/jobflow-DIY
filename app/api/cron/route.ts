@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
+import webPush from "web-push";
 
 const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key_for_build");
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Authorize the push server using the keys you saved in Vercel
+webPush.setVapidDetails(
+  "mailto:admin@cleanbuild.us", // Required by protocol, does not actually send an email here
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
+  process.env.VAPID_PRIVATE_KEY || ""
+);
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -15,7 +23,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Fetch ALL punch lists and calendar tasks
+    // 1. Fetch punch lists, calendar tasks, AND push subscriptions
     const { data: punchListData, error: punchError } = await supabase
       .from("cloud_sync")
       .select("user_id, data")
@@ -25,6 +33,11 @@ export async function GET(request: Request) {
       .from("cloud_sync")
       .select("user_id, data")
       .eq("store_key", "cleanbuild_calendar_tasks");
+
+    const { data: pushData } = await supabase
+      .from("cloud_sync")
+      .select("user_id, data")
+      .eq("store_key", "cleanbuild_push_subscription");
 
     if (punchError || !punchListData) {
       return NextResponse.json({ success: false, error: "Database fetch failed." }, { status: 400 });
@@ -36,15 +49,14 @@ export async function GET(request: Request) {
     // 2. Loop through every saved punch list
     for (const userRecord of punchListData) {
       const punchList = userRecord.data || [];
-      
-      // Match calendar tasks for the same user (for linked dates)
       const userCalendarRecord = calendarData?.find(c => c.user_id === userRecord.user_id);
       const calendarTasks = userCalendarRecord ? (userCalendarRecord.data || []) : [];
+
+      let activeTasksCount = 0; // Track how many tasks this specific user has today
 
       for (const task of punchList) {
         if (task.completed) continue;
 
-        // Calculate the TRUE due date
         let displayDueDate = task.dueDate;
         if (task.linkedTaskId) {
           const linkedTask = calendarTasks.find((t: any) => t.id === task.linkedTaskId);
@@ -57,39 +69,58 @@ export async function GET(request: Request) {
           }
         }
 
-        // 3. If due today OR PAST DUE, collect the emails
+        // If due today OR PAST DUE, add it to the count and collect emails
         if (displayDueDate && displayDueDate <= today) {
-          // Fallback to legacy assignedEmail string just in case
+          activeTasksCount++;
+          
           const emails = task.assignedEmails && task.assignedEmails.length > 0 
             ? task.assignedEmails 
             : (task.assignedEmail ? [task.assignedEmail] : []);
 
           for (const email of emails) {
             if (email) {
-              // Pass the calculated date to the task object so we can use it in the email
-              const enrichedTask = { ...task, displayDueDate };
-              emailsToSend.push({ email: email.toLowerCase().trim(), task: enrichedTask });
+              emailsToSend.push({ email: email.toLowerCase().trim(), task: { ...task, displayDueDate } });
             }
+          }
+        }
+      }
+
+      // 3. SEND PUSH NOTIFICATION (If they have active tasks)
+      if (activeTasksCount > 0) {
+        const userPushRecord = pushData?.find(p => p.user_id === userRecord.user_id);
+        if (userPushRecord && userPushRecord.data) {
+          const subscription = userPushRecord.data;
+          
+          // The message that will pop up on their lock screen
+          const payload = JSON.stringify({
+            title: "CleanBuild: Action Required",
+            body: `You have ${activeTasksCount} active task${activeTasksCount > 1 ? 's' : ''} to address today.`,
+            url: "/punch-list"
+          });
+
+          try {
+            await webPush.sendNotification(subscription, payload);
+          } catch (pushErr) {
+            console.error(`Failed to send push notification to user ${userRecord.user_id}:`, pushErr);
           }
         }
       }
     }
 
     if (emailsToSend.length === 0) {
-      return NextResponse.json({ success: true, message: "No active tasks due." });
+      return NextResponse.json({ success: true, message: "No active tasks due. Push check complete." });
     }
 
     // 4. Group by email so each person only gets ONE digest email
     const tasksByEmail = emailsToSend.reduce((acc: any, item: any) => {
       if (!acc[item.email]) acc[item.email] = [];
-      // Prevent duplicating the exact same task
       if (!acc[item.email].some((t: any) => t.id === item.task.id)) {
         acc[item.email].push(item.task);
       }
       return acc;
     }, {});
 
-    // 5. Send emails
+    // 5. Send digest emails
     for (const [email, tasks] of Object.entries(tasksByEmail)) {
       const tasksByCategory = (tasks as any[]).reduce((acc: any, task: any) => {
         const cat = task.category || "General To-Do";
@@ -106,7 +137,6 @@ export async function GET(request: Request) {
           </h3>
         `;
         for (const task of catTasks as any[]) {
-          // Identify if past due to color-code the email alert
           const isPastDue = task.displayDueDate < today;
           const dueBadge = isPastDue 
             ? `<span style="background-color: #ffe4e6; color: #e11d48; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 4px; display: inline-block;">⚠️ PAST DUE</span>`
@@ -146,7 +176,7 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, message: "Successfully processed emails." });
+    return NextResponse.json({ success: true, message: "Successfully processed emails and push notifications." });
   } catch (error) {
     console.error("Cron Error:", error);
     return NextResponse.json({ success: false, error: "Failed to process cron job" }, { status: 500 });
