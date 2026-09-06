@@ -13,6 +13,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
+// Helper function required to convert your VAPID key for the browser
+const urlBase64ToUint8Array = (base64String: string) => {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
+}
+
 interface Expense {
   id: number
   title?: string
@@ -100,6 +112,9 @@ export default function DashboardPage() {
   const [emailInput, setEmailInput] = useState("")
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
 
+  // State to track if push notifications are enabled on this device
+  const [isPushEnabled, setIsPushEnabled] = useState(false)
+
   useEffect(() => {
     const fetchUserEmail = async () => {
       const { data } = await supabase.auth.getUser()
@@ -108,7 +123,86 @@ export default function DashboardPage() {
       }
     }
     fetchUserEmail()
+
+    // Check if the device is already subscribed to Push Notifications
+    if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
+      navigator.serviceWorker.ready.then((registration) => {
+        registration.pushManager.getSubscription().then((subscription) => {
+          setIsPushEnabled(!!subscription)
+        })
+      })
+    }
   }, [])
+
+  const handleTogglePush = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      alert("Push notifications are not supported by this browser. Try installing the app to your home screen first!")
+      return
+    }
+
+    try {
+      // Use getRegistration instead of ready to prevent infinite hanging in dev mode
+      const registration = await navigator.serviceWorker.getRegistration()
+      
+      if (!registration) {
+        alert("Service Worker is offline. Push notifications require the live Vercel site (HTTPS) or a local production build to function.")
+        return
+      }
+
+      if (isPushEnabled) {
+        // TURN OFF NOTIFICATIONS
+        const subscription = await registration.pushManager.getSubscription()
+        if (subscription) {
+          await subscription.unsubscribe()
+          const { data: userData } = await supabase.auth.getUser()
+          if (userData?.user?.id) {
+            // Remove the subscription from Supabase
+            await supabase.from("cloud_sync")
+              .delete()
+              .match({ user_id: userData.user.id, store_key: "cleanbuild_push_subscription" })
+          }
+        }
+        setIsPushEnabled(false)
+      } else {
+        // TURN ON NOTIFICATIONS
+        const permission = await Notification.requestPermission()
+        if (permission !== "granted") {
+          alert("Permission denied. You must allow notifications in your browser settings to use this feature.")
+          return
+        }
+
+        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        if (!vapidPublicKey) {
+          alert("Security key missing. Ensure NEXT_PUBLIC_VAPID_PUBLIC_KEY is set in your environment variables.")
+          return
+        }
+
+        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey)
+        
+        // Subscribe the device
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey,
+        })
+
+        // Save the device ID to Supabase
+        const { data: userData } = await supabase.auth.getUser()
+        if (userData?.user?.id) {
+          await supabase.from("cloud_sync").upsert({
+            user_id: userData.user.id,
+            store_key: "cleanbuild_push_subscription",
+            data: subscription.toJSON()
+          })
+        }
+        
+        setIsPushEnabled(true)
+        alert("Success! This device will now receive CleanBuild lock-screen alerts.")
+      }
+    } catch (error) {
+      console.error("Failed to toggle push notifications:", error)
+      alert("An error occurred while setting up notifications. See console for details.")
+    }
+  }
 
   const handleOpenAddModal = () => {
     if (!newPunchText.trim()) return
@@ -203,7 +297,6 @@ export default function DashboardPage() {
     return "upcoming"
   }
 
-  // Dashboard Item Sorting
   const sortedPunchList = useMemo(() => {
     return [...punchList].sort((a, b) => {
       if (a.completed !== b.completed) return a.completed ? 1 : -1
@@ -796,6 +889,20 @@ export default function DashboardPage() {
         
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
           <div>
+            <h3 className="text-slate-900 font-bold text-sm">📱 Lock-Screen Notifications</h3>
+            <p className="text-slate-500 text-xs mt-1">Receive daily task reminders directly on this device.</p>
+          </div>
+          <Button 
+            variant={isPushEnabled ? "default" : "outline"}
+            onClick={handleTogglePush}
+            className={`shrink-0 shadow-sm font-bold ${isPushEnabled ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "text-blue-600 border-blue-200 hover:bg-blue-50"}`}
+          >
+            {isPushEnabled ? "🔔 Notifications Active" : "🔕 Enable Notifications"}
+          </Button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
+          <div>
             <h3 className="text-slate-900 font-bold text-sm">Load Onboarding Tutorial</h3>
             <p className="text-slate-500 text-xs mt-1">Reset this account to a "brand new user" state to see the example project data.</p>
           </div>
@@ -825,7 +932,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.11
+        CleanBuild v1.02
       </div>
 
     </main>
