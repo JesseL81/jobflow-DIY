@@ -336,13 +336,13 @@ export default function ExpenseTracker() {
 
           <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
             <CardHeader className="p-6 pb-2">
-              <div className="flex items-center justify-between">
-  <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
-  {/* SWIPE INDICATOR: Matches Top Header */}
-  <div className="md:hidden flex items-center text-[10px] font-bold text-orange-400 uppercase tracking-wider bg-slate-900 px-2.5 py-1 rounded border border-slate-800 shadow-sm">
-    ← Swipe →
-  </div>
-</div>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
+                {/* SWIPE INDICATOR: Matches Top Header */}
+                <div className="md:hidden self-start flex items-center text-[10px] font-bold text-orange-400 uppercase tracking-wider bg-slate-900 px-2.5 py-1 rounded border border-slate-800 shadow-sm">
+                  ← Swipe →
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-6 pt-2">
               {expenses.length === 0 ? (
