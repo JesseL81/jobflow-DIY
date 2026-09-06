@@ -13,7 +13,6 @@ export default function AppleIcon() {
           <path d="M20 38L50 20L80 38L50 56L20 38Z" fill="#FF8C00"/>
           <path d="M20 38V68L50 85V56L20 38Z" fill="#C2410C"/>
           <path d="M80 38V68L50 85V56L80 38Z" fill="#FF6B00"/>
-          <path d="M12 35 L50 12 L88 35" stroke="#FFFFFF" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" fill="none" />
           <path d="M44 50.4L33 43.8C28.5 41.1 26 44 26 49.5V58.5C26 64 28.5 66.9 33 69.6L44 76.2" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
           <line x1="56" y1="52.6" x2="56" y2="75" stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
           <path d="M56 52.6L68 45.4C72.5 42.7 75 44.5 75 48.5C75 52.5 72.5 55.5 68 58.2L56 65.4" stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
