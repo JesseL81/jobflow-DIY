@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { usePathname } from "next/navigation"
 import { syncManager } from "@/lib/syncManager"
 
 const navItems = [
@@ -16,6 +15,7 @@ const navItems = [
   { label: "Contacts & Vendors", href: "/contacts", icon: "📞" },
   { label: "Templates", href: "/templates", icon: "📋" },
   { label: "Tips & Tricks", href: "/tips", icon: "💡" },
+  { label: "Settings", href: "/settings", icon: "⚙️" },
   { label: "Logo Showcase", href: "/logo-preview", icon: "🎨" },
 ]
 
@@ -45,7 +45,6 @@ function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGE
 
 export default function SidebarNav() {
   const pathname = usePathname()
-  const router = useRouter()
   
   // Project Name State
   const [projectName, setProjectName] = useState("My Project")
@@ -90,11 +89,6 @@ export default function SidebarNav() {
     // Dispatch event so exports on other tabs automatically catch the new name
     window.dispatchEvent(new Event("project-name-updated"))
     setIsEditingName(false)
-  }
-
-  const handleLogOut = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
   }
 
   return (
@@ -162,24 +156,12 @@ export default function SidebarNav() {
             </Link>
           )
         })}
-
-        {/* Divider */}
-        <div className="h-[1px] bg-slate-800/80 my-3 mx-2" />
-
-        {/* Log Out Button styled perfectly as the last tab */}
-        <button
-          onClick={handleLogOut}
-          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg transition-all text-slate-400 hover:text-white hover:bg-rose-600/80 text-left"
-        >
-          <span className="text-base">🚪</span>
-          <span>Sign Out</span>
-        </button>
       </nav>
 
       {/* Version Tracker at the Bottom */}
-      <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0">
+      <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0 border-t border-slate-800/80">
         <span className="text-[11px] font-bold text-slate-600 tracking-widest uppercase">
-          CleanBuild v1.000
+          CleanBuild v1.00
         </span>
       </div>
     </div>

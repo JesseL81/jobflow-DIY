@@ -567,9 +567,6 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
       
-      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
-      </div>
     </main>
   )
 }

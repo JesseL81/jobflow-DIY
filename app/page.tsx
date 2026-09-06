@@ -1,9 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { set, clear } from "idb-keyval"
 import { supabase } from "@/lib/supabase"
-import { syncManager } from "@/lib/syncManager"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,18 +10,6 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
-
-// Helper function required to convert your VAPID key for the browser
-const urlBase64ToUint8Array = (base64String: string) => {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/")
-  const rawData = window.atob(base64)
-  const outputArray = new Uint8Array(rawData.length)
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i)
-  }
-  return outputArray
-}
 
 interface Expense {
   id: number
@@ -102,8 +88,9 @@ export default function DashboardPage() {
   const [customNonWorkdays, , nonWorkdaysLoaded] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", []) 
   const [punchList, setPunchList, punchLoaded] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
   const [calendarTasks, , calendarLoaded] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
+  const [projectDates, , datesLoaded] = useOfflineSync<{startDate: string, endDate: string}>("cleanbuild_project_dates", { startDate: "2026-06-29", endDate: "2026-07-30" })
   
-  const isAppLoaded = expensesLoaded && budgetLoaded && nonWorkdaysLoaded && punchLoaded && calendarLoaded
+  const isAppLoaded = expensesLoaded && budgetLoaded && nonWorkdaysLoaded && punchLoaded && calendarLoaded && datesLoaded
 
   const [newPunchText, setNewPunchText] = useState("")
   const [editingPunch, setEditingPunch] = useState<PunchItem | null>(null)
@@ -111,9 +98,6 @@ export default function DashboardPage() {
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
-
-  // State to track if push notifications are enabled on this device
-  const [isPushEnabled, setIsPushEnabled] = useState(false)
 
   useEffect(() => {
     const fetchUserEmail = async () => {
@@ -123,86 +107,7 @@ export default function DashboardPage() {
       }
     }
     fetchUserEmail()
-
-    // Check if the device is already subscribed to Push Notifications
-    if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
-      navigator.serviceWorker.ready.then((registration) => {
-        registration.pushManager.getSubscription().then((subscription) => {
-          setIsPushEnabled(!!subscription)
-        })
-      })
-    }
   }, [])
-
-  const handleTogglePush = async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      alert("Push notifications are not supported by this browser. Try installing the app to your home screen first!")
-      return
-    }
-
-    try {
-      // Use getRegistration instead of ready to prevent infinite hanging in dev mode
-      const registration = await navigator.serviceWorker.getRegistration()
-      
-      if (!registration) {
-        alert("Service Worker is offline. Push notifications require the live Vercel site (HTTPS) or a local production build to function.")
-        return
-      }
-
-      if (isPushEnabled) {
-        // TURN OFF NOTIFICATIONS
-        const subscription = await registration.pushManager.getSubscription()
-        if (subscription) {
-          await subscription.unsubscribe()
-          const { data: userData } = await supabase.auth.getUser()
-          if (userData?.user?.id) {
-            // Remove the subscription from Supabase
-            await supabase.from("cloud_sync")
-              .delete()
-              .match({ user_id: userData.user.id, store_key: "cleanbuild_push_subscription" })
-          }
-        }
-        setIsPushEnabled(false)
-      } else {
-        // TURN ON NOTIFICATIONS
-        const permission = await Notification.requestPermission()
-        if (permission !== "granted") {
-          alert("Permission denied. You must allow notifications in your browser settings to use this feature.")
-          return
-        }
-
-        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-        if (!vapidPublicKey) {
-          alert("Security key missing. Ensure NEXT_PUBLIC_VAPID_PUBLIC_KEY is set in your environment variables.")
-          return
-        }
-
-        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey)
-        
-        // Subscribe the device
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedVapidKey,
-        })
-
-        // Save the device ID to Supabase
-        const { data: userData } = await supabase.auth.getUser()
-        if (userData?.user?.id) {
-          await supabase.from("cloud_sync").upsert({
-            user_id: userData.user.id,
-            store_key: "cleanbuild_push_subscription",
-            data: subscription.toJSON()
-          })
-        }
-        
-        setIsPushEnabled(true)
-        alert("Success! This device will now receive CleanBuild lock-screen alerts.")
-      }
-    } catch (error) {
-      console.error("Failed to toggle push notifications:", error)
-      alert("An error occurred while setting up notifications. See console for details.")
-    }
-  }
 
   const handleOpenAddModal = () => {
     if (!newPunchText.trim()) return
@@ -333,77 +238,25 @@ export default function DashboardPage() {
   const remainingBudget = totalBudget - totalSpent
   const percentBudgetUsed = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0
 
-  const projStart = new Date("2026-06-29T00:00:00")
-  const projEnd = new Date("2026-07-30T00:00:00")
+  // 1. Dynamic Dates Pulled From Settings
+  const projStart = new Date((projectDates?.startDate || "2026-06-29") + "T00:00:00")
+  const projEnd = new Date((projectDates?.endDate || "2026-07-30") + "T00:00:00")
+  
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const totalTimeMs = projEnd.getTime() - projStart.getTime()
+  
+  const totalTimeMs = Math.max(0, projEnd.getTime() - projStart.getTime())
   const elapsedTimeMs = today.getTime() - projStart.getTime()
+  
+  // FIX: Unclamped day calculations to allow the percentage to exceed 100%
   const totalDays = Math.max(1, Math.round(totalTimeMs / (1000 * 60 * 60 * 24)) + 1)
-  const currentDay = Math.min(totalDays, Math.max(1, Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1))
-  const percentTimeUsed = Math.min(100, Math.max(0, Math.round((currentDay / totalDays) * 100)))
-
-  const handleRestoreTutorial = async () => {
-    const isConfirmed = window.confirm(
-      "This will replace your current data with the tutorial examples. Continue?"
-    )
-    
-    if (!isConfirmed) return
-
-    try {
-      await clear()
-      const { data: userData } = await supabase.auth.getUser()
-      if (userData?.user?.id) {
-        await supabase
-          .from("cloud_sync")
-          .delete()
-          .eq("user_id", userData.user.id)
-      }
-      window.location.reload()
-    } catch (error) {
-      console.error("Failed to restore tutorial:", error)
-      alert("An error occurred while trying to load the tutorial.")
-    }
-  }
-
-  const handleClearAllData = async () => {
-    const isConfirmed = window.confirm(
-      "🚨 WARNING: Are you sure you want to completely wipe all project data? This will delete your schedule, punch list, and vision board forever. This cannot be undone."
-    )
-    
-    if (!isConfirmed) return
-
-    try {
-      const keysToClear = [
-        "cleanbuild_expenses",
-        "cleanbuild_punch_list",
-        "cleanbuild_calendar_tasks",
-        "cleanbuild_custom_nonworkdays",
-        "cleanbuild_vision_board",
-        "cleanbuild_vision_board_categories",
-        "cleanbuild_selections_items",
-        "cleanbuild_contacts",
-        "cleanbuild_non_workdays_map",
-        "cleanbuild_explicit_working_days"
-      ]
-
-      for (const key of keysToClear) {
-        await set(key, [])
-        await syncManager.pushToCloud(key, [])
-      }
-
-      await set("cleanbuild_total_budget", 0)
-      await syncManager.pushToCloud("cleanbuild_total_budget", 0)
-      
-      await set("cleanbuild_selections_budgets", {})
-      await syncManager.pushToCloud("cleanbuild_selections_budgets", {})
-
-      window.location.reload()
-    } catch (error) {
-      console.error("Failed to wipe data:", error)
-      alert("An error occurred while trying to clear your data.")
-    }
-  }
+  const currentDay = Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1
+  
+  // Prevent percentage from going below 0 (if project hasn't started yet), but allow it to exceed 100
+  const percentTimeUsed = Math.max(0, Math.round((currentDay / totalDays) * 100))
+  
+  // Cap the visual bar width at 100% so it doesn't break the UI
+  const barVisualWidth = Math.min(100, percentTimeUsed)
 
   const isNewTask = editingPunch && !punchList.some(p => p.id === editingPunch.id)
   
@@ -482,16 +335,16 @@ export default function DashboardPage() {
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-sm font-semibold">Project Timeline Progress</CardTitle>
-                  <span className="text-xs font-bold text-slate-600">
-                    Day {currentDay} of {totalDays} Calendar Days ({percentTimeUsed}%)
+                  <span className={`text-xs font-bold ${percentTimeUsed > 100 ? "text-rose-600" : "text-slate-600"}`}>
+                    Day {Math.max(0, currentDay)} of {totalDays} Calendar Days ({percentTimeUsed}%)
                   </span>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                   <div 
-                    className="h-full bg-blue-600 transition-all duration-500" 
-                    style={{ width: isAppLoaded ? `${percentTimeUsed}%` : "0%" }} 
+                    className={`h-full transition-all duration-500 ${percentTimeUsed > 100 ? "bg-rose-500" : "bg-blue-600"}`}
+                    style={{ width: isAppLoaded ? `${barVisualWidth}%` : "0%" }} 
                   />
                 </div>
               </CardContent>
@@ -885,54 +738,8 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="mt-8 border border-slate-200 bg-white rounded-xl p-6 flex flex-col gap-6">
-        
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
-          <div>
-            <h3 className="text-slate-900 font-bold text-sm">📱 Lock-Screen Notifications</h3>
-            <p className="text-slate-500 text-xs mt-1">Receive daily task reminders directly on this device.</p>
-          </div>
-          <Button 
-            variant={isPushEnabled ? "default" : "outline"}
-            onClick={handleTogglePush}
-            className={`shrink-0 shadow-sm font-bold ${isPushEnabled ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "text-blue-600 border-blue-200 hover:bg-blue-50"}`}
-          >
-            {isPushEnabled ? "🔔 Notifications Active" : "🔕 Enable Notifications"}
-          </Button>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
-          <div>
-            <h3 className="text-slate-900 font-bold text-sm">Load Onboarding Tutorial</h3>
-            <p className="text-slate-500 text-xs mt-1">Reset this account to a "brand new user" state to see the example project data.</p>
-          </div>
-          <Button 
-            variant="outline" 
-            onClick={handleRestoreTutorial}
-            className="shrink-0 shadow-sm font-bold text-blue-600 border-blue-200 hover:bg-blue-50"
-          >
-            👋 Load Examples
-          </Button>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <h3 className="text-rose-900 font-bold text-sm">Start Real Project (Clear Data)</h3>
-            <p className="text-rose-700 text-xs mt-1">Permanently delete all examples, tasks, and schedule items to start a true blank slate.</p>
-          </div>
-          <Button 
-            variant="destructive" 
-            onClick={handleClearAllData}
-            className="shrink-0 shadow-sm font-bold"
-          >
-            🗑️ Clear All Data
-          </Button>
-        </div>
-
-      </div>
-
       <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.10
+        CleanBuild v1.02
       </div>
 
     </main>

@@ -4,7 +4,7 @@ import React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 // ==============================================================================
-// MODIFIED LOGO SVGS (1 - 14)
+// MODIFIED LOGO SVGS (1 - 15)
 // ==============================================================================
 
 function LogoFastTrackAmber({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
@@ -141,6 +141,7 @@ function LogoCBMeasure({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSV
   );
 }
 
+// Option 13: The Original Etched Cube
 function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -177,6 +178,39 @@ function LogoCBHammer({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVG
   );
 }
 
+// Option 15: The New Simple Bold Line Roof Variant
+function LogoCBBlockRoof({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <rect width="100" height="100" rx="22" fill="#18181B" />
+      
+      {/* Base 3D Cube */}
+      <path d="M20 38L50 20L80 38L50 56L20 38Z" fill="#FF8C00"/>
+      <path d="M20 38V68L50 85V56L20 38Z" fill="#C2410C"/>
+      <path d="M80 38V68L50 85V56L80 38Z" fill="#FF6B00"/>
+      
+      {/* Simple Bold Roof Line (Hovering slightly over the cube) */}
+      <path d="M12 35 L50 12 L88 35" stroke="#FFFFFF" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+
+      {/* C - Letter */}
+      <path
+        d="M44 50.4L33 43.8C28.5 41.1 26 44 26 49.5V58.5C26 64 28.5 66.9 33 69.6L44 76.2"
+        stroke="#FFFFFF"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      {/* B - Letter */}
+      <g stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <line x1="56" y1="52.6" x2="56" y2="75" />
+        <path d="M56 52.6L68 45.4C72.5 42.7 75 44.5 75 48.5C75 52.5 72.5 55.5 68 58.2L56 65.4" />
+        <path d="M56 65.4L69 57.6C73.5 54.9 76 56.7 76 60.7C76 64.7 73.5 67.7 69 70.4L56 78.2" />
+      </g>
+    </svg>
+  );
+}
+
 // ==============================================================================
 // MAIN PAGE DISPLAY COMPONENT
 // ==============================================================================
@@ -197,14 +231,15 @@ export default function LogoPreviewPage() {
     { id: 12, originalId: 71, name: "CB Measure Loop", prefix: "Clean", suffix: "Build", component: LogoCBMeasure, colorClass: "text-amber-500" },
     { id: 13, originalId: 69, name: "CB 3D Cube (Etched C & B)", prefix: "Clean", suffix: "Build", component: LogoCBBlock, colorClass: "text-orange-400" },
     { id: 14, originalId: 65, name: "CB Monogram (Extended Line)", prefix: "Clean", suffix: "Build", component: LogoCBHammer, colorClass: "text-orange-500" },
+    { id: 15, originalId: "13b", name: "CB House (Bold Line Roof)", prefix: "Clean", suffix: "Build", component: LogoCBBlockRoof, colorClass: "text-orange-400" },
   ]
 
   return (
     <main className="p-8 max-w-7xl mx-auto space-y-8 bg-slate-900 text-white min-h-screen">
       <div>
-        <h2 className="text-2xl font-bold text-amber-400">📋 Selected Logo Collection (Options 1 – 14)</h2>
+        <h2 className="text-2xl font-bold text-amber-400">📋 Selected Logo Collection (Options 1 – 15)</h2>
         <p className="text-slate-400 text-sm mt-1">
-          Showing 14 filtered logos with custom tweaks applied.
+          Showing 15 filtered logos with custom tweaks applied.
         </p>
       </div>
 

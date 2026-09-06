@@ -14,7 +14,6 @@ const TOPICS = [
     bullets: [
       "Key reason for buffer: Structural rot hidden inside walls or under subfloors.",
       "Buffer must also cover material price surges for commodities like lumber, copper, and PVC.",
-      "Test of a line i have added to budgeting"
     ],
   },
   {
@@ -54,8 +53,8 @@ const TOPICS = [
     id: "Testing",
     category: "My new topic",
     icon: "📜",
-    title: "aaaaa Pull Permits Early to Avoid Stop-Work Orders",
-    summary: "aaaaa City building departments often take 2 to 6 weeks to review plans. Starting work without permits can result in costly fines or having to tear down uninspected work.",
+    title: "Pull Permits Early to Avoid Stop-Work Orders",
+    summary: "City building departments often take 2 to 6 weeks to review plans. Starting work without permits can result in costly fines or having to tear down uninspected work.",
     bullets: [
       "Confirm complete required documentation (site plans, engineering specs) before submission.",
       "Schedule your main rough-in inspections 3 days in advance.",
@@ -187,11 +186,6 @@ export default function TipsPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
-
-      {/* Version Tracker Footer */}
-      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
       </div>
       
     </main>

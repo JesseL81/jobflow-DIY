@@ -96,7 +96,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
 ]
 
 export default function SelectionsPage() {
-  // 1. Universal Sync Hooks (Replaces all custom DB and Cloud logic!)
+  // 1. Universal Sync Hooks
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
   const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
     "Plumbing Fixtures": 500,
@@ -147,7 +147,9 @@ export default function SelectionsPage() {
   }, [items, selectedCategory, totalCost])
 
   const handleToggleCheck = async (id: string) => {
-    await setItems((prev) => prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)))
+    // FIX: Calculate array locally before passing to offline sync
+    const updatedItems = items.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
+    await setItems(updatedItems)
   }
 
   const filteredItems = useMemo(() => {
@@ -163,7 +165,9 @@ export default function SelectionsPage() {
 
   const handleSaveBudget = async () => {
     const num = parseFloat(tempBudgetVal) || 0
-    await setCategoryBudgets((prev) => ({ ...prev, [selectedCategory]: num }))
+    // FIX: Calculate object locally before passing to offline sync
+    const updatedBudgets = { ...categoryBudgets, [selectedCategory]: num }
+    await setCategoryBudgets(updatedBudgets)
     setIsBudgetModalOpen(false)
   }
 
@@ -216,7 +220,9 @@ export default function SelectionsPage() {
           checked: formSyncToExpenses ? true : editingItem.checked,
           syncToExpenses: formSyncToExpenses,
         }
-        await setItems((prev) => prev.map((i) => (i.id === editingItem.id ? updatedItem : i)))
+        // FIX: Calculate array locally before passing to offline sync
+        const updatedItemsList = items.map((i) => (i.id === editingItem.id ? updatedItem : i))
+        await setItems(updatedItemsList)
       } else {
         updatedItem = {
           id: Date.now().toString(),
@@ -230,7 +236,9 @@ export default function SelectionsPage() {
           checked: true,
           syncToExpenses: formSyncToExpenses,
         }
-        await setItems((prev) => [updatedItem, ...prev])
+        // FIX: Calculate array locally before passing to offline sync
+        const updatedItemsList = [updatedItem, ...items]
+        await setItems(updatedItemsList)
       }
 
       // Cross-tab interaction: Send this expense to the Expenses Store if toggled
@@ -256,6 +264,17 @@ export default function SelectionsPage() {
         } catch (err) {
           console.error(err)
         }
+      } else if (editingItem && editingItem.syncToExpenses && !formSyncToExpenses) {
+        // Fix: Remove the expense if the user manually turned the sync off during an edit
+        try {
+          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+          const filteredExpenses = existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
+          await set("cleanbuild_expenses", filteredExpenses)
+          await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
+          window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {
+          console.error(err)
+        }
       }
 
       setIsModalOpen(false)
@@ -266,7 +285,10 @@ export default function SelectionsPage() {
 
   const handleDeleteItem = async () => {
     if (!editingItem) return
-    await setItems((prev) => prev.filter((i) => i.id !== editingItem.id))
+    
+    // FIX: Calculate array locally before passing to offline sync
+    const updatedItems = items.filter((i) => i.id !== editingItem.id)
+    await setItems(updatedItems)
     
     // Cross-tab interaction: Remove from expenses if it was linked
     try {
@@ -652,9 +674,6 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
-      </div>
     </main>
   )
 }

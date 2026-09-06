@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
 
@@ -55,14 +54,18 @@ const INITIAL_CONTACTS: Contact[] = [
 ]
 
 export default function ContactsPage() {
-  // 1. Universal Sync Hook (Replaces all custom DB and Cloud logic!)
+  // Universal Sync Hook
   const [contacts, setContacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", INITIAL_CONTACTS)
   
   const [activeContactId, setActiveContactId] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  
+  // Controlled Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
+  // Form State
   const [newName, setNewName] = useState("")
   const [newCompany, setNewCompany] = useState("")
   const [newTrade, setNewTrade] = useState("General Subcontractor")
@@ -81,19 +84,56 @@ export default function ContactsPage() {
     )
   })
 
-  // Automatically select the first contact in the filtered list if none is active
-  const activeContact =
-    filteredContacts.find((c) => c.id === activeContactId) || filteredContacts[0] || null
+  // Automatically select the first contact if none is active
+  const activeContact = filteredContacts.find((c) => c.id === activeContactId) || filteredContacts[0] || null
 
-  const handleAddContact = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleOpenAddModal = () => {
+    setEditingId(null)
+    setNewName("")
+    setNewCompany("")
+    setNewTrade("General Subcontractor")
+    setNewPhone("")
+    setNewEmail("")
+    setNewAddress("")
+    setNewNotes("")
+    setNewStatus("Active")
+    setIsModalOpen(true)
+  }
+
+  const handleOpenEditModal = (contact: Contact) => {
+    setEditingId(contact.id)
+    setNewName(contact.name)
+    setNewCompany(contact.company)
+    setNewTrade(contact.trade)
+    setNewPhone(contact.phone)
+    setNewEmail(contact.email)
+    setNewAddress(contact.address)
+    setNewNotes(contact.notes)
+    setNewStatus(contact.status)
+    setIsModalOpen(true)
+  }
+
+  const handleDeleteContact = async (id: string) => {
+    const isConfirmed = window.confirm("Are you sure you want to remove this contact from your directory? This cannot be undone.")
+    if (!isConfirmed) return
+
+    const updatedContacts = contacts.filter((c) => c.id !== id)
+    await setContacts(updatedContacts)
+    
+    if (activeContactId === id) {
+      setActiveContactId("")
+    }
+  }
+
+  const handleSaveContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!newName || !newCompany || isSubmitting) return
 
     setIsSubmitting(true)
 
     try {
-      const newContact: Contact = {
-        id: `c-${Date.now()}`,
+      const contactData: Contact = {
+        id: editingId || `c-${Date.now()}`,
         name: newName,
         company: newCompany,
         trade: newTrade || "General Subcontractor",
@@ -104,21 +144,18 @@ export default function ContactsPage() {
         status: newStatus,
       }
 
-      const updatedContacts = [newContact, ...contacts]
+      let updatedContacts;
+      if (editingId) {
+        updatedContacts = contacts.map((c) => (c.id === editingId ? contactData : c))
+      } else {
+        updatedContacts = [contactData, ...contacts]
+      }
       
       // Auto-syncs to IndexedDB and Supabase
       await setContacts(updatedContacts)
       
-      setActiveContactId(newContact.id)
-      setNewName("")
-      setNewCompany("")
-      setNewTrade("General Subcontractor")
-      setNewPhone("")
-      setNewEmail("")
-      setNewAddress("")
-      setNewNotes("")
-      setNewStatus("Active")
-      setIsDialogOpen(false)
+      setActiveContactId(contactData.id)
+      setIsModalOpen(false)
     } finally {
       setIsSubmitting(false)
     }
@@ -138,19 +175,24 @@ export default function ContactsPage() {
         </div>
 
         <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none">
-              + Add New Contact
-            </DialogTrigger>
-            
+          <Button 
+            onClick={handleOpenAddModal}
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none"
+          >
+            + Add New Contact
+          </Button>
+          
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border border-slate-200">
-              <form onSubmit={handleAddContact}>
+              <form onSubmit={handleSaveContact}>
                 <DialogHeader className="pb-2 border-b border-slate-100">
                   <DialogTitle className="text-lg font-bold text-slate-900">
-                    Add New Contact / Vendor
+                    {editingId ? "Edit Contact" : "Add New Contact / Vendor"}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-slate-500">
-                    Fill in vendor and trade details to save them to your active directory.
+                    {editingId 
+                      ? "Update the details for this vendor below." 
+                      : "Fill in vendor and trade details to save them to your active directory."}
                   </DialogDescription>
                 </DialogHeader>
 
@@ -265,13 +307,21 @@ export default function ContactsPage() {
                   </div>
                 </div>
 
-                <DialogFooter className="pt-2 border-t border-slate-100">
+                <DialogFooter className="pt-2 border-t border-slate-100 flex gap-2 sm:justify-end">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsModalOpen(false)}
+                    className="text-xs shadow-sm"
+                  >
+                    Cancel
+                  </Button>
                   <Button 
                     type="submit" 
                     disabled={isSubmitting}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 disabled:opacity-50"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 disabled:opacity-50 shadow-sm"
                   >
-                    {isSubmitting ? "Saving..." : "Save Contact"}
+                    {isSubmitting ? "Saving..." : (editingId ? "Update Contact" : "Save Contact")}
                   </Button>
                 </DialogFooter>
               </form>
@@ -282,6 +332,7 @@ export default function ContactsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start flex-1">
         
+        {/* Left Side: Directory List */}
         <div className="md:col-span-4 space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -334,35 +385,59 @@ export default function ContactsPage() {
           </div>
         </div>
 
+        {/* Right Side: Active Contact Details */}
         <div className="md:col-span-8">
           {activeContact ? (
             <Card className="bg-white border rounded-xl p-6 shadow-sm min-h-[420px] space-y-6">
-              <div className="pb-4 border-b border-slate-100">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <Badge
-                    variant="secondary"
-                    className="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
-                  >
-                    {activeContact.trade}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] ${
-                      activeContact.status === "Preferred"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-slate-100 text-slate-700 border-slate-200"
-                    }`}
-                  >
-                    {activeContact.status}
-                  </Badge>
+              <div className="pb-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge
+                      variant="secondary"
+                      className="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                    >
+                      {activeContact.trade}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${
+                        activeContact.status === "Preferred"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : activeContact.status === "On Hold"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : "bg-slate-100 text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      {activeContact.status}
+                    </Badge>
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-950 leading-tight">
+                    {activeContact.name}
+                  </h2>
+                  <p className="text-sm font-medium text-slate-600 mt-0.5">
+                    {activeContact.company}
+                  </p>
                 </div>
-
-                <h2 className="text-2xl font-bold text-slate-950 leading-tight">
-                  {activeContact.name}
-                </h2>
-                <p className="text-sm font-medium text-slate-600 mt-0.5">
-                  {activeContact.company}
-                </p>
+                
+                {/* Edit & Delete Action Buttons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleOpenEditModal(activeContact)}
+                    className="h-8 text-xs shadow-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    Edit
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleDeleteContact(activeContact.id)}
+                    className="h-8 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-6">
@@ -403,7 +478,7 @@ export default function ContactsPage() {
                   <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
                     Notes & Trade Details
                   </h4>
-                  <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                  <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3.5 rounded-lg border border-slate-200 whitespace-pre-wrap">
                     {activeContact.notes}
                   </p>
                 </div>
@@ -418,9 +493,6 @@ export default function ContactsPage() {
 
       </div>
 
-      <div className="w-full text-center py-6 text-xs text-slate-500 border-t border-slate-200 mt-8">
-        CleanBuild v1.01
-      </div>
       
     </main>
   )
