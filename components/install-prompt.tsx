@@ -79,10 +79,11 @@ export function InstallPrompt() {
           </p>
         </div>
 
-        {isIOS ? (
-          <div className="bg-slate-800 rounded-lg p-3 border border-slate-700 text-xs text-slate-300">
-            1: tap the ... on the bottom right of the screen
-            2: Tap the <span className="font-bold text-blue-400">Share</span> icon (box wth the up arrow), then scroll down and tap <span className="font-bold text-white">"Add to Home Screen"</span>.
+       {isIOS ? (
+          <div className="bg-slate-800 rounded-lg p-3 border border-slate-700 text-xs text-slate-300 space-y-1.5">
+            <div>1: Tap the <span className="font-bold text-blue-400">...</span> on the bottom right of the screen.</div>
+            <div>2: Tap the <span className="font-bold text-blue-400">Share</span> icon (box with the up arrow).</div>
+            <div>3: Scroll down and tap <span className="font-bold text-white">"Add to Home Screen"</span>.</div>
           </div>
         ) : (
           <Button 
