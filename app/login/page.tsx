@@ -102,7 +102,7 @@ export default function LoginPage() {
               onClick={() => { setIsSignUp(false); setErrorMessage(""); setSuccessMessage(""); }}
               className={`flex-1 text-xs font-bold py-2.5 rounded-md transition-all ${
                 !isSignUp 
-                  ? "bg-slate-700 text-white shadow-sm ring-1 ring-slate-600" 
+                  ? "bg-blue-600 text-white shadow-md" 
                   : "text-slate-400 hover:text-slate-300"
               }`}
             >
@@ -113,7 +113,7 @@ export default function LoginPage() {
               onClick={() => { setIsSignUp(true); setErrorMessage(""); setSuccessMessage(""); }}
               className={`flex-1 text-xs font-bold py-2.5 rounded-md transition-all ${
                 isSignUp 
-                  ? "bg-slate-700 text-white shadow-sm ring-1 ring-slate-600" 
+                  ? "bg-blue-600 text-white shadow-md" 
                   : "text-slate-400 hover:text-slate-300"
               }`}
             >
@@ -154,7 +154,7 @@ export default function LoginPage() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder="•••"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400 pr-16 w-full"
