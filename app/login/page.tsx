@@ -49,11 +49,20 @@ export default function LoginPage() {
     setSuccessMessage("")
 
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password })
+      const { error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      })
+      
       if (error) {
         setErrorMessage(error.message)
       } else {
-        setSuccessMessage("Account created! Check your email for confirmation, or try logging in.")
+        setSuccessMessage("Account created! Please check your email to confirm your account before signing in.")
+        setIsSignUp(false) // Flip back to sign-in mode automatically
+        setPassword("") // Clear the password for security
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -87,13 +96,13 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleAuth} className="space-y-4">
             {errorMessage && (
-              <div className="p-3 bg-rose-500/20 border border-rose-500/50 text-rose-300 text-xs rounded-lg">
+              <div className="p-3 bg-rose-500/20 border border-rose-500/50 text-rose-300 text-xs rounded-lg font-medium leading-relaxed">
                 {errorMessage}
               </div>
             )}
 
             {successMessage && (
-              <div className="p-3 bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs rounded-lg">
+              <div className="p-3 bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs rounded-lg font-medium leading-relaxed">
                 {successMessage}
               </div>
             )}
