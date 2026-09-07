@@ -602,8 +602,8 @@ export default function VisionBoardPage() {
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-6">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-4">
             <DialogTitle className="text-lg font-bold text-orange-400">
               {editingItem ? "Edit Board Entry" : "Add Photos / Idea"}
             </DialogTitle>
@@ -705,11 +705,10 @@ export default function VisionBoardPage() {
             </div>
           </div>
 
-          {/* FIX: Set footer to flex-row to ensure side-by-side buttons on mobile */}
-          <DialogFooter className="flex flex-row w-full gap-3 pt-4 mt-2 border-t border-slate-100 sm:justify-between">
+          <DialogFooter className="flex flex-row w-full gap-3 px-6 py-4 -mx-6 -mb-6 mt-4 bg-slate-50 border-t border-slate-200 sm:justify-between sm:space-x-0">
             <Button 
               size="sm" 
-              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm disabled:opacity-50" 
+              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm disabled:opacity-50 m-0" 
               onClick={handleSaveItem}
               disabled={isSubmitting}
             >
@@ -719,7 +718,7 @@ export default function VisionBoardPage() {
               variant="outline" 
               size="sm" 
               onClick={() => setIsModalOpen(false)} 
-              className="flex-1 shadow-sm font-semibold text-slate-700"
+              className="flex-1 shadow-sm font-semibold text-slate-700 m-0"
             >
               Cancel
             </Button>
