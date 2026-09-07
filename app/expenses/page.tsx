@@ -413,12 +413,11 @@ export default function ExpenseTracker() {
                             </TableCell>
                             <TableCell className="text-right whitespace-nowrap">
                               <Button
-                                variant="ghost"
                                 size="sm"
-                                className="h-7 text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-100"
                                 onClick={() => handleOpenModal(expense)}
+                                className="h-6 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase"
                               >
-                                Edit
+                                EDIT
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -584,17 +583,17 @@ export default function ExpenseTracker() {
 
       {/* Category Breakdown Dialog */}
       <Dialog open={breakdownType !== null} onOpenChange={(open) => { if (!open) setBreakdownType(null) }}>
-        <DialogContent className="sm:max-w-[480px] max-h-[85vh] flex flex-col p-0 overflow-hidden border-2 border-slate-900 rounded-xl">
-          <DialogHeader className="px-6 py-5 border-b border-slate-100">
-            <DialogTitle className={breakdownType === 'materials' ? 'text-blue-600' : 'text-purple-600'}>
+        <DialogContent className="sm:max-w-[480px] max-h-[85vh] flex flex-col p-0 overflow-hidden border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800">
+            <DialogTitle className={breakdownType === 'materials' ? 'text-blue-400 font-bold' : 'text-purple-400 font-bold'}>
               {breakdownType === 'materials' ? 'Materials Breakdown' : 'Labor Breakdown'}
             </DialogTitle>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-xs text-slate-400 mt-1">
               Showing all expenses containing {breakdownType} costs.
             </CardDescription>
           </DialogHeader>
 
-          <div className="overflow-y-auto px-6 py-2 flex-1">
+          <div className="overflow-y-auto px-6 py-2 flex-1 bg-white">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -626,13 +625,10 @@ export default function ExpenseTracker() {
             </Table>
           </div>
 
-          <DialogFooter className="flex sm:justify-between items-center gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
-             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className="h-9">
-               Close List
-             </Button>
+          <div className="flex flex-row w-full gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
              <Button 
                size="sm"
-               className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 px-4"
+               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold h-9"
                onClick={() => {
                  setBreakdownType(null)
                  handleOpenModal()
@@ -640,7 +636,10 @@ export default function ExpenseTracker() {
              >
                + Log Expense
              </Button>
-          </DialogFooter>
+             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className="flex-1 h-9 font-semibold text-slate-700">
+               Close List
+             </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
