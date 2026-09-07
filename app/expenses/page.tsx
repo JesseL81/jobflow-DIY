@@ -44,6 +44,7 @@ export default function ExpenseTracker() {
   // Modal States
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false)
+  const [breakdownType, setBreakdownType] = useState<"materials" | "labor" | null>(null)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -257,34 +258,51 @@ export default function ExpenseTracker() {
                   <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Total Budget
                   </CardDescription>
-                  <button
+                  <Button
+                    size="sm"
                     onClick={() => {
                       setTempBudget(totalBudget.toString())
                       setIsBudgetDialogOpen(true)
                     }}
-                    className="text-xs text-indigo-600 hover:underline font-bold"
+                    className="h-6 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm"
                   >
-                    Edit
-                  </button>
+                    EDIT
+                  </Button>
                 </div>
                 <CardTitle className="text-2xl font-extrabold text-slate-900 mt-1">${totalBudget.toLocaleString()}</CardTitle>
               </CardHeader>
             </Card>
 
-            <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+            <Card 
+              className="bg-white border border-slate-200 shadow-xs rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all group relative"
+              onClick={() => setBreakdownType("materials")}
+            >
               <CardHeader className="pb-2 p-5">
-                <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Materials Spent
-                </CardDescription>
+                <div className="flex justify-between items-start">
+                  <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-blue-500 transition-colors">
+                    Materials Spent
+                  </CardDescription>
+                  <span className="text-[10px] font-bold text-slate-300 group-hover:text-blue-500 transition-colors">
+                    View ↗
+                  </span>
+                </div>
                 <CardTitle className="text-2xl font-extrabold text-blue-600 mt-1">${totalMaterials.toLocaleString()}</CardTitle>
               </CardHeader>
             </Card>
 
-            <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+            <Card 
+              className="bg-white border border-slate-200 shadow-xs rounded-xl cursor-pointer hover:border-purple-400 hover:bg-purple-50/30 transition-all group relative"
+              onClick={() => setBreakdownType("labor")}
+            >
               <CardHeader className="pb-2 p-5">
-                <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Labor Spent
-                </CardDescription>
+                <div className="flex justify-between items-start">
+                  <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-purple-500 transition-colors">
+                    Labor Spent
+                  </CardDescription>
+                  <span className="text-[10px] font-bold text-slate-300 group-hover:text-purple-500 transition-colors">
+                    View ↗
+                  </span>
+                </div>
                 <CardTitle className="text-2xl font-extrabold text-purple-600 mt-1">${totalLabor.toLocaleString()}</CardTitle>
               </CardHeader>
             </Card>
@@ -338,7 +356,6 @@ export default function ExpenseTracker() {
             <CardHeader className="p-6 pb-2">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
-                {/* SWIPE INDICATOR: Matches Top Header */}
                 <div className="md:hidden self-start flex items-center text-[10px] font-bold text-orange-400 uppercase tracking-wider bg-slate-900 px-2.5 py-1 rounded border border-slate-800 shadow-sm">
                   ← Swipe →
                 </div>
@@ -417,6 +434,7 @@ export default function ExpenseTracker() {
         </div>
       </Card>
 
+      {/* Main Expense Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -477,6 +495,7 @@ export default function ExpenseTracker() {
               <Input
                 type="file"
                 accept="image/*"
+                capture="environment" // Instantly pulls up the back camera on mobile devices
                 onChange={handlePhotoUpload}
                 className="cursor-pointer"
               />
@@ -525,6 +544,7 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
 
+      {/* Budget Dialog */}
       <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
         <DialogContent className="sm:max-w-[360px]">
           <DialogHeader>
@@ -553,6 +573,69 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
 
+      {/* Category Breakdown Dialog */}
+      <Dialog open={breakdownType !== null} onOpenChange={(open) => { if (!open) setBreakdownType(null) }}>
+        <DialogContent className="sm:max-w-[480px] max-h-[85vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 border-b border-slate-100">
+            <DialogTitle className={breakdownType === 'materials' ? 'text-blue-600' : 'text-purple-600'}>
+              {breakdownType === 'materials' ? 'Materials Breakdown' : 'Labor Breakdown'}
+            </DialogTitle>
+            <CardDescription className="text-xs">
+              Showing all expenses containing {breakdownType} costs.
+            </CardDescription>
+          </DialogHeader>
+
+          <div className="overflow-y-auto px-6 py-2 flex-1">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="font-bold text-slate-600 h-10 px-2 text-xs">Date</TableHead>
+                  <TableHead className="font-bold text-slate-600 h-10 px-2 text-xs">Description</TableHead>
+                  <TableHead className="text-right font-bold text-slate-600 h-10 px-2 text-xs">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expenses
+                  .filter(e => breakdownType === 'materials' ? (e.materials || 0) > 0 : (e.labor || 0) > 0)
+                  .map(expense => (
+                    <TableRow key={expense.id} className="hover:bg-slate-50/50">
+                      <TableCell className="px-2 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDisplayDate(expense.date)}</TableCell>
+                      <TableCell className="px-2 py-3 text-xs font-medium text-slate-900">{expense.description}</TableCell>
+                      <TableCell className={`px-2 py-3 text-right text-xs font-bold ${breakdownType === 'materials' ? 'text-blue-600' : 'text-purple-600'}`}>
+                        ${breakdownType === 'materials' ? expense.materials?.toLocaleString() : expense.labor?.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                ))}
+                {expenses.filter(e => breakdownType === 'materials' ? (e.materials || 0) > 0 : (e.labor || 0) > 0).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-slate-400 text-xs py-10 border-b-0 italic">
+                      No {breakdownType} expenses recorded yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <DialogFooter className="flex sm:justify-between items-center gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
+             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className="h-9">
+               Close List
+             </Button>
+             <Button 
+               size="sm"
+               className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 px-4"
+               onClick={() => {
+                 setBreakdownType(null)
+                 handleOpenModal()
+               }}
+             >
+               + Log Expense
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox Dialog */}
       <Dialog open={Boolean(lightboxPhoto)} onOpenChange={() => setLightboxPhoto(null)}>
         <DialogContent className="max-w-[90vw] md:max-w-3xl h-[80vh] p-2 bg-black/95 border-slate-800 flex flex-col items-center justify-center">
           <div className="relative w-full h-full flex items-center justify-center p-2">
