@@ -117,7 +117,7 @@ export default function LoginPage() {
                   : "text-slate-400 hover:text-slate-300"
               }`}
             >
-              Sign Up
+              Create Account
             </button>
           </div>
 
@@ -154,7 +154,7 @@ export default function LoginPage() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder="••••••••"
+                  placeholder="•••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400 pr-16 w-full"
