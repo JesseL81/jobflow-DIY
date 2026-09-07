@@ -568,7 +568,7 @@ export default function VisionBoardPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 text-xs text-indigo-700 border-indigo-200 hover:bg-indigo-50 shadow-xs"
+                            className="h-6 px-3 text-[10px] uppercase font-bold text-indigo-700 border-indigo-200 hover:bg-indigo-50 shadow-xs"
                             disabled={isExporting}
                             onClick={() => handleExportItemAndPhotos(item)}
                             title="Export PDF & Photos"
@@ -576,17 +576,16 @@ export default function VisionBoardPage() {
                             📥 Export
                           </Button>
                           <Button
-                            variant="outline"
                             size="sm"
-                            className="h-8 text-xs text-slate-700 shadow-xs"
                             onClick={() => handleOpenModal(item)}
+                            className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
                           >
-                            Edit
+                            EDIT
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 text-xs text-rose-600 hover:bg-rose-50"
+                            className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
                             onClick={() => handleDeleteItem(item.id)}
                           >
                             Delete
@@ -603,12 +602,12 @@ export default function VisionBoardPage() {
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-slate-200">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">
+        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+            <DialogTitle className="text-lg font-bold text-orange-400">
               {editingItem ? "Edit Board Entry" : "Add Photos / Idea"}
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogDescription className="text-xs text-slate-300 mt-1">
               Upload photos to your vision board, tag the category, and add any design notes.
             </DialogDescription>
           </DialogHeader>
@@ -666,13 +665,22 @@ export default function VisionBoardPage() {
 
             <div className="grid gap-1.5 border-t pt-3">
               <Label className="font-semibold text-slate-700 text-xs">Attach Board Photos</Label>
-              <Input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handlePhotoUpload}
-                className="cursor-pointer text-xs h-9"
-              />
+              
+              <div className="flex gap-2 mt-1">
+                {/* Camera Button */}
+                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                  Camera
+                  <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoUpload} className="hidden" />
+                </label>
+
+                {/* File Upload Button */}
+                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  Upload File
+                  <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
+                </label>
+              </div>
 
               {(itemPhotos || []).length > 0 && (
                 <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 mt-2">
@@ -703,7 +711,7 @@ export default function VisionBoardPage() {
             </Button>
             <Button 
               size="sm" 
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm disabled:opacity-50" 
+              className="bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm disabled:opacity-50" 
               onClick={handleSaveItem}
               disabled={isSubmitting}
             >

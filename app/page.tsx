@@ -399,7 +399,7 @@ export default function DashboardPage() {
                     disabled={!newPunchText.trim()}
                     className={`text-xs h-9 px-4 shadow-sm transition-colors ${
                       newPunchText.trim() 
-                        ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                        ? "bg-blue-600 hover:bg-blue-400 text-white font-semibold" 
                         : "bg-slate-200 text-slate-400 cursor-not-allowed hover:bg-slate-200"
                     }`} 
                     onClick={handleOpenAddModal}
@@ -497,8 +497,12 @@ export default function DashboardPage() {
                           </div>
 
                           <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
-                            <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(item)} className="h-7 text-xs px-3 shadow-xs bg-white/80 text-slate-700">
-                              Edit
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleOpenEditModal(item)} 
+                              className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
+                            >
+                              EDIT
                             </Button>
                             <button onClick={() => handleDeletePunch(item.id)} className="text-slate-400 hover:text-rose-600 h-7 w-7 flex items-center justify-center rounded hover:bg-rose-50 transition-colors">
                               ✕
@@ -555,18 +559,18 @@ export default function DashboardPage() {
       </Card>
 
       <Dialog open={!!editingPunch} onOpenChange={(open) => !open && setEditingPunch(null)}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>
+        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+            <DialogTitle className="text-lg font-bold text-orange-400">
               {isNewTask ? "Add Task Details" : "Edit Task & Notifications"}
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs text-slate-300 mt-1">
               Set due dates for alerts or assign emails to trigger automated notifications.
             </DialogDescription>
           </DialogHeader>
 
           {editingPunch && (
-            <div className="grid gap-4 py-2">
+            <div className="grid gap-4 py-2 px-1">
               <div>
                 <Label htmlFor="edit-task" className="text-xs font-bold text-slate-700">Task Name *</Label>
                 <Input
@@ -680,7 +684,7 @@ export default function DashboardPage() {
                       }} 
                       className="shadow-sm h-10 text-sm"
                     />
-                    <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-10 shadow-sm">
+                    <Button type="button" onClick={handleAddEmail} className="bg-blue-600 hover:bg-blue-400 text-white font-semibold px-4 h-10 shadow-sm">
                       Add
                     </Button>
                   </div>
@@ -718,7 +722,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 border-t">
+          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 mt-2 border-t border-slate-100">
             {editingPunch && !isNewTask ? (
               <Button variant="destructive" size="sm" onClick={() => handleDeletePunch(editingPunch.id)} className="shadow-sm">
                 Delete
@@ -730,7 +734,7 @@ export default function DashboardPage() {
               <Button variant="outline" onClick={() => setEditingPunch(null)} className="shadow-sm">
                 Cancel
               </Button>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" onClick={handleSavePunchEdit}>
+              <Button className="bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" onClick={handleSavePunchEdit}>
                 {isNewTask ? "Create Task" : "Save Changes"}
               </Button>
             </div>

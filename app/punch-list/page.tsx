@@ -266,7 +266,7 @@ export default function PunchListPage() {
           <Button
             size="sm"
             onClick={handleOpenAdd}
-            className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
           >
             + Add To-Do
           </Button>
@@ -334,7 +334,6 @@ export default function PunchListPage() {
                   
                   const alertStatus = getAlertStatus(displayDueDate, item.completed)
 
-                  // Dynamic Background Tint based on Due Date proximity
                   let cardStyle = "bg-white border-slate-200 hover:border-slate-300 shadow-xs"
                   if (item.completed) {
                     cardStyle = "bg-slate-50 border-slate-200 opacity-60 shadow-none"
@@ -344,11 +343,11 @@ export default function PunchListPage() {
                     const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24))
 
                     if (diffDays < 0) {
-                      cardStyle = "bg-rose-50 border-rose-200 hover:border-rose-300 shadow-xs" // Past Due
+                      cardStyle = "bg-rose-50 border-rose-200 hover:border-rose-300 shadow-xs"
                     } else if (diffDays <= 3) {
-                      cardStyle = "bg-amber-50 border-amber-200 hover:border-amber-300 shadow-xs" // 0-3 Days
+                      cardStyle = "bg-amber-50 border-amber-200 hover:border-amber-300 shadow-xs"
                     } else {
-                      cardStyle = "bg-emerald-50 border-emerald-200 hover:border-emerald-300 shadow-xs" // 4+ Days
+                      cardStyle = "bg-emerald-50 border-emerald-200 hover:border-emerald-300 shadow-xs"
                     }
                   }
 
@@ -399,7 +398,11 @@ export default function PunchListPage() {
                               </h3>
                             </div>
 
-                            <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(item)} className="h-7 text-xs text-slate-500 hover:bg-slate-200 shrink-0 bg-white/80">
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleOpenEdit(item)} 
+                              className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
+                            >
                               Edit
                             </Button>
                           </div>
@@ -418,7 +421,11 @@ export default function PunchListPage() {
                 {filteredItems.length === 0 && (
                   <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-300">
                     <p className="text-slate-500 text-sm font-medium">No tasks found in {selectedCategory}.</p>
-                    <Button variant="outline" size="sm" onClick={handleOpenAdd} className="mt-3 text-xs">
+                    <Button 
+                      size="sm" 
+                      onClick={handleOpenAdd} 
+                      className="mt-3 bg-blue-600 hover:bg-blue-400 text-white font-semibold text-xs h-9 px-4 shadow-sm"
+                    >
                       + Add New Task
                     </Button>
                   </div>
@@ -431,10 +438,12 @@ export default function PunchListPage() {
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingItem ? "Edit Task" : "Add New Task"}</DialogTitle>
-            <DialogDescription className="text-xs">
+        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+            <DialogTitle className="text-lg font-bold text-orange-400">
+              {editingItem ? "Edit Task" : "Add New Task"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-300 mt-1">
               Set due dates for alerts or assign emails to trigger automated notifications.
             </DialogDescription>
           </DialogHeader>
@@ -586,12 +595,12 @@ export default function PunchListPage() {
                 placeholder="Details, measurements, or materials needed..." 
                 value={formNotes} 
                 onChange={(e) => setFormNotes(e.target.value)} 
-                className="w-full mt-1 p-2.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                className="w-full mt-1 p-2.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
               />
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 border-t">
+          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 mt-2 border-t border-slate-100">
             {editingItem ? (
               <Button variant="destructive" size="sm" onClick={() => handleDeleteItem()} className="shadow-sm">
                 Delete
@@ -603,7 +612,7 @@ export default function PunchListPage() {
               <Button variant="outline" onClick={() => setIsModalOpen(false)} className="shadow-sm">
                 Cancel
               </Button>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" onClick={handleSaveItem}>
+              <Button className="bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold" onClick={handleSaveItem}>
                 {editingItem ? "Save Changes" : "Add Task"}
               </Button>
             </div>

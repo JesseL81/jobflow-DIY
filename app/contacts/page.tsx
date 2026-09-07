@@ -177,26 +177,26 @@ export default function ContactsPage() {
         <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
           <Button 
             onClick={handleOpenAddModal}
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none"
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none"
           >
             + Add New Contact
           </Button>
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border border-slate-200">
+            <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
               <form onSubmit={handleSaveContact}>
-                <DialogHeader className="pb-2 border-b border-slate-100">
-                  <DialogTitle className="text-lg font-bold text-slate-900">
+                <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+                  <DialogTitle className="text-lg font-bold text-orange-400">
                     {editingId ? "Edit Contact" : "Add New Contact / Vendor"}
                   </DialogTitle>
-                  <DialogDescription className="text-xs text-slate-500">
+                  <DialogDescription className="text-xs text-slate-300 mt-1">
                     {editingId 
                       ? "Update the details for this vendor below." 
                       : "Fill in vendor and trade details to save them to your active directory."}
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-4 py-4 text-xs">
+                <div className="grid gap-4 py-2 text-xs">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="name" className="font-semibold text-slate-700">Contact Person Name *</Label>
@@ -307,19 +307,19 @@ export default function ContactsPage() {
                   </div>
                 </div>
 
-                <DialogFooter className="pt-2 border-t border-slate-100 flex gap-2 sm:justify-end">
+                <DialogFooter className="pt-2 flex gap-2 sm:justify-end mt-2 border-t border-slate-100 pt-4">
                   <Button 
                     type="button" 
                     variant="outline" 
                     onClick={() => setIsModalOpen(false)}
-                    className="text-xs shadow-sm"
+                    className="text-xs shadow-sm h-9"
                   >
                     Cancel
                   </Button>
                   <Button 
                     type="submit" 
                     disabled={isSubmitting}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 disabled:opacity-50 shadow-sm"
+                    className="bg-blue-600 hover:bg-blue-400 text-white text-xs font-semibold px-4 disabled:opacity-50 shadow-sm h-9"
                   >
                     {isSubmitting ? "Saving..." : (editingId ? "Update Contact" : "Save Contact")}
                   </Button>
@@ -422,20 +422,19 @@ export default function ContactsPage() {
                 {/* Edit & Delete Action Buttons */}
                 <div className="flex items-center gap-2 shrink-0">
                   <Button 
-                    variant="outline" 
                     size="sm" 
                     onClick={() => handleOpenEditModal(activeContact)}
-                    className="h-8 text-xs shadow-xs text-slate-700 hover:bg-slate-50"
+                    className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
                   >
-                    Edit
+                    EDIT
                   </Button>
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     onClick={() => handleDeleteContact(activeContact.id)}
-                    className="h-8 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                    className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
                   >
-                    Delete
+                    DELETE
                   </Button>
                 </div>
               </div>

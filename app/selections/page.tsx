@@ -345,7 +345,7 @@ export default function SelectionsPage() {
           <Button
             size="sm"
             onClick={handleOpenAdd}
-            className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
           >
             + Add Item
           </Button>
@@ -414,13 +414,12 @@ export default function SelectionsPage() {
                     )}
 
                     <Button
-                      variant="outline"
                       size="sm"
                       onClick={() => {
                         setTempBudgetVal(currentCategoryAllowance ? currentCategoryAllowance.toString() : "")
                         setIsBudgetModalOpen(true)
                       }}
-                      className="h-8 text-xs border-slate-300"
+                      className="h-8 text-xs bg-blue-600 hover:bg-blue-400 text-white font-semibold"
                     >
                       🎯 Set Budget Target
                     </Button>
@@ -475,8 +474,12 @@ export default function SelectionsPage() {
                             </div>
                           </div>
 
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(item)} className="h-7 text-xs text-slate-500 hover:bg-slate-100">
-                            Edit
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleOpenEdit(item)} 
+                            className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
+                          >
+                            EDIT
                           </Button>
                         </div>
                       </CardHeader>
@@ -525,7 +528,11 @@ export default function SelectionsPage() {
                 {filteredItems.length === 0 && (
                   <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-300">
                     <p className="text-slate-500 text-sm font-medium">No items found in {selectedCategory}.</p>
-                    <Button variant="outline" size="sm" onClick={handleOpenAdd} className="mt-3 text-xs">
+                    <Button 
+                      size="sm" 
+                      onClick={handleOpenAdd} 
+                      className="mt-3 bg-blue-600 hover:bg-blue-400 text-white font-semibold text-xs h-9 px-4 shadow-sm"
+                    >
                       + Add First Item
                     </Button>
                   </div>
@@ -539,8 +546,9 @@ export default function SelectionsPage() {
         </div>
       </Card>
 
+      {/* Budget Dialog */}
       <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] border-2 border-slate-900 rounded-xl">
           <DialogHeader>
             <DialogTitle>Set Budget Target for {selectedCategory}</DialogTitle>
           </DialogHeader>
@@ -558,17 +566,20 @@ export default function SelectionsPage() {
             <Button variant="outline" onClick={() => setIsBudgetModalOpen(false)}>
               Cancel
             </Button>
-            <Button className="bg-indigo-600 text-white" onClick={handleSaveBudget}>
+            <Button className="bg-blue-600 hover:bg-blue-400 text-white" onClick={handleSaveBudget}>
               Save Target
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Main Item Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingItem ? "Edit Material Selection" : "Add New Material Selection"}</DialogTitle>
+        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+            <DialogTitle className="text-orange-400 font-bold">
+              {editingItem ? "Edit Material Selection" : "Add New Material Selection"}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
@@ -650,7 +661,7 @@ export default function SelectionsPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between sm:justify-between items-center">
+          <DialogFooter className="flex justify-between sm:justify-between items-center mt-2">
             {editingItem ? (
               <Button variant="destructive" size="sm" onClick={handleDeleteItem}>
                 Delete
@@ -663,7 +674,7 @@ export default function SelectionsPage() {
                 Cancel
               </Button>
               <Button 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50" 
+                className="bg-blue-600 hover:bg-blue-400 text-white disabled:opacity-50" 
                 onClick={handleSaveItem}
                 disabled={isSubmitting}
               >

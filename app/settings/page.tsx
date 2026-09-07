@@ -226,9 +226,8 @@ export default function SettingsPage() {
           </p>
         </div>
         <Button 
-          variant="outline" 
           onClick={handleSignOut}
-          className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 bg-transparent font-bold shadow-sm"
+          className="bg-blue-600 hover:bg-blue-400 text-white font-bold shadow-sm"
         >
           Sign Out
         </Button>
@@ -274,7 +273,7 @@ export default function SettingsPage() {
                 <Button 
                   type="submit" 
                   disabled={isSavingDates}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm font-semibold h-10"
+                  className="w-full bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold h-10"
                 >
                   {isSavingDates ? "Saving..." : "Save Timeline"}
                 </Button>
@@ -321,7 +320,7 @@ export default function SettingsPage() {
                 <Button 
                   type="submit" 
                   disabled={isUpdatingPassword || !newPassword}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm font-semibold h-10"
+                  className="w-full bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold h-10"
                 >
                   {isUpdatingPassword ? "Updating..." : "Update Password"}
                 </Button>
@@ -347,9 +346,8 @@ export default function SettingsPage() {
                 <p className="text-slate-500 text-xs mt-1">Status: {isPushEnabled ? "Active" : "Disabled"}</p>
               </div>
               <Button 
-                variant={isPushEnabled ? "default" : "outline"}
                 onClick={handleTogglePush}
-                className={`shrink-0 shadow-sm font-bold w-full sm:w-auto ${isPushEnabled ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "text-blue-600 border-blue-200 hover:bg-blue-50"}`}
+                className={`shrink-0 shadow-sm font-bold w-full sm:w-auto ${isPushEnabled ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-blue-600 hover:bg-blue-400 text-white"}`}
               >
                 {isPushEnabled ? "🔔 Notifications Active" : "🔕 Enable Notifications"}
               </Button>
@@ -371,9 +369,8 @@ export default function SettingsPage() {
                   <p className="text-slate-500 text-xs mt-1">Reset this account to see example project data.</p>
                 </div>
                 <Button 
-                  variant="outline" 
                   onClick={handleRestoreTutorial}
-                  className="shrink-0 shadow-sm font-bold text-blue-600 border-blue-200 hover:bg-blue-50 w-full sm:w-auto"
+                  className="shrink-0 shadow-sm font-bold bg-rose-600 hover:bg-rose-500 text-white w-full sm:w-auto"
                 >
                   👋 Load Examples
                 </Button>
@@ -385,9 +382,8 @@ export default function SettingsPage() {
                   <p className="text-rose-700 text-xs mt-1">Permanently delete all data to start a blank slate.</p>
                 </div>
                 <Button 
-                  variant="destructive" 
                   onClick={handleClearAllData}
-                  className="shrink-0 shadow-sm font-bold w-full sm:w-auto"
+                  className="shrink-0 shadow-sm font-bold bg-rose-600 hover:bg-rose-500 text-white w-full sm:w-auto"
                 >
                   🗑️ Clear All Data
                 </Button>

@@ -536,7 +536,7 @@ export default function SchedulePage() {
           <Button
             size="sm"
             onClick={handleOpenAddEventModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
           >
             + Add Event
           </Button>
@@ -728,9 +728,9 @@ export default function SchedulePage() {
 
       {/* MODAL: DATE SETTINGS & STATUS */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col p-6">
-          <DialogHeader className="pb-2 border-b shrink-0">
-            <DialogTitle>
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col p-6 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 shrink-0 mb-2">
+            <DialogTitle className="text-lg font-bold text-orange-400">
               {editingTask ? `Edit Task: ${editingTask.title}` : "Date Settings & Status"}
             </DialogTitle>
           </DialogHeader>
@@ -753,7 +753,7 @@ export default function SchedulePage() {
                       type="checkbox"
                       checked={saturdaysOff}
                       onChange={(e) => setSaturdaysOff(e.target.checked)}
-                      className="h-4 w-4 accent-indigo-600 rounded cursor-pointer"
+                      className="h-4 w-4 accent-orange-400 rounded cursor-pointer"
                     />
                     <Label htmlFor="saturdays-off-toggle" className="text-xs font-semibold text-slate-700 cursor-pointer w-full">
                       Saturdays Off
@@ -766,7 +766,7 @@ export default function SchedulePage() {
                       type="checkbox"
                       checked={sundaysOff}
                       onChange={(e) => setSundaysOff(e.target.checked)}
-                      className="h-4 w-4 accent-indigo-600 rounded cursor-pointer"
+                      className="h-4 w-4 accent-orange-400 rounded cursor-pointer"
                     />
                     <Label htmlFor="sundays-off-toggle" className="text-xs font-semibold text-slate-700 cursor-pointer w-full">
                       Sundays Off
@@ -907,7 +907,7 @@ export default function SchedulePage() {
           </div>
 
           {/* FIXED ALWAYS-VISIBLE FOOTER */}
-          <DialogFooter className="pt-3 border-t shrink-0 flex justify-between items-center sm:justify-between">
+          <DialogFooter className="pt-4 border-t shrink-0 flex justify-between items-center sm:justify-between">
             {editingTask ? (
               <Button variant="destructive" size="sm" onClick={handleDeleteTask} className="shadow-sm">
                 Delete Task
@@ -920,7 +920,7 @@ export default function SchedulePage() {
               <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="shadow-sm">
                 Cancel
               </Button>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" onClick={handleSaveModal}>
+              <Button className="bg-blue-600 hover:bg-blue-400 text-white shadow-sm" onClick={handleSaveModal}>
                 {editingTask ? "Update Task" : "Save Changes"}
               </Button>
             </div>
