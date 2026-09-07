@@ -436,7 +436,7 @@ export default function ExpenseTracker() {
 
       {/* Main Expense Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[480px] border-2 border-slate-900 rounded-xl">
           <DialogHeader>
             <DialogTitle>{editingExpense ? "Edit Expense Entry" : "Log New Expense"}</DialogTitle>
           </DialogHeader>
@@ -492,13 +492,22 @@ export default function ExpenseTracker() {
 
             <div className="grid gap-2">
               <Label>Attach Receipt Image</Label>
-              <Input
-                type="file"
-                accept="image/*"
-                capture="environment" // Instantly pulls up the back camera on mobile devices
-                onChange={handlePhotoUpload}
-                className="cursor-pointer"
-              />
+              
+              <div className="flex gap-2">
+                {/* Camera Button */}
+                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 py-2.5 px-3 rounded-md border border-slate-300 shadow-sm font-semibold text-xs transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                  Camera
+                  <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+                </label>
+
+                {/* File Upload Button */}
+                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 py-2.5 px-3 rounded-md border border-slate-300 shadow-sm font-semibold text-xs transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  Upload File
+                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                </label>
+              </div>
 
               {receiptPhoto && (
                 <div className="relative h-28 w-full border rounded-md overflow-hidden bg-slate-50 mt-1">
@@ -546,7 +555,7 @@ export default function ExpenseTracker() {
 
       {/* Budget Dialog */}
       <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
-        <DialogContent className="sm:max-w-[360px]">
+        <DialogContent className="sm:max-w-[360px] border-2 border-slate-900 rounded-xl">
           <DialogHeader>
             <DialogTitle>Update Total Budget</DialogTitle>
           </DialogHeader>
@@ -575,7 +584,7 @@ export default function ExpenseTracker() {
 
       {/* Category Breakdown Dialog */}
       <Dialog open={breakdownType !== null} onOpenChange={(open) => { if (!open) setBreakdownType(null) }}>
-        <DialogContent className="sm:max-w-[480px] max-h-[85vh] flex flex-col p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-[480px] max-h-[85vh] flex flex-col p-0 overflow-hidden border-2 border-slate-900 rounded-xl">
           <DialogHeader className="px-6 py-5 border-b border-slate-100">
             <DialogTitle className={breakdownType === 'materials' ? 'text-blue-600' : 'text-purple-600'}>
               {breakdownType === 'materials' ? 'Materials Breakdown' : 'Labor Breakdown'}
