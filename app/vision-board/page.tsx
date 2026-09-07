@@ -705,17 +705,23 @@ export default function VisionBoardPage() {
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
-            <Button variant="outline" size="sm" onClick={() => setIsModalOpen(false)}>
-              Cancel
-            </Button>
+          {/* FIX: Set footer to flex-row to ensure side-by-side buttons on mobile */}
+          <DialogFooter className="flex flex-row w-full gap-3 pt-4 mt-2 border-t border-slate-100 sm:justify-between">
             <Button 
               size="sm" 
-              className="bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm disabled:opacity-50" 
+              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm disabled:opacity-50" 
               onClick={handleSaveItem}
               disabled={isSubmitting}
             >
               {isSubmitting ? "Saving..." : editingItem ? "Update Entry" : "Save to Board"}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsModalOpen(false)} 
+              className="flex-1 shadow-sm font-semibold text-slate-700"
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
