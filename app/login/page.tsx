@@ -94,6 +94,33 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent>
+          
+          {/* Segmented Toggle Switch */}
+          <div className="flex p-1 bg-slate-900 border border-slate-700/50 rounded-lg mb-6 shadow-inner">
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(false); setErrorMessage(""); setSuccessMessage(""); }}
+              className={`flex-1 text-xs font-bold py-2.5 rounded-md transition-all ${
+                !isSignUp 
+                  ? "bg-slate-700 text-white shadow-sm ring-1 ring-slate-600" 
+                  : "text-slate-400 hover:text-slate-300"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(true); setErrorMessage(""); setSuccessMessage(""); }}
+              className={`flex-1 text-xs font-bold py-2.5 rounded-md transition-all ${
+                isSignUp 
+                  ? "bg-slate-700 text-white shadow-sm ring-1 ring-slate-600" 
+                  : "text-slate-400 hover:text-slate-300"
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
           <form onSubmit={handleAuth} className="space-y-4">
             {errorMessage && (
               <div className="p-3 bg-rose-500/20 border border-rose-500/50 text-rose-300 text-xs rounded-lg font-medium leading-relaxed">
@@ -133,7 +160,6 @@ export default function LoginPage() {
                   className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400 pr-16 w-full"
                 />
                 
-                {/* BULLETPROOF TEXT BUTTON FOR SAFARI/MOBILE */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -149,18 +175,8 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-11 shadow-md mt-2 transition-colors"
             >
-              {loading ? "Processing..." : isSignUp ? "Sign Up" : "Sign In"}
+              {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
             </Button>
-
-            <div className="text-center pt-3">
-              <button
-                type="button"
-                onClick={() => { setIsSignUp(!isSignUp); setErrorMessage(""); setSuccessMessage(""); }}
-                className="text-xs font-medium text-slate-400 hover:text-orange-400 transition-colors"
-              >
-                {isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up"}
-              </button>
-            </div>
           </form>
         </CardContent>
       </Card>
