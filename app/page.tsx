@@ -722,7 +722,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <DialogFooter className="flex flex-col w-full gap-3 pt-3 mt-4 border-t border-slate-100 sm:flex-row sm:justify-between sm:items-center sm:space-x-0">
+          <DialogFooter className="flex flex-col w-full gap-3 px-6 py-4 -mx-6 -mb-6 mt-4 bg-slate-50 border-t border-slate-200 sm:flex-row sm:justify-between sm:items-center sm:space-x-0">
   
   {/* 1. SAVE & CANCEL (Top row on mobile, Right side on desktop) */}
   <div className="flex flex-row gap-3 w-full sm:w-auto sm:order-2">
@@ -759,6 +759,8 @@ export default function DashboardPage() {
   )}
 
 </DialogFooter>
+
+          
         </DialogContent>
       </Dialog>
 
