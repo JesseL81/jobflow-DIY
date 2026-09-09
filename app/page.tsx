@@ -722,23 +722,43 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 mt-2 border-t border-slate-100">
-            {editingPunch && !isNewTask ? (
-              <Button variant="destructive" size="sm" onClick={() => handleDeletePunch(editingPunch.id)} className="shadow-sm">
-                Delete
-              </Button>
-            ) : (
-              <div />
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setEditingPunch(null)} className="shadow-sm">
-                Cancel
-              </Button>
-              <Button className="bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" onClick={handleSavePunchEdit}>
-                {isNewTask ? "Create Task" : "Save Changes"}
-              </Button>
-            </div>
-          </DialogFooter>
+          <DialogFooter className="flex flex-col w-full gap-3 pt-3 mt-4 border-t border-slate-100 sm:flex-row sm:justify-between sm:items-center sm:space-x-0">
+  
+  {/* 1. SAVE & CANCEL (Top row on mobile, Right side on desktop) */}
+  <div className="flex flex-row gap-3 w-full sm:w-auto sm:order-2">
+    <Button 
+      size="sm"
+      className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm m-0" 
+      onClick={handleSavePunchEdit}
+    >
+      {isNewTask ? "Create Task" : "Save Changes"}
+    </Button>
+    
+    <Button 
+      variant="outline" 
+      size="sm"
+      onClick={() => setEditingPunch(null)}
+      className="flex-1 sm:flex-none shadow-sm font-semibold text-slate-700 m-0"
+    >
+      Cancel
+    </Button>
+  </div>
+
+  {/* 2. DELETE (Bottom row on mobile, Left side on desktop) */}
+  {editingPunch && !isNewTask ? (
+    <Button 
+      variant="destructive" 
+      size="sm" 
+      onClick={() => handleDeletePunch(editingPunch.id)}
+      className="w-full sm:w-auto sm:order-1 shadow-sm m-0"
+    >
+      Delete
+    </Button>
+  ) : (
+    <div className="hidden sm:block sm:order-1" />
+  )}
+
+</DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -437,9 +437,12 @@ export default function PunchListPage() {
         </div>
       </Card>
 
+      {/* STRICT MOBILE LAYOUT MODAL */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+        <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[90dvh] p-0 gap-0 flex flex-col overflow-hidden border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
+          
+          {/* HEADER */}
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-lg font-bold text-orange-400">
               {editingItem ? "Edit Task" : "Add New Task"}
             </DialogTitle>
@@ -448,7 +451,8 @@ export default function PunchListPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          {/* SCROLLABLE BODY */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
             <div>
               <Label htmlFor="task-text" className="text-xs font-semibold text-slate-700">Task Title / Description *</Label>
               <Input 
@@ -563,7 +567,7 @@ export default function PunchListPage() {
                     }} 
                     className="shadow-sm h-10 text-sm"
                   />
-                  <Button type="button" onClick={handleAddEmail} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-10 shadow-sm">
+                  <Button type="button" onClick={handleAddEmail} className="bg-blue-600 hover:bg-blue-400 text-white font-semibold px-4 h-10 shadow-sm">
                     Add
                   </Button>
                 </div>
@@ -587,7 +591,7 @@ export default function PunchListPage() {
               </div>
             </div>
 
-            <div className="mt-2">
+            <div>
               <Label htmlFor="task-notes" className="text-xs font-bold text-slate-700">Additional Notes (Optional)</Label>
               <textarea 
                 id="task-notes" 
@@ -600,20 +604,30 @@ export default function PunchListPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between sm:justify-between items-center pt-2 mt-2 border-t border-slate-100">
+          {/* FOOTER */}
+          <DialogFooter className="px-6 py-4 bg-slate-50 border-t border-slate-200 shrink-0 flex flex-col sm:flex-row items-center sm:justify-between gap-3 sm:space-x-0 w-full">
             {editingItem ? (
-              <Button variant="destructive" size="sm" onClick={() => handleDeleteItem()} className="shadow-sm">
-                Delete
+              <Button variant="destructive" size="sm" onClick={() => handleDeleteItem()} className="shadow-sm w-full sm:w-auto">
+                Delete Task
               </Button>
             ) : (
-              <div />
+              <div className="hidden sm:block" />
             )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsModalOpen(false)} className="shadow-sm">
-                Cancel
-              </Button>
-              <Button className="bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold" onClick={handleSaveItem}>
+            <div className="flex flex-row gap-3 w-full sm:w-auto">
+              <Button 
+                size="sm"
+                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                onClick={handleSaveItem}
+              >
                 {editingItem ? "Save Changes" : "Add Task"}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsModalOpen(false)} 
+                className="flex-1 sm:flex-none shadow-sm font-semibold text-slate-700"
+              >
+                Cancel
               </Button>
             </div>
           </DialogFooter>
