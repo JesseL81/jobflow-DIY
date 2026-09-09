@@ -722,14 +722,14 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <DialogFooter className="flex flex-col w-full gap-3 px-6 py-4 -mx-6 -mb-6 mt-4 bg-slate-50 border-t border-slate-200 sm:flex-row sm:justify-between sm:items-center sm:space-x-0">
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
   
-  {/* 1. SAVE & CANCEL (Top row on mobile, Right side on desktop) */}
-  <div className="flex flex-row gap-3 w-full sm:w-auto sm:order-2">
+  {/* 1. SAVE & CANCEL (Always side-by-side) */}
+  <div className="flex gap-2 w-full sm:order-2">
     <Button 
       size="sm"
-      className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm m-0" 
-      onClick={handleSavePunchEdit}
+      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+      onClick={handleSavePunchEdit} /* Change to page's save function */
     >
       {isNewTask ? "Create Task" : "Save Changes"}
     </Button>
@@ -737,28 +737,26 @@ export default function DashboardPage() {
     <Button 
       variant="outline" 
       size="sm"
-      onClick={() => setEditingPunch(null)}
-      className="flex-1 sm:flex-none shadow-sm font-semibold text-slate-700 m-0"
+      onClick={() => setEditingPunch(null)} /* Change to page's close function */
+      className="flex-1 shadow-sm font-semibold text-slate-700"
     >
       Cancel
     </Button>
   </div>
 
-  {/* 2. DELETE (Bottom row on mobile, Left side on desktop) */}
-  {editingPunch && !isNewTask ? (
+  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
+  {editingPunch && !isNewTask && ( /* Change 'editingPunch' to the page's state */
     <Button 
       variant="destructive" 
       size="sm" 
-      onClick={() => handleDeletePunch(editingPunch.id)}
-      className="w-full sm:w-auto sm:order-1 shadow-sm m-0"
+      onClick={() => handleDeletePunch(editingPunch.id)} /* Change to page's delete function */
+      className="w-full sm:w-auto sm:order-1 shadow-sm"
     >
       Delete
     </Button>
-  ) : (
-    <div className="hidden sm:block sm:order-1" />
   )}
 
-</DialogFooter>
+</div>
 
           
         </DialogContent>

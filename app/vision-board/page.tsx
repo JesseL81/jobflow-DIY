@@ -705,24 +705,25 @@ export default function VisionBoardPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex flex-row w-full gap-3 px-6 py-4 -mx-6 -mb-6 mt-4 bg-slate-50 border-t border-slate-200 sm:justify-between sm:space-x-0">
-            <Button 
-              size="sm" 
-              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm disabled:opacity-50 m-0" 
-              onClick={handleSaveItem}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Saving..." : editingItem ? "Update Entry" : "Save to Board"}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setIsModalOpen(false)} 
-              className="flex-1 shadow-sm font-semibold text-slate-700 m-0"
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
+          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+  <Button 
+    size="sm" 
+    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+    onClick={handleSaveItem}
+    disabled={isSubmitting}
+  >
+    {isSubmitting ? "Saving..." : editingItem ? "Update Entry" : "Save to Board"}
+  </Button>
+  
+  <Button 
+    variant="outline" 
+    size="sm" 
+    onClick={() => setIsModalOpen(false)} 
+    className="flex-1 shadow-sm font-semibold text-slate-700"
+  >
+    Cancel
+  </Button>
+</div>
         </DialogContent>
       </Dialog>
 
