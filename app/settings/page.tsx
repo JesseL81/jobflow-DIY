@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { set, clear } from "idb-keyval"
 import { supabase } from "@/lib/supabase"
 import { syncManager } from "@/lib/syncManager"
-import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,12 +25,6 @@ export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState<string>("")
   const [isPushEnabled, setIsPushEnabled] = useState(false)
   
-  // Project Dates Sync
-  const [projectDates, setProjectDates] = useOfflineSync("cleanbuild_project_dates", { startDate: "2026-06-29", endDate: "2026-07-30" })
-  const [localStartDate, setLocalStartDate] = useState("2026-06-29")
-  const [localEndDate, setLocalEndDate] = useState("2026-07-30")
-  const [isSavingDates, setIsSavingDates] = useState(false)
-
   // Password State
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -56,20 +49,6 @@ export default function SettingsPage() {
       })
     }
   }, [])
-
-  // Sync local input state with the database on load
-  useEffect(() => {
-    if (projectDates?.startDate) setLocalStartDate(projectDates.startDate)
-    if (projectDates?.endDate) setLocalEndDate(projectDates.endDate)
-  }, [projectDates])
-
-  const handleSaveTimeline = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSavingDates(true)
-    await setProjectDates({ startDate: localStartDate, endDate: localEndDate })
-    setIsSavingDates(false)
-    alert("Project timeline saved successfully! The Dashboard progress bar will now reflect these dates.")
-  }
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -237,50 +216,6 @@ export default function SettingsPage() {
         
         {/* Left Column */}
         <div className="space-y-6">
-          
-          <Card className="bg-white border shadow-sm rounded-xl">
-            <CardHeader className="pb-4 border-b border-slate-100">
-              <CardTitle className="text-lg font-bold">Project Configuration</CardTitle>
-              <CardDescription className="text-xs">
-                Set your build timeline to track progress on the Dashboard.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <form onSubmit={handleSaveTimeline} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-700">Project Start Date</Label>
-                    <Input 
-                      type="date" 
-                      value={localStartDate}
-                      onChange={(e) => setLocalStartDate(e.target.value)}
-                      className="h-9 text-sm"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-700">Target End Date</Label>
-                    <Input 
-                      type="date" 
-                      value={localEndDate}
-                      onChange={(e) => setLocalEndDate(e.target.value)}
-                      className="h-9 text-sm"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <Button 
-                  type="submit" 
-                  disabled={isSavingDates}
-                  className="w-full bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold h-10"
-                >
-                  {isSavingDates ? "Saving..." : "Save Timeline"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
           <Card className="bg-white border shadow-sm rounded-xl">
             <CardHeader className="pb-4 border-b border-slate-100">
               <CardTitle className="text-lg font-bold">Account & Security</CardTitle>
@@ -327,12 +262,10 @@ export default function SettingsPage() {
               </form>
             </CardContent>
           </Card>
-
         </div>
 
         {/* Right Column */}
         <div className="space-y-6">
-          
           <Card className="bg-white border shadow-sm rounded-xl">
             <CardHeader className="pb-4 border-b border-slate-100">
               <CardTitle className="text-lg font-bold">Device Notifications</CardTitle>
@@ -391,7 +324,6 @@ export default function SettingsPage() {
 
             </CardContent>
           </Card>
-
         </div>
       </div>
       

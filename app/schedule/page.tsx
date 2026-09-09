@@ -5,7 +5,7 @@ import { get } from "idb-keyval"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
@@ -89,6 +89,24 @@ export default function SchedulePage() {
   const [saturdaysOff, setSaturdaysOff] = useOfflineSync<boolean>("cleanbuild_saturdays_off", true)
   const [sundaysOff, setSundaysOff] = useOfflineSync<boolean>("cleanbuild_sundays_off", true)
   const [nonWorkdaysMap, setNonWorkdaysMap] = useOfflineSync<Record<string, string>>("cleanbuild_non_workdays_map", {})
+
+  // Project Dates Sync & State
+  const [projectDates, setProjectDates] = useOfflineSync<{startDate: string, endDate: string}>("cleanbuild_project_dates", { startDate: "2026-06-29", endDate: "2026-07-30" })
+  
+  const [isDatesModalOpen, setIsDatesModalOpen] = useState(false)
+  const [tempStartDate, setTempStartDate] = useState("")
+  const [tempEndDate, setTempEndDate] = useState("")
+
+  const handleOpenDatesModal = () => {
+    setTempStartDate(projectDates?.startDate || "2026-06-29")
+    setTempEndDate(projectDates?.endDate || "2026-07-30")
+    setIsDatesModalOpen(true)
+  }
+
+  const handleSaveDates = async () => {
+    await setProjectDates({ startDate: tempStartDate, endDate: tempEndDate })
+    setIsDatesModalOpen(false)
+  }
 
   // Keep Log Non-Workdays mapped if updated from another tab
   useEffect(() => {
@@ -522,24 +540,38 @@ export default function SchedulePage() {
           </Button>
         </div>
 
-        {/* MOBILE CENTERED FIX APPLIED HERE */}
         {/* Right Column */}
-        <div className="flex items-center justify-center md:justify-end w-full gap-3">
+        <div className="flex flex-col justify-center w-full md:w-auto md:justify-self-end gap-2 shrink-0">
+          
+          {/* Top Row: Today & Add Event */}
+          <div className="flex gap-2 w-full">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTodayClick}
+              className="flex-1 text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            >
+              Today
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleOpenAddEventModal}
+              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            >
+              + Add Event
+            </Button>
+          </div>
+
+          {/* Bottom Row: Full-Width Project Dates */}
           <Button
             variant="outline"
             size="sm"
-            onClick={handleTodayClick}
-            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            onClick={handleOpenDatesModal}
+            className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
           >
-            Today
+            📅 Project Dates
           </Button>
-          <Button
-            size="sm"
-            onClick={handleOpenAddEventModal}
-            className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
-          >
-            + Add Event
-          </Button>
+          
         </div>
 
       </div>
@@ -666,14 +698,16 @@ export default function SchedulePage() {
                         >
                           {day.dayNum === 1 ? `${day.monthName} ${day.dayNum}` : day.dayNum}
                         </span>
-                        {day.isNonWorkday && (
+                        
+                        {/* BADGE LOGIC: Hides default 'Saturday', 'Sunday', and blank 'Non-workday' tags */}
+                        {day.isNonWorkday && day.nonWorkdayTitle && !["Saturday", "Sunday", "Non-workday"].includes(day.nonWorkdayTitle) && (
                           <div className="flex items-center gap-1">
                             {day.isFromLog && (
-                              <span className="text-[9px] font-bold text-white bg-blue-600 px-1 py-0.2 rounded-full shadow-xs" title="Synced from Daily Logs">
+                              <span className="text-[9px] font-bold text-white bg-blue-600 px-1 py-[1px] rounded-full shadow-xs" title="Synced from Daily Logs">
                                 Log
                               </span>
                             )}
-                            <span className="text-[10px] text-slate-700 font-bold bg-slate-400/60 px-1.5 py-0.2 rounded truncate max-w-[90px]" title={day.nonWorkdayTitle}>
+                            <span className="text-[10px] text-slate-700 font-bold bg-slate-400/60 px-1.5 py-[1px] rounded truncate max-w-[90px]" title={day.nonWorkdayTitle}>
                               {day.nonWorkdayTitle}
                             </span>
                           </div>
@@ -906,44 +940,96 @@ export default function SchedulePage() {
 
           </div>
 
-         <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
-  
-  {/* 1. SAVE & CANCEL (Always side-by-side) */}
-  <div className="flex gap-2 w-full sm:order-2">
-    <Button 
-      size="sm"
-      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-      onClick={handleSaveModal} 
-    >
-      {editingTask ? "Update Task" : "Save Changes"}
-    </Button>
-    
-    <Button 
-      variant="outline" 
-      size="sm"
-      onClick={() => setIsDialogOpen(false)} 
-      className="flex-1 shadow-sm font-semibold text-slate-700"
-    >
-      Cancel
-    </Button>
-  </div>
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+            {/* 1. SAVE & CANCEL (Always side-by-side) */}
+            <div className="flex gap-2 w-full sm:order-2">
+              <Button 
+                size="sm"
+                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                onClick={handleSaveModal} 
+              >
+                {editingTask ? "Update Task" : "Save Changes"}
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsDialogOpen(false)} 
+                className="flex-1 shadow-sm font-semibold text-slate-700"
+              >
+                Cancel
+              </Button>
+            </div>
 
-  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
-  {editingTask && (
-    <Button 
-      variant="destructive" 
-      size="sm" 
-      onClick={handleDeleteTask} 
-      className="w-full sm:w-auto sm:order-1 shadow-sm"
-    >
-      Delete
-    </Button>
-  )}
-
-</div>
+            {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
+            {editingTask && (
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={handleDeleteTask} 
+                className="w-full sm:w-auto sm:order-1 shadow-sm"
+              >
+                Delete
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
       
+      {/* MODAL: PROJECT DATES */}
+      <Dialog open={isDatesModalOpen} onOpenChange={setIsDatesModalOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-6">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-4">
+            <DialogTitle className="text-lg font-bold text-orange-400">
+              Project Dates
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-300 mt-1">
+              Set the overall start and end dates for your build.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="start-date" className="font-semibold text-slate-700 text-xs">Start Date</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={tempStartDate}
+                onChange={(e) => setTempStartDate(e.target.value)}
+                className="h-10 text-sm shadow-sm border-slate-200"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="end-date" className="font-semibold text-slate-700 text-xs">End Date</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={tempEndDate}
+                onChange={(e) => setTempEndDate(e.target.value)}
+                className="h-10 text-sm shadow-sm border-slate-200"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+            <Button 
+              size="sm" 
+              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+              onClick={handleSaveDates}
+            >
+              Save Dates
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsDatesModalOpen(false)} 
+              className="flex-1 shadow-sm font-semibold text-slate-700"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }
