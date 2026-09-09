@@ -525,32 +525,42 @@ export default function ExpenseTracker() {
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between items-center sm:justify-between mt-2">
-            {editingExpense ? (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDeleteExpense(editingExpense.id)}
-              >
-                Delete
-              </Button>
-            ) : (
-              <div />
-            )}
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+  
+  {/* 1. SAVE & CANCEL (Always side-by-side) */}
+  <div className="flex gap-2 w-full sm:order-2">
+    <Button 
+      size="sm"
+      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+      onClick={handleSaveExpense}
+      disabled={isSubmitting}
+    >
+      {isSubmitting ? "Saving..." : editingExpense ? "Update Expense" : "Save Expense"}
+    </Button>
+    
+    <Button 
+      variant="outline" 
+      size="sm"
+      onClick={() => setIsDialogOpen(false)} 
+      className="flex-1 shadow-sm font-semibold text-slate-700"
+    >
+      Cancel
+    </Button>
+  </div>
 
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                className="bg-blue-600 hover:bg-blue-400 text-white disabled:opacity-50" 
-                onClick={handleSaveExpense}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Saving..." : editingExpense ? "Update Expense" : "Save Expense"}
-              </Button>
-            </div>
-          </DialogFooter>
+  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
+  {editingExpense && (
+    <Button 
+      variant="destructive" 
+      size="sm" 
+      onClick={() => handleDeleteExpense(editingExpense.id)} 
+      className="w-full sm:w-auto sm:order-1 shadow-sm"
+    >
+      Delete
+    </Button>
+  )}
+
+</div>
         </DialogContent>
       </Dialog>
 
@@ -572,14 +582,24 @@ export default function ExpenseTracker() {
             />
           </div>
 
-          <DialogFooter className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsBudgetDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button className="bg-blue-600 hover:bg-blue-400 text-white" onClick={handleSaveBudget}>
-              Save Budget
-            </Button>
-          </DialogFooter>
+          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+  <Button 
+    size="sm"
+    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+    onClick={handleSaveBudget}
+  >
+    Save Budget
+  </Button>
+
+  <Button 
+    variant="outline" 
+    size="sm"
+    onClick={() => setIsBudgetDialogOpen(false)} 
+    className="flex-1 shadow-sm font-semibold text-slate-700"
+  >
+    Cancel
+  </Button>
+</div>
         </DialogContent>
       </Dialog>
 

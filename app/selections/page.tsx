@@ -562,14 +562,23 @@ export default function SelectionsPage() {
               onChange={(e) => setTempBudgetVal(e.target.value)}
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsBudgetModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button className="bg-blue-600 hover:bg-blue-400 text-white" onClick={handleSaveBudget}>
-              Save Target
-            </Button>
-          </DialogFooter>
+          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+  <Button 
+    size="sm"
+    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+    onClick={handleSaveBudget}
+  >
+    Save Target
+  </Button>
+  <Button 
+    variant="outline" 
+    size="sm"
+    onClick={() => setIsBudgetModalOpen(false)} 
+    className="flex-1 shadow-sm font-semibold text-slate-700"
+  >
+    Cancel
+  </Button>
+</div>
         </DialogContent>
       </Dialog>
 
@@ -661,27 +670,42 @@ export default function SelectionsPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between sm:justify-between items-center mt-2">
-            {editingItem ? (
-              <Button variant="destructive" size="sm" onClick={handleDeleteItem}>
-                Delete
-              </Button>
-            ) : (
-              <div />
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                className="bg-blue-600 hover:bg-blue-400 text-white disabled:opacity-50" 
-                onClick={handleSaveItem}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Saving..." : editingItem ? "Save Changes" : "Add Selection"}
-              </Button>
-            </div>
-          </DialogFooter>
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+  
+  {/* 1. SAVE & CANCEL (Always side-by-side) */}
+  <div className="flex gap-2 w-full sm:order-2">
+    <Button 
+      size="sm"
+      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+      onClick={handleSaveItem}
+      disabled={isSubmitting}
+    >
+      {isSubmitting ? "Saving..." : editingItem ? "Save Changes" : "Add Selection"}
+    </Button>
+    
+    <Button 
+      variant="outline" 
+      size="sm"
+      onClick={() => setIsModalOpen(false)} 
+      className="flex-1 shadow-sm font-semibold text-slate-700"
+    >
+      Cancel
+    </Button>
+  </div>
+
+  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
+  {editingItem && (
+    <Button 
+      variant="destructive" 
+      size="sm" 
+      onClick={handleDeleteItem} 
+      className="w-full sm:w-auto sm:order-1 shadow-sm"
+    >
+      Delete
+    </Button>
+  )}
+
+</div>
         </DialogContent>
       </Dialog>
 

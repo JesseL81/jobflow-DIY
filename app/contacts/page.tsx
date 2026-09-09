@@ -307,23 +307,26 @@ export default function ContactsPage() {
                   </div>
                 </div>
 
-                <DialogFooter className="pt-2 flex gap-2 sm:justify-end mt-2 border-t border-slate-100 pt-4">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsModalOpen(false)}
-                    className="text-xs shadow-sm h-9"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="bg-blue-600 hover:bg-blue-400 text-white text-xs font-semibold px-4 disabled:opacity-50 shadow-sm h-9"
-                  >
-                    {isSubmitting ? "Saving..." : (editingId ? "Update Contact" : "Save Contact")}
-                  </Button>
-                </DialogFooter>
+                <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+  <Button 
+    type="submit"
+    size="sm"
+    disabled={isSubmitting}
+    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+  >
+    {isSubmitting ? "Saving..." : editingId ? "Update Contact" : "Save Contact"}
+  </Button>
+  
+  <Button 
+    type="button"
+    variant="outline" 
+    size="sm"
+    onClick={() => setIsModalOpen(false)} 
+    className="flex-1 shadow-sm font-semibold text-slate-700"
+  >
+    Cancel
+  </Button>
+</div>
               </form>
             </DialogContent>
           </Dialog>

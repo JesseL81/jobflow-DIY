@@ -906,25 +906,41 @@ export default function SchedulePage() {
 
           </div>
 
-          {/* FIXED ALWAYS-VISIBLE FOOTER */}
-          <DialogFooter className="pt-4 border-t shrink-0 flex justify-between items-center sm:justify-between">
-            {editingTask ? (
-              <Button variant="destructive" size="sm" onClick={handleDeleteTask} className="shadow-sm">
-                Delete Task
-              </Button>
-            ) : (
-              <div />
-            )}
+         <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+  
+  {/* 1. SAVE & CANCEL (Always side-by-side) */}
+  <div className="flex gap-2 w-full sm:order-2">
+    <Button 
+      size="sm"
+      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+      onClick={handleSaveModal} 
+    >
+      {editingTask ? "Update Task" : "Save Changes"}
+    </Button>
+    
+    <Button 
+      variant="outline" 
+      size="sm"
+      onClick={() => setIsDialogOpen(false)} 
+      className="flex-1 shadow-sm font-semibold text-slate-700"
+    >
+      Cancel
+    </Button>
+  </div>
 
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="shadow-sm">
-                Cancel
-              </Button>
-              <Button className="bg-blue-600 hover:bg-blue-400 text-white shadow-sm" onClick={handleSaveModal}>
-                {editingTask ? "Update Task" : "Save Changes"}
-              </Button>
-            </div>
-          </DialogFooter>
+  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
+  {editingTask && (
+    <Button 
+      variant="destructive" 
+      size="sm" 
+      onClick={handleDeleteTask} 
+      className="w-full sm:w-auto sm:order-1 shadow-sm"
+    >
+      Delete
+    </Button>
+  )}
+
+</div>
         </DialogContent>
       </Dialog>
       

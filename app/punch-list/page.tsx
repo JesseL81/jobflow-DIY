@@ -603,34 +603,42 @@ export default function PunchListPage() {
               />
             </div>
           </div>
+  
+  <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+  
+  {/* 1. SAVE & CANCEL (Always side-by-side) */}
+  <div className="flex gap-2 w-full sm:order-2">
+    <Button 
+      size="sm"
+      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+      onClick={handleSaveItem} 
+    >
+      {editingItem ? "Save Changes" : "Add Task"}
+    </Button>
+    
+    <Button 
+      variant="outline" 
+      size="sm"
+      onClick={() => setIsModalOpen(false)} 
+      className="flex-1 shadow-sm font-semibold text-slate-700"
+    >
+      Cancel
+    </Button>
+  </div>
 
-          {/* FOOTER */}
-          <DialogFooter className="px-6 py-4 bg-slate-50 border-t border-slate-200 shrink-0 flex flex-col sm:flex-row items-center sm:justify-between gap-3 sm:space-x-0 w-full">
-            {editingItem ? (
-              <Button variant="destructive" size="sm" onClick={() => handleDeleteItem()} className="shadow-sm w-full sm:w-auto">
-                Delete Task
-              </Button>
-            ) : (
-              <div className="hidden sm:block" />
-            )}
-            <div className="flex flex-row gap-3 w-full sm:w-auto">
-              <Button 
-                size="sm"
-                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-                onClick={handleSaveItem}
-              >
-                {editingItem ? "Save Changes" : "Add Task"}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setIsModalOpen(false)} 
-                className="flex-1 sm:flex-none shadow-sm font-semibold text-slate-700"
-              >
-                Cancel
-              </Button>
-            </div>
-          </DialogFooter>
+  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
+  {editingItem && (
+    <Button 
+      variant="destructive" 
+      size="sm" 
+      onClick={handleDeleteItem} 
+      className="w-full sm:w-auto sm:order-1 shadow-sm"
+    >
+      Delete
+    </Button>
+  )}
+
+</div>
         </DialogContent>
       </Dialog>
 
