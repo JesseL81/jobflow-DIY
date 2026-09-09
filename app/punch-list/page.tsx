@@ -604,7 +604,7 @@ export default function PunchListPage() {
             </div>
           </div>
   
-  <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+  <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 pb-2 border-t border-slate-100">
   
   {/* 1. SAVE & CANCEL (Always side-by-side) */}
   <div className="flex gap-2 w-full sm:order-2">
