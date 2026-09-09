@@ -498,41 +498,33 @@ export default function PunchListPage() {
                 </div>
                 
                 <div className="w-full">
-                  {isLinked ? (
-                    <select
-                      value={linkedTaskId}
-                      onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
-                      className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none ${linkedTaskId === "" ? "text-slate-500" : "text-slate-900"}`}
-                    >
-                      <option value="" disabled>Select calendar task...</option>
-                      {calendarTasks.length === 0 && (
-                        <option disabled>No calendar tasks found</option>
-                      )}
-                      {calendarTasks.map(t => (
-                        <option key={t.id} value={t.id} className="text-slate-900">
-                          {t.title} ({formatDisplayDate(t.endDate)})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="relative w-full">
-                      <Input 
-                        id="task-date" 
-                        type="date"
-                        value={formDueDate} 
-                        onChange={(e) => setFormDueDate(e.target.value)} 
-                        className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none pr-8 relative z-10 bg-transparent"
-                      />
-                      {!formDueDate && (
-                        <div className="absolute inset-y-1 left-1 right-10 bg-white flex items-center pl-2 pointer-events-none z-0">
-                          <span className="text-slate-500 text-sm">Due Date...</span>
-                        </div>
-                      )}
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-base z-20">
-                        📅
-                      </span>
-                    </div>
-                  )}
+  {isLinked ? (
+    <select
+      value={linkedTaskId}
+      onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
+      className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none ${linkedTaskId === "" ? "text-slate-500" : "text-slate-900"}`}
+    >
+      <option value="" disabled>Select calendar task...</option>
+      {calendarTasks.length === 0 && (
+        <option disabled>No calendar tasks found</option>
+      )}
+      {calendarTasks.map(t => (
+        <option key={t.id} value={t.id} className="text-slate-900">
+          {t.title} ({formatDisplayDate(t.endDate)})
+        </option>
+      ))}
+    </select>
+  ) : (
+    <Input 
+      id="task-date" 
+      type="date"
+      value={formDueDate} 
+      onChange={(e) => setFormDueDate(e.target.value)} 
+      className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+    />
+  )}
+</div>
+
                 </div>
                 
                 {isLinked && linkedTaskId !== "" && (
@@ -602,7 +594,6 @@ export default function PunchListPage() {
                 className="w-full mt-1 p-2.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
               />
             </div>
-          </div>
   
   <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 pb-2 border-t border-slate-100">
   
