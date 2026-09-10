@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-// Helper required for Push Notifications
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/")
@@ -38,26 +37,59 @@ export default function SettingsPage() {
   const [isInviting, setIsInviting] = useState(false)
   const [activePartner, setActivePartner] = useState<{ email: string, status: string } | null>(null)
   
-  // Upgraded 3-Tier Permissions State
+  // Share Link State
+  const [inviteLink, setInviteLink] = useState("")
+  const [copied, setCopied] = useState(false)
+  
   const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({
     schedule: "edit",
     punch_list: "edit",
     vision_board: "edit",
-    expenses: "hidden", // Default hidden for safety
+    expenses: "hidden", 
     selections: "edit",
     contacts: "edit",
   })
 
+  // 🔥 UPDATED: Now checks the database on page load for existing invites
   useEffect(() => {
-    const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      if (data?.user?.email) {
-        setUserEmail(data.user.email)
+    const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        setUserEmail(user.email)
+        
+        // Check for an existing project folder
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("owner_id", user.id)
+          .single()
+
+        if (project) {
+          // If a folder exists, check for an existing partner
+          const { data: members } = await supabase
+            .from("project_members")
+            .select("*")
+            .eq("project_id", project.id)
+
+          if (members && members.length > 0) {
+            const partner = members[0]
+            setActivePartner({ email: partner.invite_email, status: partner.status || "Pending" })
+            
+            if (partner.permissions) {
+              setPermissions(partner.permissions)
+            }
+
+            // Regenerate the link if they are pending
+            if (partner.status?.includes("Pending")) {
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
+              setInviteLink(`${baseUrl}/login?invite=${encodeURIComponent(partner.invite_email)}`)
+            }
+          }
+        }
       }
     }
-    fetchUser()
+    fetchUserData()
 
-    // Check Push Subscription Status
     if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
       navigator.serviceWorker.ready.then((registration) => {
         registration.pushManager.getSubscription().then((subscription) => {
@@ -214,10 +246,8 @@ export default function SettingsPage() {
     setIsInviting(true)
     
     try {
-      // 1. Get the current user's secure token
       const { data: { session } } = await supabase.auth.getSession()
       
-      // 2. Fire the data to our new API route
       const response = await fetch("/api/invite", {
         method: "POST",
         headers: {
@@ -232,14 +262,15 @@ export default function SettingsPage() {
 
       const result = await response.json()
 
-      // 3. Handle limit errors or database issues
       if (!response.ok) {
         alert(`Error: ${result.error}`)
         setIsInviting(false)
         return
       }
 
-      // 4. Success! Update the UI
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
+      setInviteLink(`${baseUrl}/login?invite=${encodeURIComponent(inviteEmail)}`)
+      
       setActivePartner({ email: inviteEmail, status: "Pending (Invite Sent)" })
       setInviteEmail("")
     } catch (error) {
@@ -250,16 +281,52 @@ export default function SettingsPage() {
     }
   }
 
-  const handleRevokeAccess = () => {
+  // 🔥 UPDATED: Now deletes the partner from the actual database
+  const handleRevokeAccess = async () => {
     const isConfirmed = window.confirm("Are you sure you want to remove this partner? They will immediately lose access to this project.")
-    if (isConfirmed) {
-      setActivePartner(null)
+    if (isConfirmed && activePartner) {
+      try {
+        const { error } = await supabase
+          .from("project_members")
+          .delete()
+          .eq("invite_email", activePartner.email)
+
+        if (error) throw error
+
+        setActivePartner(null)
+        setInviteLink("")
+      } catch (error) {
+        console.error("Revoke Error:", error)
+        alert("Failed to remove partner from the database.")
+      }
     }
   }
 
-  const handlePermissionChange = (key: string, value: PermissionLevel) => {
-    setPermissions(prev => ({ ...prev, [key]: value }))
-    // If activePartner exists, we would normally trigger an auto-save to Supabase here!
+  // 🔥 UPDATED: Changing permissions now auto-saves to the database
+  const handlePermissionChange = async (key: string, value: PermissionLevel) => {
+    const newPermissions = { ...permissions, [key]: value }
+    setPermissions(newPermissions)
+
+    if (activePartner) {
+      const { error } = await supabase
+        .from("project_members")
+        .update({ permissions: newPermissions })
+        .eq("invite_email", activePartner.email)
+
+      if (error) {
+        console.error("Permission Update Error:", error)
+      }
+    }
+  }
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy", err)
+    }
   }
 
   return (
@@ -304,19 +371,38 @@ export default function SettingsPage() {
               {/* STATE 1: ACTIVE OR PENDING PARTNER */}
               {activePartner ? (
                 <div className="space-y-5">
-                  <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-3 rounded-lg">
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">{activePartner.email}</p>
-                      <p className="text-xs font-semibold text-blue-600 mt-0.5">{activePartner.status}</p>
+                  <div className="flex flex-col gap-3 bg-blue-50 border border-blue-100 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{activePartner.email}</p>
+                        <p className="text-xs font-semibold text-blue-600 mt-0.5">{activePartner.status}</p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleRevokeAccess}
+                        className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 h-8 text-xs font-bold shadow-sm"
+                      >
+                        Revoke
+                      </Button>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleRevokeAccess}
-                      className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 h-8 text-xs font-bold shadow-sm"
-                    >
-                      Revoke
-                    </Button>
+
+                    {/* COPY LINK SECTION */}
+                    {inviteLink && activePartner.status.includes("Pending") && (
+                      <div className="pt-3 border-t border-blue-100 flex items-center gap-2">
+                        <Input 
+                          readOnly 
+                          value={inviteLink} 
+                          className="h-8 text-xs bg-white text-slate-500 font-medium" 
+                        />
+                        <Button 
+                          onClick={handleCopyLink}
+                          className="h-8 shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold w-24"
+                        >
+                          {copied ? "Copied! ✅" : "Copy Link"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3">
