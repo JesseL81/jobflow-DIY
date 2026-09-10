@@ -97,7 +97,7 @@ export async function POST(request: Request) {
               Click the button below to log in or create an account to accept the invitation and access the project data.
             </p>
             <div style="margin-top: 30px; margin-bottom: 30px;">
-              <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login" 
+              <a href="https://diy.cleanbuild.us/login" 
                  style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
                 Join the Project
               </a>
