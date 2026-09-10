@@ -21,6 +21,8 @@ const urlBase64ToUint8Array = (base64String: string) => {
   return outputArray
 }
 
+type PermissionLevel = "edit" | "read-only" | "hidden"
+
 export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState<string>("")
   const [isPushEnabled, setIsPushEnabled] = useState(false)
@@ -30,6 +32,21 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" })
+
+  // --- Collaboration State ---
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [isInviting, setIsInviting] = useState(false)
+  const [activePartner, setActivePartner] = useState<{ email: string, status: string } | null>(null)
+  
+  // Upgraded 3-Tier Permissions State
+  const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({
+    schedule: "edit",
+    punch_list: "edit",
+    vision_board: "edit",
+    expenses: "hidden", // Default hidden for safety
+    selections: "edit",
+    contacts: "edit",
+  })
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -89,7 +106,6 @@ export default function SettingsPage() {
 
     try {
       const registration = await navigator.serviceWorker.getRegistration()
-      
       if (!registration) {
         alert("Service Worker is offline. Push notifications require the live Vercel site (HTTPS) or a local production build to function.")
         return
@@ -192,6 +208,60 @@ export default function SettingsPage() {
     }
   }
 
+  // --- Handlers for Collaboration ---
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsInviting(true)
+    
+    try {
+      // 1. Get the current user's secure token
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      // 2. Fire the data to our new API route
+      const response = await fetch("/api/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          email: inviteEmail,
+          permissions: permissions
+        })
+      })
+
+      const result = await response.json()
+
+      // 3. Handle limit errors or database issues
+      if (!response.ok) {
+        alert(`Error: ${result.error}`)
+        setIsInviting(false)
+        return
+      }
+
+      // 4. Success! Update the UI
+      setActivePartner({ email: inviteEmail, status: "Pending (Invite Sent)" })
+      setInviteEmail("")
+    } catch (error) {
+      console.error("Invite Error:", error)
+      alert("Failed to send invite. Please check your connection.")
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
+  const handleRevokeAccess = () => {
+    const isConfirmed = window.confirm("Are you sure you want to remove this partner? They will immediately lose access to this project.")
+    if (isConfirmed) {
+      setActivePartner(null)
+    }
+  }
+
+  const handlePermissionChange = (key: string, value: PermissionLevel) => {
+    setPermissions(prev => ({ ...prev, [key]: value }))
+    // If activePartner exists, we would normally trigger an auto-save to Supabase here!
+  }
+
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
@@ -216,11 +286,128 @@ export default function SettingsPage() {
         
         {/* Left Column */}
         <div className="space-y-6">
-          <Card className="bg-white border shadow-sm rounded-xl">
-            <CardHeader className="pb-4 border-b border-slate-100">
-              <CardTitle className="text-lg font-bold">Account & Security</CardTitle>
-              <CardDescription className="text-xs">
-                Logged in as: <strong className="text-slate-900">{userEmail}</strong>
+          
+          {/* Project Collaboration Card */}
+          <Card className="bg-white border border-blue-200 shadow-sm rounded-xl overflow-hidden">
+            <CardHeader className="pb-4 border-b border-blue-200 bg-blue-100">
+              <CardTitle className="text-lg font-bold flex items-center gap-2 text-blue-950">
+                🤝 Project Collaboration
+              </CardTitle>
+              <CardDescription className="text-xs text-blue-700/80">
+                {activePartner 
+                  ? "Manage access for your project partner." 
+                  : "Invite one partner or co-owner to share this project with you."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-5">
+              
+              {/* STATE 1: ACTIVE OR PENDING PARTNER */}
+              {activePartner ? (
+                <div className="space-y-5">
+                  <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-3 rounded-lg">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{activePartner.email}</p>
+                      <p className="text-xs font-semibold text-blue-600 mt-0.5">{activePartner.status}</p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleRevokeAccess}
+                      className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 h-8 text-xs font-bold shadow-sm"
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Manage Permissions</Label>
+                    <div className="grid gap-3 pt-1">
+                      {Object.keys(permissions).map((key) => {
+                        const typedKey = key as keyof typeof permissions;
+                        const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                        
+                        return (
+                          <div key={key} className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-semibold text-slate-700 w-1/3">
+                              {label}
+                            </span>
+                            <select
+                              value={permissions[typedKey]}
+                              onChange={(e) => handlePermissionChange(typedKey, e.target.value as PermissionLevel)}
+                              className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
+                            >
+                              <option value="edit">Full Access (Edit)</option>
+                              <option value="read-only">Read-Only (View)</option>
+                              <option value="hidden">Hidden</option>
+                            </select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+              ) : (
+                
+                /* STATE 2: INVITE FORM */
+                <form onSubmit={handleSendInvite} className="space-y-5">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Partner Email Address</Label>
+                    <Input 
+                      type="email" 
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      className="h-9 text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Starting Permissions</Label>
+                    <div className="grid gap-3 pt-1">
+                      {Object.keys(permissions).map((key) => {
+                        const typedKey = key as keyof typeof permissions;
+                        const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                        
+                        return (
+                          <div key={key} className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-semibold text-slate-700 w-1/3">
+                              {label}
+                            </span>
+                            <select
+                              value={permissions[typedKey]}
+                              onChange={(e) => handlePermissionChange(typedKey, e.target.value as PermissionLevel)}
+                              className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
+                            >
+                              <option value="edit">Full Access (Edit)</option>
+                              <option value="read-only">Read-Only (View)</option>
+                              <option value="hidden">Hidden</option>
+                            </select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <Button 
+                    type="submit" 
+                    disabled={isInviting || !inviteEmail}
+                    className="w-full bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold h-10 mt-2"
+                  >
+                    {isInviting ? "Sending..." : "Send Invite Link"}
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Account & Security Card */}
+          <Card className="bg-white border border-emerald-200 shadow-sm rounded-xl overflow-hidden">
+            <CardHeader className="pb-4 border-b border-emerald-200 bg-emerald-100">
+              <CardTitle className="text-lg font-bold text-emerald-950">Account & Security</CardTitle>
+              <CardDescription className="text-xs text-emerald-700">
+                Logged in as: <strong className="text-emerald-950">{userEmail}</strong>
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
@@ -266,10 +453,12 @@ export default function SettingsPage() {
 
         {/* Right Column */}
         <div className="space-y-6">
-          <Card className="bg-white border shadow-sm rounded-xl">
-            <CardHeader className="pb-4 border-b border-slate-100">
-              <CardTitle className="text-lg font-bold">Device Notifications</CardTitle>
-              <CardDescription className="text-xs">
+          
+          {/* Device Notifications Card */}
+          <Card className="bg-white border border-amber-200 shadow-sm rounded-xl overflow-hidden">
+            <CardHeader className="pb-4 border-b border-amber-200 bg-amber-100">
+              <CardTitle className="text-lg font-bold text-amber-950 flex items-center gap-2">📱 Device Notifications</CardTitle>
+              <CardDescription className="text-xs text-amber-700">
                 Receive daily task reminders directly on this specific device.
               </CardDescription>
             </CardHeader>
@@ -287,9 +476,10 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white border shadow-sm rounded-xl border-rose-100">
-            <CardHeader className="pb-4 border-b border-rose-100 bg-rose-50/30 rounded-t-xl">
-              <CardTitle className="text-lg font-bold text-rose-900">Danger Zone</CardTitle>
+          {/* Danger Zone Card */}
+          <Card className="bg-white border border-rose-200 shadow-sm rounded-xl overflow-hidden">
+            <CardHeader className="pb-4 border-b border-rose-200 bg-rose-100">
+              <CardTitle className="text-lg font-bold text-rose-900 flex items-center gap-2">⚠️ Danger Zone</CardTitle>
               <CardDescription className="text-xs text-rose-700">
                 Manage your raw database and project state.
               </CardDescription>
