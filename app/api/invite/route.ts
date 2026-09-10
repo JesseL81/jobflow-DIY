@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // 4. FIX: Extract the raw token and explicitly hand it to Supabase so it knows who you are!
+    // 4. Extract the raw token and explicitly hand it to Supabase so it knows who you are
     const token = authHeader.replace("Bearer ", "")
     const { data: authData, error: authError } = await supabase.auth.getUser(token)
     
@@ -30,14 +30,25 @@ export async function POST(request: Request) {
     const userId = authData.user.id
     
     // 5. Find the master project belonging to the primary user
-    const { data: project } = await supabase
+    let { data: project } = await supabase
       .from("projects")
       .select("id")
       .eq("owner_id", userId)
       .single()
 
+    // 🔥 NEW: Auto-create the project folder if they don't have one!
     if (!project) {
-      return NextResponse.json({ error: "Master project folder not found." }, { status: 404 })
+      const { data: newProject, error: createError } = await supabase
+        .from("projects")
+        .insert({ owner_id: userId, project_name: "My Home Build" })
+        .select("id")
+        .single()
+        
+      if (createError || !newProject) {
+        console.error("Project Creation Error:", createError)
+        return NextResponse.json({ error: "Failed to generate master project folder." }, { status: 500 })
+      }
+      project = newProject
     }
 
     // 6. Enforce the 1-Partner Limit
