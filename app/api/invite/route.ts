@@ -12,17 +12,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 })
     }
 
-    // 3. Connect to Supabase securely using that specific token
+    // 3. Connect to Supabase securely
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // 4. Find the master project belonging to the primary user
-    const { data: authData } = await supabase.auth.getUser()
-    const userId = authData?.user?.id
+    // 4. FIX: Extract the raw token and explicitly hand it to Supabase so it knows who you are!
+    const token = authHeader.replace("Bearer ", "")
+    const { data: authData, error: authError } = await supabase.auth.getUser(token)
     
+    if (authError || !authData?.user?.id) {
+      return NextResponse.json({ error: "Could not verify your account token." }, { status: 401 })
+    }
+    
+    const userId = authData.user.id
+    
+    // 5. Find the master project belonging to the primary user
     const { data: project } = await supabase
       .from("projects")
       .select("id")
@@ -33,7 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Master project folder not found." }, { status: 404 })
     }
 
-    // 5. Enforce the 1-Partner Limit
+    // 6. Enforce the 1-Partner Limit
     const { data: members } = await supabase
       .from("project_members")
       .select("id")
@@ -43,7 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Limit reached. You can only share this project with one partner." }, { status: 400 })
     }
 
-    // 6. Save the invite to the database
+    // 7. Save the invite to the database
     const { error: insertError } = await supabase
       .from("project_members")
       .insert({
