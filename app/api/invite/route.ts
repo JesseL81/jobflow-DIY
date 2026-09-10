@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       .eq("owner_id", userId)
       .single()
 
-    // 🔥 NEW: Auto-create the project folder if they don't have one!
+    // 🔥 Auto-create the project folder if they don't have one!
     if (!project) {
       const { data: newProject, error: createError } = await supabase
         .from("projects")
@@ -46,7 +46,8 @@ export async function POST(request: Request) {
         
       if (createError || !newProject) {
         console.error("Project Creation Error:", createError)
-        return NextResponse.json({ error: "Failed to generate master project folder." }, { status: 500 })
+        // This will now output the exact database error to your screen!
+        return NextResponse.json({ error: `Database blocked folder creation: ${createError?.message}` }, { status: 500 })
       }
       project = newProject
     }
@@ -71,7 +72,10 @@ export async function POST(request: Request) {
         permissions: permissions
       })
 
-    if (insertError) throw insertError
+    if (insertError) {
+      console.error("Invite Insert Error:", insertError)
+      return NextResponse.json({ error: `Database blocked invite creation: ${insertError.message}` }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
 
