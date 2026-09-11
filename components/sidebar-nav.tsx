@@ -107,8 +107,10 @@ export default function SidebarNav() {
           .eq("status", "Active")
 
         if (shared) {
-          shared.forEach(member => {
-            const ownerId = member.projects?.owner_id
+          shared.forEach((member: any) => {
+            // Safely extract the owner_id whether Supabase returns an object or an array
+            const ownerId = member.projects?.owner_id || member.projects?.[0]?.owner_id
+            
             if (ownerId) {
               availableWorkspaces.push({ id: ownerId, name: "🤝 Shared Build", isOwner: false })
             }
