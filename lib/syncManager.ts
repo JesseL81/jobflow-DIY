@@ -20,29 +20,25 @@ export const ALL_STORE_KEYS = [
 export const syncManager = {
   async pushToCloud(storeKey: string, data: any) {
     try {
-      // 1. Check offline status BEFORE attempting a network call
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         console.warn(`✈️ Offline: Queuing ${storeKey} for cloud sync.`)
         await set(`dirty_${storeKey}`, true)
         return
       }
 
-      // 2. 🔥 NEW: Use the Master Router to get the correct target ID
-      const { data: masterId, error: rpcError } = await supabase.rpc("get_master_user_id")
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData?.user?.id) return
 
-      if (rpcError || !masterId) {
-        console.warn(`Cloud push aborted: No valid master route found for ${storeKey}`)
-        return
-      }
+      // 🔥 Pull the target workspace from localStorage (defaults to their own ID)
+      const targetWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || userData.user.id
 
-      // 3. Update using the masterId
       const { data: existingData, error: updateError } = await supabase
         .from("cloud_sync")
         .update({
           data: data,
           updated_at: new Date().toISOString(),
         })
-        .eq("user_id", masterId)
+        .eq("user_id", targetWorkspaceId)
         .eq("store_key", storeKey)
         .select()
 
@@ -52,7 +48,7 @@ export const syncManager = {
         const { error: insertError } = await supabase
           .from("cloud_sync")
           .insert({
-            user_id: masterId,
+            user_id: targetWorkspaceId,
             store_key: storeKey,
             data: data,
           })
@@ -80,15 +76,16 @@ export const syncManager = {
 
     if (typeof navigator !== "undefined" && !navigator.onLine) return null
 
-    // 🔥 NEW: Use the Master Router to pull from the correct target ID
-    const { data: masterId, error: rpcError } = await supabase.rpc("get_master_user_id")
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData?.user?.id) return null
 
-    if (rpcError || !masterId) return null
+    // 🔥 Pull the target workspace from localStorage (defaults to their own ID)
+    const targetWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || userData.user.id
 
     const { data, error } = await supabase
       .from("cloud_sync")
       .select("data")
-      .eq("user_id", masterId)
+      .eq("user_id", targetWorkspaceId)
       .eq("store_key", storeKey)
       .maybeSingle()
 
@@ -98,7 +95,6 @@ export const syncManager = {
     return data.data
   },
 
-  // Flushes all queued offline changes across the entire app
   async flushAllDirty() {
     if (typeof navigator !== "undefined" && !navigator.onLine) return
 
@@ -107,7 +103,6 @@ export const syncManager = {
       if (isDirty) {
         const localData = await get(key)
         if (localData !== undefined) {
-          console.log(`📡 Auto-syncing offline changes for ${key}...`)
           await this.pushToCloud(key, localData)
         }
       }
@@ -115,10 +110,8 @@ export const syncManager = {
   },
 }
 
-// Global Reconnection Listener: Runs automatically when internet restores
 if (typeof window !== "undefined") {
   window.addEventListener("online", () => {
-    console.log("🌐 Internet restored! Flushing queued offline data...")
     syncManager.flushAllDirty()
   })
 }

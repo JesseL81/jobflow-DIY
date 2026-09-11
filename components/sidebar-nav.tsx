@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { syncManager } from "@/lib/syncManager"
 import { supabase } from "@/lib/supabase"
+import { clear } from "idb-keyval"
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
@@ -20,7 +21,6 @@ const navItems = [
   { label: "Logo Showcase", href: "/logo-preview", icon: "🎨" },
 ]
 
-// Map the specific routes to their database permission keys
 const routeToPermissionKey: Record<string, string> = {
   "/schedule": "schedule",
   "/punch-list": "punch_list",
@@ -30,7 +30,8 @@ const routeToPermissionKey: Record<string, string> = {
   "/contacts": "contacts",
 }
 
-// Integrated CleanBuild Logo - Transparent Background
+type Workspace = { id: string; name: string; isOwner: boolean }
+
 function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -57,17 +58,19 @@ function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGE
 export default function SidebarNav() {
   const pathname = usePathname()
   
-  // Project Name State
   const [projectName, setProjectName] = useState("My Project")
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState("")
 
-  // 🔥 NEW: Collaboration & Permissions State
   const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
   const [isGuest, setIsGuest] = useState(false)
   const [isNavLoading, setIsNavLoading] = useState(true)
 
-  // 1. Fetch Project Name
+  // 🔥 NEW: Workspace State
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
+  const [isSwitching, setIsSwitching] = useState(false)
+
   useEffect(() => {
     const savedName = localStorage.getItem("cleanbuild_project_name")
     if (savedName) setProjectName(savedName)
@@ -80,51 +83,71 @@ export default function SidebarNav() {
           localStorage.setItem("cleanbuild_project_name", cloudName)
           window.dispatchEvent(new Event("project-name-updated"))
         }
-      } catch (e) {
-        console.error("Failed to verify project name with cloud:", e)
-      }
+      } catch (e) {}
     }
     verifyCloudName()
   }, [])
 
-  // 2. 🔥 NEW: Fetch Permissions on Load
+  // 🔥 Fetch Workspaces & Permissions
   useEffect(() => {
-    const fetchPermissions = async () => {
+    const fetchCoreData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        // Check if Owner
-        const { data: project } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("owner_id", user.id)
-          .single()
+        // 1. Build Workspace List
+        let availableWorkspaces: Workspace[] = [
+          { id: user.id, name: "🏠 My Build", isOwner: true }
+        ]
 
-        if (project) {
-          setIsGuest(false)
+        const { data: shared } = await supabase
+          .from("project_members")
+          .select("project_id, projects(owner_id)")
+          .eq("user_id", user.id)
+          .eq("status", "Active")
+
+        if (shared) {
+          shared.forEach(member => {
+            const ownerId = member.projects?.owner_id
+            if (ownerId) {
+              availableWorkspaces.push({ id: ownerId, name: "🤝 Shared Build", isOwner: false })
+            }
+          })
+        }
+        setWorkspaces(availableWorkspaces)
+
+        // 2. Set Active Workspace
+        let currentWorkspaceId = localStorage.getItem("cleanbuild_active_workspace")
+        if (!currentWorkspaceId || !availableWorkspaces.find(w => w.id === currentWorkspaceId)) {
+          currentWorkspaceId = user.id
+          localStorage.setItem("cleanbuild_active_workspace", user.id)
+        }
+        setActiveWorkspaceId(currentWorkspaceId)
+
+        // 3. Set Permissions based on Active Workspace
+        if (currentWorkspaceId === user.id) {
+          setIsGuest(false) // You own this workspace
         } else {
-          // Check if Guest
+          // You are a guest in this workspace, fetch your exact permissions
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
-            .eq("invite_email", user.email)
+            .eq("user_id", user.id)
+            .eq("status", "Active")
             .single()
 
-          if (guestInvite) {
+          if (guestInvite?.permissions) {
             setIsGuest(true)
-            if (guestInvite.permissions) {
-              setPermissions(guestInvite.permissions)
-            }
+            setPermissions(guestInvite.permissions)
           }
         }
       } catch (error) {
-        console.error("Failed to load navigation permissions:", error)
+        console.error("Failed to load navigation data:", error)
       } finally {
         setIsNavLoading(false)
       }
     }
-    fetchPermissions()
+    fetchCoreData()
   }, [])
 
   const handleSaveProjectName = async () => {
@@ -140,23 +163,64 @@ export default function SidebarNav() {
     setIsEditingName(false)
   }
 
-  // 🔥 NEW: Dynamically filter links before rendering
+  // 🔥 Perform the Hard Switch
+  const handleWorkspaceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newWorkspaceId = e.target.value
+    if (newWorkspaceId === activeWorkspaceId) return
+
+    setIsSwitching(true)
+    
+    // 1. Wipe the local offline cache so old project data doesn't leak
+    await clear()
+    
+    // 2. Set the new pointer
+    localStorage.setItem("cleanbuild_active_workspace", newWorkspaceId)
+    localStorage.removeItem("cleanbuild_project_name")
+    
+    // 3. Hard reload to boot up the new project state cleanly
+    window.location.href = "/"
+  }
+
   const visibleNavItems = navItems.filter((item) => {
-    if (!isGuest) return true // Owners see all links
-    if (!permissions) return true // Fallback just in case
+    if (!isGuest) return true 
+    if (!permissions) return true 
     
     const permKey = routeToPermissionKey[item.href]
-    if (!permKey) return true // Pages without specific toggles (Dashboard, Settings) are always visible
+    if (!permKey) return true 
     
     return permissions[permKey] !== "hidden"
   })
 
   return (
-    <div className="w-full flex flex-col h-full">
+    <div className="w-full flex flex-col h-full relative">
+      
+      {/* Loading Overlay when switching projects */}
+      {isSwitching && (
+        <div className="absolute inset-0 bg-slate-900/80 z-50 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400"></div>
+        </div>
+      )}
+
+      {/* Workspace Dropdown Switcher */}
+      {workspaces.length > 1 && (
+        <div className="px-4 pt-4 pb-2 shrink-0">
+          <select
+            value={activeWorkspaceId}
+            onChange={handleWorkspaceChange}
+            className="w-full bg-slate-800 text-white text-xs font-bold py-1.5 px-3 rounded-md border border-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-orange-400 appearance-none cursor-pointer"
+          >
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute right-7 top-[22px] text-slate-400 text-[10px]">▼</div>
+        </div>
+      )}
+
       {/* Brand Header */}
-      <div className="px-4 pt-2 pb-5 flex flex-col gap-4 shrink-0">
-        
-        {/* Top Row: Logo & Name perfectly inline */}
+      <div className={`px-4 pb-5 flex flex-col gap-4 shrink-0 ${workspaces.length > 1 ? 'pt-2' : 'pt-4'}`}>
         <div className="flex items-center gap-3">
           <LogoCBBlock className="h-10 w-10 shrink-0 drop-shadow-md" />
           <h1 className="text-2xl font-extrabold tracking-tight text-white leading-none">
@@ -164,9 +228,8 @@ export default function SidebarNav() {
           </h1>
         </div>
         
-        {/* Bottom Row: Editable Project Name */}
         <div className="flex items-center group h-7 mt-2">
-          {isEditingName ? (
+          {isEditingName && !isGuest ? (
             <input
               autoFocus
               value={tempName}
@@ -181,32 +244,31 @@ export default function SidebarNav() {
               <span className="text-base font-bold text-slate-200 truncate max-w-[160px]" title={projectName}>
                 {projectName}
               </span>
-              <button 
-                onClick={() => { setTempName(projectName); setIsEditingName(true); }}
-                className="opacity-0 group-hover:opacity-100 ml-2 text-sm text-slate-500 hover:text-orange-400 transition-opacity"
-                title="Edit Project Name"
-              >
-                ✏️
-              </button>
+              {!isGuest && (
+                <button 
+                  onClick={() => { setTempName(projectName); setIsEditingName(true); }}
+                  className="opacity-0 group-hover:opacity-100 ml-2 text-sm text-slate-500 hover:text-orange-400 transition-opacity"
+                  title="Edit Project Name"
+                >
+                  ✏️
+                </button>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* Explicit, Foolproof Bold Orange Line */}
       <div className="mx-4 mb-4 h-[3px] bg-orange-500 rounded-full shrink-0" />
 
       {/* Navigation Links */}
       <nav className="space-y-1.5 text-sm font-medium px-2 flex-1 overflow-y-auto pb-4">
         {isNavLoading ? (
-          // Brief skeleton loader to prevent links from flashing on screen
           <div className="flex justify-center py-6">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-400"></div>
           </div>
         ) : (
           visibleNavItems.map((item) => {
             const isActive = pathname === item.href
-
             return (
               <Link
                 key={item.href}
@@ -225,7 +287,6 @@ export default function SidebarNav() {
         )}
       </nav>
 
-      {/* Version Tracker at the Bottom */}
       <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0 border-t border-slate-800/80">
         <span className="text-[11px] font-bold text-slate-600 tracking-widest uppercase">
           CleanBuild v1.00
