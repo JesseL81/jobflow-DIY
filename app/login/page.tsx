@@ -1,183 +1,139 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-// Integrated CleanBuild Logo (Option 13) - Transparent Background
-function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <path d="M20 38L50 20L80 38L50 56L20 38Z" fill="#FF8C00"/>
-      <path d="M20 38V68L50 85V56L20 38Z" fill="#C2410C"/>
-      <path d="M80 38V68L50 85V56L80 38Z" fill="#FF6B00"/>
-      <path
-        d="M44 50.4L33 43.8C28.5 41.1 26 44 26 49.5V58.5C26 64 28.5 66.9 33 69.6L44 76.2"
-        stroke="#FFFFFF"
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <g stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
-        <line x1="56" y1="52.6" x2="56" y2="75" />
-        <path d="M56 52.6L68 45.4C72.5 42.7 75 44.5 75 48.5C75 52.5 72.5 55.5 68 58.2L56 65.4" />
-        <path d="M56 65.4L69 57.6C73.5 54.9 76 56.7 76 60.7C76 64.7 73.5 67.7 69 70.4L56 78.2" />
-      </g>
-    </svg>
-  );
-}
-
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
+  const [view, setView] = useState<"login" | "signup" | "reset">("login")
   const [loading, setLoading] = useState(false)
-  const [errorMessage, setErrorMessage] = useState("")
-  const [isSignUp, setIsSignUp] = useState(false)
-  const [successMessage, setSuccessMessage] = useState("")
+  const [message, setMessage] = useState({ type: "", text: "" })
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setErrorMessage("")
-    setSuccessMessage("")
+    setMessage({ type: "", text: "" })
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`
-        }
-      })
-      
-      if (error) {
-        setErrorMessage(error.message)
-      } else {
-        setSuccessMessage("Account created! Please check your email to confirm your account before signing in.")
-        setIsSignUp(false) // Flip back to sign-in mode automatically
-        setPassword("") // Clear the password for security
+    try {
+      if (view === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        })
+        if (error) throw error
+        setMessage({ type: "success", text: "Success! You can now sign in." })
+        setView("login")
+      } else if (view === "login") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (error) throw error
+        window.location.href = "/" 
+      } else if (view === "reset") {
+        // 🔥 This sends the reset email and routes them to the Settings page to create a new password
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/settings`,
+        })
+        if (error) throw error
+        setMessage({ type: "success", text: "Password reset link sent to your email!" })
       }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setErrorMessage(error.message)
-      } else {
-        router.push("/") // Redirect straight to the Dashboard on successful login
-      }
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
-    <main className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-slate-100">
-      <Card className="w-full max-w-md bg-slate-800 border-slate-700 text-white shadow-xl rounded-2xl">
-        <CardHeader className="space-y-4 text-center pb-6">
-          
-          {/* Logo & Name on the same line */}
-          <div className="flex flex-row items-center justify-center gap-3">
-            <LogoCBBlock className="h-14 w-14 shrink-0 drop-shadow-md" />
-            <CardTitle className="text-3xl font-extrabold tracking-tight text-white leading-none">
-              Clean<span className="text-orange-400">Build</span>
-            </CardTitle>
-          </div>
-
-          <CardDescription className="text-slate-400 text-sm font-medium">
-            {isSignUp ? "Create your secure account" : "Sign in to access your job site data"}
+    <main className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+      <Card className="w-full max-w-md bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+        <CardHeader className="pb-4 border-b border-slate-200 bg-slate-50">
+          <CardTitle className="text-xl font-bold text-slate-900">
+            {view === "login" ? "Welcome Back" : view === "signup" ? "Create an Account" : "Reset Password"}
+          </CardTitle>
+          <CardDescription className="text-sm text-slate-600">
+            {view === "login" ? "Sign in to access your CleanBuild projects." 
+            : view === "signup" ? "Enter your details to get started." 
+            : "Enter your email and we'll send you a reset link."}
           </CardDescription>
         </CardHeader>
-
-        <CardContent>
-          
-          {/* Segmented Toggle Switch */}
-          <div className="flex p-1 bg-slate-900 border border-slate-700/50 rounded-lg mb-6 shadow-inner">
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(false); setErrorMessage(""); setSuccessMessage(""); }}
-              className={`flex-1 text-xs font-bold py-2.5 rounded-md transition-all ${
-                !isSignUp 
-                  ? "bg-blue-600 text-white shadow-md" 
-                  : "text-slate-400 hover:text-slate-300"
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(true); setErrorMessage(""); setSuccessMessage(""); }}
-              className={`flex-1 text-xs font-bold py-2.5 rounded-md transition-all ${
-                isSignUp 
-                  ? "bg-blue-600 text-white shadow-md" 
-                  : "text-slate-400 hover:text-slate-300"
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
-
+        <CardContent className="pt-6">
           <form onSubmit={handleAuth} className="space-y-4">
-            {errorMessage && (
-              <div className="p-3 bg-rose-500/20 border border-rose-500/50 text-rose-300 text-xs rounded-lg font-medium leading-relaxed">
-                {errorMessage}
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="p-3 bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs rounded-lg font-medium leading-relaxed">
-                {successMessage}
-              </div>
-            )}
-
-            <div className="space-y-1.5 text-left">
-              <Label htmlFor="email" className="text-xs font-semibold text-slate-300">Email Address</Label>
-              <Input
-                id="email"
-                type="email"
-                required
-                placeholder="name@example.com"
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700">Email Address</Label>
+              <Input 
+                type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400 pr-10"
+                placeholder="name@example.com"
+                className="h-10 text-sm"
+                required
               />
             </div>
-
-            <div className="space-y-1.5 text-left">
-              <Label htmlFor="password" className="text-xs font-semibold text-slate-300">Password</Label>
-              <div className="relative flex items-center">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  placeholder="••••••••"
+            
+            {view !== "reset" && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <Label className="text-xs font-bold text-slate-700">Password</Label>
+                  {view === "login" && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setView("reset"); setMessage({ type: "", text: "" }); }}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-500"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <Input 
+                  type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-slate-900 border-slate-700 text-white text-sm h-11 focus:border-orange-400 pr-16 w-full"
+                  placeholder="Enter your password"
+                  className="h-10 text-sm"
+                  required
                 />
-                
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded shadow-sm transition-colors focus:outline-none"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
               </div>
-            </div>
+            )}
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold h-11 shadow-md mt-2 transition-colors"
+            {message.text && (
+              <div className={`p-3 rounded-md text-xs font-bold ${message.type === "error" ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                {message.text}
+              </div>
+            )}
+
+            <Button 
+              type="submit" 
+              disabled={loading || !email || (view !== "reset" && !password)}
+              className="w-full bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-bold h-10"
             >
-              {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
+              {loading ? "Processing..." : view === "login" ? "Sign In" : view === "signup" ? "Create Account" : "Send Reset Link"}
             </Button>
           </form>
+
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            {view === "login" ? (
+              <p className="text-xs text-slate-600">
+                Don't have an account?{" "}
+                <button onClick={() => { setView("signup"); setMessage({ type: "", text: "" }); }} className="font-bold text-blue-600 hover:text-blue-500">
+                  Sign up
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs text-slate-600">
+                Back to{" "}
+                <button onClick={() => { setView("login"); setMessage({ type: "", text: "" }); }} className="font-bold text-blue-600 hover:text-blue-500">
+                  Sign in
+                </button>
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </main>
