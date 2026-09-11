@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { syncManager } from "@/lib/syncManager"
+import { supabase } from "@/lib/supabase"
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
@@ -18,6 +19,16 @@ const navItems = [
   { label: "Settings", href: "/settings", icon: "⚙️" },
   { label: "Logo Showcase", href: "/logo-preview", icon: "🎨" },
 ]
+
+// Map the specific routes to their database permission keys
+const routeToPermissionKey: Record<string, string> = {
+  "/schedule": "schedule",
+  "/punch-list": "punch_list",
+  "/vision-board": "vision_board",
+  "/expenses": "expenses",
+  "/selections": "selections",
+  "/contacts": "contacts",
+}
 
 // Integrated CleanBuild Logo - Transparent Background
 function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
@@ -51,14 +62,16 @@ export default function SidebarNav() {
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState("")
 
-  useEffect(() => {
-    // 1. INSTANT LOCAL LOAD: Prevent the flash by grabbing the local name immediately
-    const savedName = localStorage.getItem("cleanbuild_project_name")
-    if (savedName) {
-      setProjectName(savedName)
-    }
+  // 🔥 NEW: Collaboration & Permissions State
+  const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
+  const [isGuest, setIsGuest] = useState(false)
+  const [isNavLoading, setIsNavLoading] = useState(true)
 
-    // 2. SILENT CLOUD VERIFY: Check the cloud in the background to ensure it's up to date
+  // 1. Fetch Project Name
+  useEffect(() => {
+    const savedName = localStorage.getItem("cleanbuild_project_name")
+    if (savedName) setProjectName(savedName)
+
     const verifyCloudName = async () => {
       try {
         const cloudName = await syncManager.pullFromCloud("cleanbuild_project_name")
@@ -74,22 +87,69 @@ export default function SidebarNav() {
     verifyCloudName()
   }, [])
 
+  // 2. 🔥 NEW: Fetch Permissions on Load
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user?.email) return
+
+        // Check if Owner
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("owner_id", user.id)
+          .single()
+
+        if (project) {
+          setIsGuest(false)
+        } else {
+          // Check if Guest
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", user.email)
+            .single()
+
+          if (guestInvite) {
+            setIsGuest(true)
+            if (guestInvite.permissions) {
+              setPermissions(guestInvite.permissions)
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load navigation permissions:", error)
+      } finally {
+        setIsNavLoading(false)
+      }
+    }
+    fetchPermissions()
+  }, [])
+
   const handleSaveProjectName = async () => {
     const finalName = tempName.trim() || "My Project"
     setProjectName(finalName)
     localStorage.setItem("cleanbuild_project_name", finalName)
     
-    // Push the new name to the cloud instantly
     try {
       await syncManager.pushToCloud("cleanbuild_project_name", finalName)
-    } catch (e) {
-      console.error("Failed to sync project name:", e)
-    }
+    } catch (e) {}
 
-    // Dispatch event so exports on other tabs automatically catch the new name
     window.dispatchEvent(new Event("project-name-updated"))
     setIsEditingName(false)
   }
+
+  // 🔥 NEW: Dynamically filter links before rendering
+  const visibleNavItems = navItems.filter((item) => {
+    if (!isGuest) return true // Owners see all links
+    if (!permissions) return true // Fallback just in case
+    
+    const permKey = routeToPermissionKey[item.href]
+    if (!permKey) return true // Pages without specific toggles (Dashboard, Settings) are always visible
+    
+    return permissions[permKey] !== "hidden"
+  })
 
   return (
     <div className="w-full flex flex-col h-full">
@@ -138,24 +198,31 @@ export default function SidebarNav() {
 
       {/* Navigation Links */}
       <nav className="space-y-1.5 text-sm font-medium px-2 flex-1 overflow-y-auto pb-4">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href
+        {isNavLoading ? (
+          // Brief skeleton loader to prevent links from flashing on screen
+          <div className="flex justify-center py-6">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-400"></div>
+          </div>
+        ) : (
+          visibleNavItems.map((item) => {
+            const isActive = pathname === item.href
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                isActive
-                  ? "bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30 shadow-xs"
-                  : "text-slate-300 hover:text-white hover:bg-slate-800/60"
-              }`}
-            >
-              <span className="text-base">{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          )
-        })}
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                  isActive
+                    ? "bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30 shadow-xs"
+                    : "text-slate-300 hover:text-white hover:bg-slate-800/60"
+                }`}
+              >
+                <span className="text-base">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            )
+          })
+        )}
       </nav>
 
       {/* Version Tracker at the Bottom */}
