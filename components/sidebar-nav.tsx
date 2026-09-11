@@ -100,17 +100,16 @@ export default function SidebarNav() {
           { id: user.id, name: "🏠 My Build", isOwner: true }
         ]
 
+        // FIX: Search by invite_email, not user_id!
         const { data: shared } = await supabase
           .from("project_members")
           .select("project_id, projects(owner_id)")
-          .eq("user_id", user.id)
+          .eq("invite_email", user.email) 
           .eq("status", "Active")
 
         if (shared) {
           shared.forEach((member: any) => {
-            // Safely extract the owner_id whether Supabase returns an object or an array
             const ownerId = member.projects?.owner_id || member.projects?.[0]?.owner_id
-            
             if (ownerId) {
               availableWorkspaces.push({ id: ownerId, name: "🤝 Shared Build", isOwner: false })
             }
@@ -128,13 +127,13 @@ export default function SidebarNav() {
 
         // 3. Set Permissions based on Active Workspace
         if (currentWorkspaceId === user.id) {
-          setIsGuest(false) // You own this workspace
+          setIsGuest(false) 
         } else {
-          // You are a guest in this workspace, fetch your exact permissions
+          // FIX: Search by invite_email here too!
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
-            .eq("user_id", user.id)
+            .eq("invite_email", user.email)
             .eq("status", "Active")
             .single()
 
