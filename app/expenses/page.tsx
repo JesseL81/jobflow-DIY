@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -35,20 +36,20 @@ const formatDisplayDate = (dateStr: string) => {
 }
 
 export default function ExpenseTracker() {
-  // Universal Sync Hooks
   const [expenses, setExpenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
   const [totalBudget, setTotalBudget] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
   
+  // 🔥 NEW: Read-Only State for Guests
+  const [isReadOnly, setIsReadOnly] = useState(false)
+  
   const [projectName, setProjectName] = useState("My Project")
 
-  // Modal States
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false)
   const [breakdownType, setBreakdownType] = useState<"materials" | "labor" | null>(null)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Form Fields
   const [date, setDate] = useState("")
   const [description, setDescription] = useState("")
   const [materials, setMaterials] = useState<string>("")
@@ -57,12 +58,10 @@ export default function ExpenseTracker() {
   const [tempBudget, setTempBudget] = useState<string>("23402")
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 
-  // Keep Temp Budget synced with Total Budget when it loads
   useEffect(() => {
     setTempBudget(totalBudget.toString())
   }, [totalBudget])
 
-  // Load project name from sidebar
   useEffect(() => {
     const loadProjectName = () => {
       const savedName = localStorage.getItem("cleanbuild_project_name")
@@ -73,7 +72,37 @@ export default function ExpenseTracker() {
     return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
 
-  // Calculations
+  // 🔥 NEW: Fetch Permissions on Load
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user?.email) return
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("owner_id", user.id)
+          .single()
+
+        if (!project) {
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", user.email)
+            .single()
+
+          if (guestInvite?.permissions?.expenses === "read-only") {
+            setIsReadOnly(true)
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load expenses permissions:", error)
+      }
+    }
+    fetchPermissions()
+  }, [])
+
   const totalMaterials = expenses.reduce((sum, item) => sum + (item.materials || 0), 0)
   const totalLabor = expenses.reduce((sum, item) => sum + (item.labor || 0), 0)
   const totalSpent = totalMaterials + totalLabor
@@ -93,6 +122,7 @@ export default function ExpenseTracker() {
       setLabor(expense.labor.toString())
       setReceiptPhoto(expense.receiptPhoto || "")
     } else {
+      if (isReadOnly) return
       setEditingExpense(null)
       const todayStr = new Date().toISOString().split("T")[0]
       setDate(todayStr)
@@ -105,7 +135,7 @@ export default function ExpenseTracker() {
   }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return
+    if (isReadOnly || !e.target.files || !e.target.files[0]) return
     const file = e.target.files[0]
     const reader = new FileReader()
     reader.onloadend = () => {
@@ -117,7 +147,7 @@ export default function ExpenseTracker() {
   }
 
   const handleSaveExpense = async () => {
-    if (!description.trim() || !date || isSubmitting) return
+    if (isReadOnly || !description.trim() || !date || isSubmitting) return
 
     setIsSubmitting(true)
 
@@ -154,7 +184,6 @@ export default function ExpenseTracker() {
 
       await setExpenses(updatedList)
       
-      // Notify Dashboard
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("expenses-updated"))
       }
@@ -166,6 +195,7 @@ export default function ExpenseTracker() {
   }
 
   const handleDeleteExpense = async (id: number) => {
+    if (isReadOnly) return
     const updated = expenses.filter((e) => e.id !== id)
     await setExpenses(updated)
     
@@ -177,6 +207,7 @@ export default function ExpenseTracker() {
   }
 
   const handleSaveBudget = async () => {
+    if (isReadOnly) return
     const parsed = parseFloat(tempBudget) || 0
     await setTotalBudget(parsed)
     
@@ -222,10 +253,12 @@ export default function ExpenseTracker() {
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">💰 Project Expense Tracker</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+              💰 Project Expense Tracker {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
+            </h1>
           </div>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            Track materials vs. labor costs and store receipt documentation.
+            {isReadOnly ? "View the project expenses and budget." : "Track materials vs. labor costs and store receipt documentation."}
           </p>
         </div>
 
@@ -238,13 +271,15 @@ export default function ExpenseTracker() {
           >
             📊 Export CSV
           </Button>
-          <Button
-            size="sm"
-            onClick={() => handleOpenModal()}
-            className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
-          >
-            + Log Expense
-          </Button>
+          {!isReadOnly && (
+            <Button
+              size="sm"
+              onClick={() => handleOpenModal()}
+              className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            >
+              + Log Expense
+            </Button>
+          )}
         </div>
       </div>
 
@@ -258,16 +293,18 @@ export default function ExpenseTracker() {
                   <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Total Budget
                   </CardDescription>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setTempBudget(totalBudget.toString())
-                      setIsBudgetDialogOpen(true)
-                    }}
-                    className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm"
-                  >
-                    EDIT
-                  </Button>
+                  {!isReadOnly && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setTempBudget(totalBudget.toString())
+                        setIsBudgetDialogOpen(true)
+                      }}
+                      className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm"
+                    >
+                      EDIT
+                    </Button>
+                  )}
                 </div>
                 <CardTitle className="text-2xl font-extrabold text-slate-900 mt-1">${totalBudget.toLocaleString()}</CardTitle>
               </CardHeader>
@@ -364,7 +401,7 @@ export default function ExpenseTracker() {
             <CardContent className="p-6 pt-2">
               {expenses.length === 0 ? (
                 <div className="text-center py-10 text-slate-400 text-sm border-2 border-dashed rounded-lg">
-                  No expenses recorded yet. Click <strong>"+ Log Expense"</strong> to add one.
+                  No expenses recorded yet. {!isReadOnly && <span>Click <strong>"+ Log Expense"</strong> to add one.</span>}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -415,9 +452,9 @@ export default function ExpenseTracker() {
                               <Button
                                 size="sm"
                                 onClick={() => handleOpenModal(expense)}
-                                className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase"
+                                className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
                               >
-                                EDIT
+                                {isReadOnly ? "VIEW" : "EDIT"}
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -438,7 +475,7 @@ export default function ExpenseTracker() {
         <DialogContent className="sm:max-w-[480px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
           <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
             <DialogTitle className="text-orange-400 font-bold">
-              {editingExpense ? "Edit Expense Entry" : "Log New Expense"}
+              {isReadOnly ? "View Expense Entry" : editingExpense ? "Edit Expense Entry" : "Log New Expense"}
             </DialogTitle>
           </DialogHeader>
 
@@ -449,7 +486,9 @@ export default function ExpenseTracker() {
                 id="expense-date"
                 type="date"
                 value={date}
+                disabled={isReadOnly}
                 onChange={(e) => setDate(e.target.value)}
+                className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
               />
             </div>
 
@@ -459,7 +498,9 @@ export default function ExpenseTracker() {
                 id="expense-desc"
                 placeholder="e.g. Concrete, Lumber, Electrical Sub"
                 value={description}
+                disabled={isReadOnly}
                 onChange={(e) => setDescription(e.target.value)}
+                className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
               />
             </div>
 
@@ -473,7 +514,9 @@ export default function ExpenseTracker() {
                   step="0.01"
                   placeholder="0.00"
                   value={materials}
+                  disabled={isReadOnly}
                   onChange={(e) => setMaterials(e.target.value)}
+                  className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
                 />
               </div>
 
@@ -486,7 +529,9 @@ export default function ExpenseTracker() {
                   step="0.01"
                   placeholder="0.00"
                   value={labor}
+                  disabled={isReadOnly}
                   onChange={(e) => setLabor(e.target.value)}
+                  className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
                 />
               </div>
             </div>
@@ -494,73 +539,86 @@ export default function ExpenseTracker() {
             <div className="grid gap-2">
               <Label>Attach Receipt Image</Label>
               
-              <div className="flex gap-2">
-                {/* Camera Button */}
-                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-                  Camera
-                  <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
-                </label>
+              {!isReadOnly && (
+                <div className="flex gap-2">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                    Camera
+                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+                  </label>
 
-                {/* File Upload Button */}
-                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                  Upload File
-                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                </label>
-              </div>
-
-              { receiptPhoto && (
-                <div className="relative h-28 w-full border rounded-md overflow-hidden bg-slate-50 mt-1">
-                  <img src={receiptPhoto} alt="Receipt preview" className="h-full w-full object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => setReceiptPhoto("")}
-                    className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-600"
-                  >
-                    ✕
-                  </button>
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    Upload File
+                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                  </label>
                 </div>
+              )}
+
+              { receiptPhoto ? (
+                <div className={`relative h-28 w-full border rounded-md overflow-hidden bg-slate-50 ${isReadOnly ? "mt-0" : "mt-1"}`}>
+                  <img src={receiptPhoto} alt="Receipt preview" className="h-full w-full object-contain" />
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setReceiptPhoto("")}
+                      className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ) : (
+                isReadOnly && <p className="text-sm text-slate-500 italic">No receipt attached.</p>
               )}
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
-  
-  {/* 1. SAVE & CANCEL (Always side-by-side) */}
-  <div className="flex gap-2 w-full sm:order-2">
-    <Button 
-      size="sm"
-      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-      onClick={handleSaveExpense}
-      disabled={isSubmitting}
-    >
-      {isSubmitting ? "Saving..." : editingExpense ? "Update Expense" : "Save Expense"}
-    </Button>
-    
-    <Button 
-      variant="outline" 
-      size="sm"
-      onClick={() => setIsDialogOpen(false)} 
-      className="flex-1 shadow-sm font-semibold text-slate-700"
-    >
-      Cancel
-    </Button>
-  </div>
+            {isReadOnly ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsDialogOpen(false)} 
+                className="w-full shadow-sm font-semibold text-slate-700"
+              >
+                Close View
+              </Button>
+            ) : (
+              <>
+                <div className="flex gap-2 w-full sm:order-2">
+                  <Button 
+                    size="sm"
+                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    onClick={handleSaveExpense}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Saving..." : editingExpense ? "Update Expense" : "Save Expense"}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsDialogOpen(false)} 
+                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                  >
+                    Cancel
+                  </Button>
+                </div>
 
-  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
-  {editingExpense && (
-    <Button 
-      variant="destructive" 
-      size="sm" 
-      onClick={() => handleDeleteExpense(editingExpense.id)} 
-      className="w-full sm:w-auto sm:order-1 shadow-sm"
-    >
-      Delete
-    </Button>
-  )}
-
-</div>
+                {editingExpense && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={() => handleDeleteExpense(editingExpense.id)} 
+                    className="w-full sm:w-auto sm:order-1 shadow-sm"
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -583,23 +641,23 @@ export default function ExpenseTracker() {
           </div>
 
           <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
-  <Button 
-    size="sm"
-    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-    onClick={handleSaveBudget}
-  >
-    Save Budget
-  </Button>
+            <Button 
+              size="sm"
+              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+              onClick={handleSaveBudget}
+            >
+              Save Budget
+            </Button>
 
-  <Button 
-    variant="outline" 
-    size="sm"
-    onClick={() => setIsBudgetDialogOpen(false)} 
-    className="flex-1 shadow-sm font-semibold text-slate-700"
-  >
-    Cancel
-  </Button>
-</div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setIsBudgetDialogOpen(false)} 
+              className="flex-1 shadow-sm font-semibold text-slate-700"
+            >
+              Cancel
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -648,17 +706,19 @@ export default function ExpenseTracker() {
           </div>
 
           <div className="flex flex-row w-full gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
-             <Button 
-               size="sm"
-               className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-bold h-9"
-               onClick={() => {
-                 setBreakdownType(null)
-                 handleOpenModal()
-               }}
-             >
-               + Log Expense
-             </Button>
-             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className="flex-1 h-9 font-semibold text-slate-700">
+             {!isReadOnly && (
+               <Button 
+                 size="sm"
+                 className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-bold h-9"
+                 onClick={() => {
+                   setBreakdownType(null)
+                   handleOpenModal()
+                 }}
+               >
+                 + Log Expense
+               </Button>
+             )}
+             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className={`${isReadOnly ? 'w-full' : 'flex-1'} h-9 font-semibold text-slate-700`}>
                Close List
              </Button>
           </div>

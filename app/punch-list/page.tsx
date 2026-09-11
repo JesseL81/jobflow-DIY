@@ -65,19 +65,43 @@ export default function PunchListPage() {
   const [items, setItems] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
   const [calendarTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
   
+  // 🔥 NEW: Read-Only State for Guests
+  const [isReadOnly, setIsReadOnly] = useState(false)
+  
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
 
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
 
+  // 🔥 UPDATED: Fetch user email AND permissions on load
   useEffect(() => {
-    const fetchUserEmail = async () => {
+    const fetchUserAccess = async () => {
       const { data } = await supabase.auth.getUser()
       if (data?.user?.email) {
         setCurrentUserEmail(data.user.email)
+        
+        // Check if Owner
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("owner_id", data.user.id)
+          .single()
+
+        // If not owner, check guest permissions
+        if (!project) {
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", data.user.email)
+            .single()
+
+          if (guestInvite?.permissions?.punch_list === "read-only") {
+            setIsReadOnly(true)
+          }
+        }
       }
     }
-    fetchUserEmail()
+    fetchUserAccess()
   }, [])
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
@@ -107,7 +131,6 @@ export default function PunchListPage() {
     return "upcoming"
   }
 
-  // Punch List Item Sorting
   const filteredItems = useMemo(() => {
     const filtered = items.filter((item) => {
       const matchesCategory = selectedCategory === "All Categories" || item.category === selectedCategory
@@ -143,11 +166,12 @@ export default function PunchListPage() {
   }, [items, selectedCategory, searchQuery, calendarTasks])
 
   const handleToggleComplete = (id: number) => {
+    if (isReadOnly) return // Extra safety
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i)))
   }
 
   const handleAddEmail = () => {
-    if (!emailInput.trim()) return
+    if (isReadOnly || !emailInput.trim()) return
     const trimmed = emailInput.trim().toLowerCase()
     
     if (!formEmails.includes(trimmed)) {
@@ -157,10 +181,12 @@ export default function PunchListPage() {
   }
 
   const handleRemoveEmail = (emailToRemove: string) => {
+    if (isReadOnly) return
     setFormEmails(formEmails.filter(e => e !== emailToRemove))
   }
 
   const handleOpenAdd = () => {
+    if (isReadOnly) return
     setEditingItem(null)
     setFormText("")
     setFormCategory(selectedCategory !== "All Categories" ? selectedCategory : "General To-Do")
@@ -195,7 +221,7 @@ export default function PunchListPage() {
   }
 
   const handleSaveItem = () => {
-    if (!formText.trim()) return
+    if (isReadOnly || !formText.trim()) return
 
     const finalLinkedTaskId = isLinked && linkedTaskId !== "" ? Number(linkedTaskId) : undefined
     const finalLinkedTaskOffset = isLinked ? linkedTaskOffset : undefined
@@ -237,7 +263,7 @@ export default function PunchListPage() {
   }
 
   const handleDeleteItem = () => {
-    if (!editingItem) return
+    if (isReadOnly || !editingItem) return
     setItems((prev) => prev.filter((i) => i.id !== editingItem.id))
     setIsModalOpen(false)
   }
@@ -248,10 +274,12 @@ export default function PunchListPage() {
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">✅ Punch List & To-Do's</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+              ✅ Punch List & To-Do's {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
+            </h1>
           </div>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            Track missing items, inspections, returns, and set automated reminders.
+            {isReadOnly ? "View the project tasks and completion status." : "Track missing items, inspections, returns, and set automated reminders."}
           </p>
         </div>
 
@@ -263,13 +291,16 @@ export default function PunchListPage() {
             </span>
           </div>
 
-          <Button
-            size="sm"
-            onClick={handleOpenAdd}
-            className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
-          >
-            + Add To-Do
-          </Button>
+          {/* 🔥 Hide Add Button if Read-Only */}
+          {!isReadOnly && (
+            <Button
+              size="sm"
+              onClick={handleOpenAdd}
+              className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            >
+              + Add To-Do
+            </Button>
+          )}
         </div>
       </div>
 
@@ -357,8 +388,9 @@ export default function PunchListPage() {
                         <input
                           type="checkbox"
                           checked={item.completed}
+                          disabled={isReadOnly}
                           onChange={() => handleToggleComplete(item.id)}
-                          className="mt-1 h-5 w-5 rounded accent-emerald-600 cursor-pointer shrink-0"
+                          className={`mt-1 h-5 w-5 rounded accent-emerald-600 shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                         />
                         <div className="flex-1 space-y-1.5">
                           <div className="flex items-start justify-between gap-3">
@@ -401,9 +433,9 @@ export default function PunchListPage() {
                             <Button 
                               size="sm" 
                               onClick={() => handleOpenEdit(item)} 
-                              className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
+                              className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
                             >
-                              Edit
+                              {isReadOnly ? "View" : "Edit"}
                             </Button>
                           </div>
                           
@@ -421,13 +453,15 @@ export default function PunchListPage() {
                 {filteredItems.length === 0 && (
                   <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-300">
                     <p className="text-slate-500 text-sm font-medium">No tasks found in {selectedCategory}.</p>
-                    <Button 
-                      size="sm" 
-                      onClick={handleOpenAdd} 
-                      className="mt-3 bg-blue-600 hover:bg-blue-400 text-white font-semibold text-xs h-9 px-4 shadow-sm"
-                    >
-                      + Add New Task
-                    </Button>
+                    {!isReadOnly && (
+                      <Button 
+                        size="sm" 
+                        onClick={handleOpenAdd} 
+                        className="mt-3 bg-blue-600 hover:bg-blue-400 text-white font-semibold text-xs h-9 px-4 shadow-sm"
+                      >
+                        + Add New Task
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -444,23 +478,26 @@ export default function PunchListPage() {
           {/* HEADER */}
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-lg font-bold text-orange-400">
-              {editingItem ? "Edit Task" : "Add New Task"}
+              {isReadOnly ? "View Task Details" : (editingItem ? "Edit Task" : "Add New Task")}
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-300 mt-1">
-              Set due dates for alerts or assign emails to trigger automated notifications.
-            </DialogDescription>
+            {!isReadOnly && (
+              <DialogDescription className="text-xs text-slate-300 mt-1">
+                Set due dates for alerts or assign emails to trigger automated notifications.
+              </DialogDescription>
+            )}
           </DialogHeader>
 
           {/* SCROLLABLE BODY */}
           <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
             <div>
-              <Label htmlFor="task-text" className="text-xs font-semibold text-slate-700">Task Title / Description *</Label>
+              <Label htmlFor="task-text" className="text-xs font-semibold text-slate-700">Task Title / Description {isReadOnly ? "" : "*"}</Label>
               <Input 
                 id="task-text" 
                 placeholder="e.g. Caulk baseboards in master bath" 
                 value={formText} 
+                disabled={isReadOnly}
                 onChange={(e) => setFormText(e.target.value)} 
-                className="mt-1 shadow-sm h-10 text-sm"
+                className={`mt-1 shadow-sm h-10 text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
@@ -469,8 +506,9 @@ export default function PunchListPage() {
               <select
                 id="task-cat"
                 value={formCategory}
+                disabled={isReadOnly}
                 onChange={(e) => setFormCategory(e.target.value)}
-                className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               >
                 {CATEGORIES.filter((c) => c !== "All Categories").map((c) => (
                   <option key={c} value={c}>
@@ -486,65 +524,70 @@ export default function PunchListPage() {
                   <Label className="text-xs font-semibold text-slate-700">
                     Due Date (For Alerts)
                   </Label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
+                  <label className={`flex items-center gap-1.5 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}>
                     <input 
                       type="checkbox" 
                       checked={isLinked}
+                      disabled={isReadOnly}
                       onChange={(e) => setIsLinked(e.target.checked)}
-                      className="h-4 w-4 accent-blue-600 rounded"
+                      className={`h-4 w-4 accent-blue-600 rounded ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}
                     />
                     <span className="text-xs font-bold text-blue-600">Link to Schedule</span>
                   </label>
                 </div>
                 
                 <div className="w-full">
-  {isLinked ? (
-    <select
-      value={linkedTaskId}
-      onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
-      className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none ${linkedTaskId === "" ? "text-slate-500" : "text-slate-900"}`}
-    >
-      <option value="" disabled>Select calendar task...</option>
-      {calendarTasks.length === 0 && (
-        <option disabled>No calendar tasks found</option>
-      )}
-      {calendarTasks.map(t => (
-        <option key={t.id} value={t.id} className="text-slate-900">
-          {t.title} ({formatDisplayDate(t.endDate)})
-        </option>
-      ))}
-    </select>
-  ) : (
-    <Input 
-      id="task-date" 
-      type="date"
-      value={formDueDate} 
-      onChange={(e) => setFormDueDate(e.target.value)} 
-      className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-    />
-  )}
-</div>
-
-                </div>
-                
-                {isLinked && linkedTaskId !== "" && (
-                  <div className="flex items-center justify-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200 mt-3">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Offset (Days)</Label>
+                  {isLinked ? (
+                    <select
+                      value={linkedTaskId}
+                      disabled={isReadOnly}
+                      onChange={(e) => setLinkedTaskId(e.target.value === "" ? "" : Number(e.target.value))}
+                      className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none ${linkedTaskId === "" ? "text-slate-500" : "text-slate-900"} ${isReadOnly ? "opacity-80" : ""}`}
+                    >
+                      <option value="" disabled>Select calendar task...</option>
+                      {calendarTasks.length === 0 && (
+                        <option disabled>No calendar tasks found</option>
+                      )}
+                      {calendarTasks.map(t => (
+                        <option key={t.id} value={t.id} className="text-slate-900">
+                          {t.title} ({formatDisplayDate(t.endDate)})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
                     <Input 
-                      type="number" 
-                      value={linkedTaskOffset} 
-                      onChange={(e) => setLinkedTaskOffset(e.target.value === "" ? 0 : parseInt(e.target.value, 10))}
-                      className="h-7 w-16 text-xs text-center px-1 shadow-sm bg-white"
+                      id="task-date" 
+                      type="date"
+                      value={formDueDate} 
+                      disabled={isReadOnly}
+                      onChange={(e) => setFormDueDate(e.target.value)} 
+                      className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 ${isReadOnly ? "opacity-80" : ""}`}
                     />
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      (- for lead before, + for lag after)
-                    </span>
-                  </div>
-                )}
+                  )}
+                </div>
+
               </div>
+                
+              {isLinked && linkedTaskId !== "" && (
+                <div className="flex items-center justify-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200 mt-3">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Offset (Days)</Label>
+                  <Input 
+                    type="number" 
+                    value={linkedTaskOffset} 
+                    disabled={isReadOnly}
+                    onChange={(e) => setLinkedTaskOffset(e.target.value === "" ? 0 : parseInt(e.target.value, 10))}
+                    className={`h-7 w-16 text-xs text-center px-1 shadow-sm bg-white ${isReadOnly ? "opacity-80" : ""}`}
+                  />
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    (- for lead before, + for lag after)
+                  </span>
+                </div>
+              )}
+            </div>
               
-              <div className="pt-3 border-t border-slate-100">
-                <Label className="text-xs font-semibold text-slate-700 block mb-1.5">Email</Label>
+            <div className="pt-3 border-t border-slate-100">
+              <Label className="text-xs font-semibold text-slate-700 block mb-1.5">Email Assignments</Label>
+              {!isReadOnly && (
                 <div className="flex gap-2">
                   <Input 
                     type="email"
@@ -563,12 +606,14 @@ export default function PunchListPage() {
                     Add
                   </Button>
                 </div>
-                
-                {formEmails.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {formEmails.map((email, idx) => (
-                      <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium">
-                        {email}
+              )}
+              
+              {formEmails.length > 0 ? (
+                <div className={`flex flex-wrap gap-2 ${!isReadOnly ? "mt-3" : ""}`}>
+                  {formEmails.map((email, idx) => (
+                    <span key={idx} className={`bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium ${isReadOnly ? "opacity-90" : ""}`}>
+                      {email}
+                      {!isReadOnly && (
                         <button 
                           type="button" 
                           onClick={() => handleRemoveEmail(email)} 
@@ -576,11 +621,13 @@ export default function PunchListPage() {
                         >
                           ✕
                         </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                isReadOnly && <p className="text-sm text-slate-500 italic">No emails assigned.</p>
+              )}
             </div>
 
             <div>
@@ -590,46 +637,59 @@ export default function PunchListPage() {
                 rows={3}
                 placeholder="Details, measurements, or materials needed..." 
                 value={formNotes} 
+                disabled={isReadOnly}
                 onChange={(e) => setFormNotes(e.target.value)} 
-                className="w-full mt-1 p-2.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                className={`w-full mt-1 p-2.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
   
-  <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 pb-2 border-t border-slate-100">
-  
-  {/* 1. SAVE & CANCEL (Always side-by-side) */}
-  <div className="flex gap-2 w-full sm:order-2">
-    <Button 
-      size="sm"
-      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-      onClick={handleSaveItem} 
-    >
-      {editingItem ? "Save Changes" : "Add Task"}
-    </Button>
-    
-    <Button 
-      variant="outline" 
-      size="sm"
-      onClick={() => setIsModalOpen(false)} 
-      className="flex-1 shadow-sm font-semibold text-slate-700"
-    >
-      Cancel
-    </Button>
-  </div>
+            <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 pb-2 border-t border-slate-100">
+            
+            {isReadOnly ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsModalOpen(false)} 
+                className="w-full shadow-sm font-semibold text-slate-700"
+              >
+                Close View
+              </Button>
+            ) : (
+              <>
+                <div className="flex gap-2 w-full sm:order-2">
+                  <Button 
+                    size="sm"
+                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    onClick={handleSaveItem} 
+                  >
+                    {editingItem ? "Save Changes" : "Add Task"}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsModalOpen(false)} 
+                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                  >
+                    Cancel
+                  </Button>
+                </div>
 
-  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
-  {editingItem && (
-    <Button 
-      variant="destructive" 
-      size="sm" 
-      onClick={handleDeleteItem} 
-      className="w-full sm:w-auto sm:order-1 shadow-sm"
-    >
-      Delete
-    </Button>
-  )}
+                {editingItem && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={handleDeleteItem} 
+                    className="w-full sm:w-auto sm:order-1 shadow-sm"
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
+            )}
 
-</div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

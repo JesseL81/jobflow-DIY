@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
+import { supabase } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -54,18 +55,18 @@ const INITIAL_CONTACTS: Contact[] = [
 ]
 
 export default function ContactsPage() {
-  // Universal Sync Hook
   const [contacts, setContacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", INITIAL_CONTACTS)
+  
+  // 🔥 NEW: Read-Only State for Guests
+  const [isReadOnly, setIsReadOnly] = useState(false)
   
   const [activeContactId, setActiveContactId] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   
-  // Controlled Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  // Form State
   const [newName, setNewName] = useState("")
   const [newCompany, setNewCompany] = useState("")
   const [newTrade, setNewTrade] = useState("General Subcontractor")
@@ -74,6 +75,37 @@ export default function ContactsPage() {
   const [newAddress, setNewAddress] = useState("")
   const [newNotes, setNewNotes] = useState("")
   const [newStatus, setNewStatus] = useState<"Active" | "Preferred" | "On Hold">("Active")
+
+  // 🔥 NEW: Fetch Permissions on Load
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user?.email) return
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("owner_id", user.id)
+          .single()
+
+        if (!project) {
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", user.email)
+            .single()
+
+          if (guestInvite?.permissions?.contacts === "read-only") {
+            setIsReadOnly(true)
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load contacts permissions:", error)
+      }
+    }
+    fetchPermissions()
+  }, [])
 
   const filteredContacts = contacts.filter((c) => {
     const term = searchTerm.toLowerCase()
@@ -84,10 +116,10 @@ export default function ContactsPage() {
     )
   })
 
-  // Automatically select the first contact if none is active
   const activeContact = filteredContacts.find((c) => c.id === activeContactId) || filteredContacts[0] || null
 
   const handleOpenAddModal = () => {
+    if (isReadOnly) return
     setEditingId(null)
     setNewName("")
     setNewCompany("")
@@ -114,6 +146,7 @@ export default function ContactsPage() {
   }
 
   const handleDeleteContact = async (id: string) => {
+    if (isReadOnly) return
     const isConfirmed = window.confirm("Are you sure you want to remove this contact from your directory? This cannot be undone.")
     if (!isConfirmed) return
 
@@ -127,7 +160,7 @@ export default function ContactsPage() {
 
   const handleSaveContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!newName || !newCompany || isSubmitting) return
+    if (isReadOnly || !newName || !newCompany || isSubmitting) return
 
     setIsSubmitting(true)
 
@@ -151,7 +184,6 @@ export default function ContactsPage() {
         updatedContacts = [contactData, ...contacts]
       }
       
-      // Auto-syncs to IndexedDB and Supabase
       await setContacts(updatedContacts)
       
       setActiveContactId(contactData.id)
@@ -167,56 +199,64 @@ export default function ContactsPage() {
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📞 Contacts & Vendors</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+              📞 Contacts & Vendors {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
+            </h1>
           </div>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            Select a contact on the left to view complete details.
+            {isReadOnly ? "View the directory details." : "Select a contact on the left to view complete details."}
           </p>
         </div>
 
         <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
-          <Button 
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none"
-          >
-            + Add New Contact
-          </Button>
+          {!isReadOnly && (
+            <Button 
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none"
+            >
+              + Add New Contact
+            </Button>
+          )}
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
               <form onSubmit={handleSaveContact}>
                 <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
                   <DialogTitle className="text-lg font-bold text-orange-400">
-                    {editingId ? "Edit Contact" : "Add New Contact / Vendor"}
+                    {isReadOnly ? "View Contact" : editingId ? "Edit Contact" : "Add New Contact / Vendor"}
                   </DialogTitle>
-                  <DialogDescription className="text-xs text-slate-300 mt-1">
-                    {editingId 
-                      ? "Update the details for this vendor below." 
-                      : "Fill in vendor and trade details to save them to your active directory."}
-                  </DialogDescription>
+                  {!isReadOnly && (
+                    <DialogDescription className="text-xs text-slate-300 mt-1">
+                      {editingId 
+                        ? "Update the details for this vendor below." 
+                        : "Fill in vendor and trade details to save them to your active directory."}
+                    </DialogDescription>
+                  )}
                 </DialogHeader>
 
                 <div className="grid gap-4 py-2 text-xs">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="name" className="font-semibold text-slate-700">Contact Person Name *</Label>
+                      <Label htmlFor="name" className="font-semibold text-slate-700">Contact Person Name {isReadOnly ? "" : "*"}</Label>
                       <Input
                         id="name"
                         placeholder="e.g. Dave Miller"
                         value={newName}
+                        disabled={isReadOnly}
                         onChange={(e) => setNewName(e.target.value)}
-                        className="bg-white border-slate-200 text-xs h-9"
+                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                         required
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="company" className="font-semibold text-slate-700">Business / Company Name *</Label>
+                      <Label htmlFor="company" className="font-semibold text-slate-700">Business / Company Name {isReadOnly ? "" : "*"}</Label>
                       <Input
                         id="company"
                         placeholder="e.g. Apex Electrical"
                         value={newCompany}
+                        disabled={isReadOnly}
                         onChange={(e) => setNewCompany(e.target.value)}
-                        className="bg-white border-slate-200 text-xs h-9"
+                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                         required
                       />
                     </div>
@@ -228,8 +268,9 @@ export default function ContactsPage() {
                       <select
                         id="trade"
                         value={newTrade}
+                        disabled={isReadOnly}
                         onChange={(e) => setNewTrade(e.target.value)}
-                        className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                       >
                         <option value="General Subcontractor">General Subcontractor</option>
                         <option value="Electrician">Electrician</option>
@@ -250,8 +291,9 @@ export default function ContactsPage() {
                       <select
                         id="status"
                         value={newStatus}
+                        disabled={isReadOnly}
                         onChange={(e) => setNewStatus(e.target.value as "Active" | "Preferred" | "On Hold")}
-                        className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                       >
                         <option value="Active">Active</option>
                         <option value="Preferred">Preferred</option>
@@ -267,8 +309,9 @@ export default function ContactsPage() {
                         id="phone"
                         placeholder="(555) 000-0000"
                         value={newPhone}
+                        disabled={isReadOnly}
                         onChange={(e) => setNewPhone(e.target.value)}
-                        className="bg-white border-slate-200 text-xs h-9"
+                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -278,8 +321,9 @@ export default function ContactsPage() {
                         type="email"
                         placeholder="contact@company.com"
                         value={newEmail}
+                        disabled={isReadOnly}
                         onChange={(e) => setNewEmail(e.target.value)}
-                        className="bg-white border-slate-200 text-xs h-9"
+                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                       />
                     </div>
                   </div>
@@ -290,8 +334,9 @@ export default function ContactsPage() {
                       id="address"
                       placeholder="123 Main St, Suite 100, City, ST"
                       value={newAddress}
+                      disabled={isReadOnly}
                       onChange={(e) => setNewAddress(e.target.value)}
-                      className="bg-white border-slate-200 text-xs h-9"
+                      className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                     />
                   </div>
 
@@ -301,32 +346,47 @@ export default function ContactsPage() {
                       id="notes"
                       placeholder="Rates, lead times, licensing info, or scheduling requirements..."
                       value={newNotes}
+                      disabled={isReadOnly}
                       onChange={(e) => setNewNotes(e.target.value)}
-                      className="flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                      className={`flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                     />
                   </div>
                 </div>
 
                 <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
-  <Button 
-    type="submit"
-    size="sm"
-    disabled={isSubmitting}
-    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-  >
-    {isSubmitting ? "Saving..." : editingId ? "Update Contact" : "Save Contact"}
-  </Button>
-  
-  <Button 
-    type="button"
-    variant="outline" 
-    size="sm"
-    onClick={() => setIsModalOpen(false)} 
-    className="flex-1 shadow-sm font-semibold text-slate-700"
-  >
-    Cancel
-  </Button>
-</div>
+                  {isReadOnly ? (
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setIsModalOpen(false)} 
+                      className="w-full shadow-sm font-semibold text-slate-700"
+                    >
+                      Close View
+                    </Button>
+                  ) : (
+                    <>
+                      <Button 
+                        type="submit"
+                        size="sm"
+                        disabled={isSubmitting}
+                        className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                      >
+                        {isSubmitting ? "Saving..." : editingId ? "Update Contact" : "Save Contact"}
+                      </Button>
+                      
+                      <Button 
+                        type="button"
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setIsModalOpen(false)} 
+                        className="flex-1 shadow-sm font-semibold text-slate-700"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  )}
+                </div>
               </form>
             </DialogContent>
           </Dialog>
@@ -427,18 +487,20 @@ export default function ContactsPage() {
                   <Button 
                     size="sm" 
                     onClick={() => handleOpenEditModal(activeContact)}
-                    className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
+                    className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
                   >
-                    EDIT
+                    {isReadOnly ? "VIEW" : "EDIT"}
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => handleDeleteContact(activeContact.id)}
-                    className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
-                  >
-                    DELETE
-                  </Button>
+                  {!isReadOnly && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleDeleteContact(activeContact.id)}
+                      className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
+                    >
+                      DELETE
+                    </Button>
+                  )}
                 </div>
               </div>
 

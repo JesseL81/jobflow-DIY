@@ -20,27 +20,29 @@ export const ALL_STORE_KEYS = [
 export const syncManager = {
   async pushToCloud(storeKey: string, data: any) {
     try {
-      const { data: userData } = await supabase.auth.getUser()
-      const userId = userData?.user?.id
-
-      if (!userId) {
-        console.warn(`Cloud push aborted: No user logged in for ${storeKey}`)
-        return
-      }
-
+      // 1. Check offline status BEFORE attempting a network call
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         console.warn(`✈️ Offline: Queuing ${storeKey} for cloud sync.`)
         await set(`dirty_${storeKey}`, true)
         return
       }
 
+      // 2. 🔥 NEW: Use the Master Router to get the correct target ID
+      const { data: masterId, error: rpcError } = await supabase.rpc("get_master_user_id")
+
+      if (rpcError || !masterId) {
+        console.warn(`Cloud push aborted: No valid master route found for ${storeKey}`)
+        return
+      }
+
+      // 3. Update using the masterId
       const { data: existingData, error: updateError } = await supabase
         .from("cloud_sync")
         .update({
           data: data,
           updated_at: new Date().toISOString(),
         })
-        .eq("user_id", userId)
+        .eq("user_id", masterId)
         .eq("store_key", storeKey)
         .select()
 
@@ -50,7 +52,7 @@ export const syncManager = {
         const { error: insertError } = await supabase
           .from("cloud_sync")
           .insert({
-            user_id: userId,
+            user_id: masterId,
             store_key: storeKey,
             data: data,
           })
@@ -76,15 +78,17 @@ export const syncManager = {
       return localData
     }
 
-    const { data: userData } = await supabase.auth.getUser()
-    const userId = userData?.user?.id
+    if (typeof navigator !== "undefined" && !navigator.onLine) return null
 
-    if (!userId) return null
+    // 🔥 NEW: Use the Master Router to pull from the correct target ID
+    const { data: masterId, error: rpcError } = await supabase.rpc("get_master_user_id")
+
+    if (rpcError || !masterId) return null
 
     const { data, error } = await supabase
       .from("cloud_sync")
       .select("data")
-      .eq("user_id", userId)
+      .eq("user_id", masterId)
       .eq("store_key", storeKey)
       .maybeSingle()
 

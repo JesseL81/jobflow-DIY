@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
+import { supabase } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -70,9 +71,11 @@ const getTodayInputDate = () => {
 export default function VisionBoardPage() {
   const [isMounted, setIsMounted] = useState(false)
   
-  // 1. Universal Sync Hooks (Replaces all custom DB and Cloud logic!)
   const [boardItems, setBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", INITIAL_BOARD)
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_vision_board_categories", DEFAULT_CATEGORIES)
+  
+  // 🔥 NEW: Read-Only State for Guests
+  const [isReadOnly, setIsReadOnly] = useState(false)
   
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
@@ -99,8 +102,39 @@ export default function VisionBoardPage() {
     setIsMounted(true)
   }, [])
 
+  // 🔥 NEW: Fetch Permissions on Load
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user?.email) return
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("owner_id", user.id)
+          .single()
+
+        if (!project) {
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", user.email)
+            .single()
+
+          if (guestInvite?.permissions?.vision_board === "read-only") {
+            setIsReadOnly(true)
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load vision board permissions:", error)
+      }
+    }
+    fetchPermissions()
+  }, [])
+
   const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) return
+    if (isReadOnly || !newCategoryName.trim()) return
     const trimmed = newCategoryName.trim()
     
     if ((categories || []).includes(trimmed)) {
@@ -111,8 +145,8 @@ export default function VisionBoardPage() {
 
     const updatedCategories = [...(categories || []), trimmed]
     
-    // Auto-syncs to IndexedDB and Supabase
-    await setCategories(updatedCategories)
+    // 🔥 FIRE AND FORGET
+    setCategories(updatedCategories)
 
     setNewCategoryName("")
     setIsAddingCategory(false)
@@ -301,6 +335,7 @@ export default function VisionBoardPage() {
       setItemUrl(itemToEdit.url || "")
       setItemPhotos(Array.isArray(itemToEdit.photos) ? itemToEdit.photos : [])
     } else {
+      if (isReadOnly) return
       const defaultDate = getTodayInputDate()
       setEditingItem(null)
       setItemDate(defaultDate)
@@ -313,7 +348,7 @@ export default function VisionBoardPage() {
   }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return
+    if (isReadOnly || !e.target.files) return
     const files = Array.from(e.target.files)
 
     files.forEach((file) => {
@@ -328,11 +363,12 @@ export default function VisionBoardPage() {
   }
 
   const handleRemovePhoto = (index: number) => {
+    if (isReadOnly) return
     setItemPhotos((prev) => (prev || []).filter((_, i) => i !== index))
   }
 
   const handleSaveItem = async () => {
-    if (!itemNotes.trim() && (itemPhotos || []).length === 0 && !itemUrl.trim()) return
+    if (isReadOnly || (!itemNotes.trim() && (itemPhotos || []).length === 0 && !itemUrl.trim())) return
     if (isSubmitting) return
 
     setIsSubmitting(true)
@@ -367,8 +403,8 @@ export default function VisionBoardPage() {
         ]
       }
 
-      // Auto-syncs to IndexedDB and Supabase
-      await setBoardItems(updatedItems)
+      // 🔥 FIRE AND FORGET: No 'await' here. Closes instantly and syncs in background.
+      setBoardItems(updatedItems)
       setIsModalOpen(false)
     } finally {
       setIsSubmitting(false)
@@ -376,9 +412,11 @@ export default function VisionBoardPage() {
   }
 
   const handleDeleteItem = async (id: number) => {
+    if (isReadOnly) return
     const updatedItems = (boardItems || []).filter((l) => l.id !== id)
-    // Auto-syncs to IndexedDB and Supabase
-    await setBoardItems(updatedItems)
+    
+    // 🔥 FIRE AND FORGET
+    setBoardItems(updatedItems)
   }
 
   if (!isMounted) return null;
@@ -388,10 +426,12 @@ export default function VisionBoardPage() {
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📷 Vision Board</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+              📷 Vision Board {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
+            </h1>
           </div>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            Organize inspiration, materials, paint colors, and design ideas into visual categories.
+            {isReadOnly ? "View the project inspiration and ideas." : "Organize inspiration, materials, paint colors, and design ideas into visual categories."}
           </p>
         </div>
 
@@ -408,13 +448,15 @@ export default function VisionBoardPage() {
             </Button>
           )}
 
-          <Button
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
-            onClick={() => handleOpenModal()}
-          >
-            + Add Photos / Idea
-          </Button>
+          {!isReadOnly && (
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              onClick={() => handleOpenModal()}
+            >
+              + Add Photos / Idea
+            </Button>
+          )}
         </div>
       </div>
 
@@ -486,15 +528,17 @@ export default function VisionBoardPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="pt-2 px-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingCategory(true)}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-dashed border-slate-300"
-                    >
-                      + Add Custom Category
-                    </button>
-                  </div>
+                  !isReadOnly && (
+                    <div className="pt-2 px-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingCategory(true)}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-dashed border-slate-300"
+                      >
+                        + Add Custom Category
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -503,7 +547,7 @@ export default function VisionBoardPage() {
               {(filteredItems || []).length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-xl text-slate-400 text-sm border-2 border-dashed border-slate-200 shadow-sm">
                   No images or ideas found in this category.<br />
-                  Click <strong>"+ Add Photos / Idea"</strong> to start building your vision board.
+                  {!isReadOnly && <span>Click <strong>"+ Add Photos / Idea"</strong> to start building your vision board.</span>}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -578,18 +622,20 @@ export default function VisionBoardPage() {
                           <Button
                             size="sm"
                             onClick={() => handleOpenModal(item)}
-                            className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
+                            className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
                           >
-                            EDIT
+                            {isReadOnly ? "VIEW" : "EDIT"}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
-                            onClick={() => handleDeleteItem(item.id)}
-                          >
-                            Delete
-                          </Button>
+                          {!isReadOnly && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
+                              onClick={() => handleDeleteItem(item.id)}
+                            >
+                              Delete
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </Card>
@@ -605,11 +651,13 @@ export default function VisionBoardPage() {
         <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-6">
           <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-4">
             <DialogTitle className="text-lg font-bold text-orange-400">
-              {editingItem ? "Edit Board Entry" : "Add Photos / Idea"}
+              {isReadOnly ? "View Board Entry" : editingItem ? "Edit Board Entry" : "Add Photos / Idea"}
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-300 mt-1">
-              Upload photos to your vision board, tag the category, and add any design notes.
-            </DialogDescription>
+            {!isReadOnly && (
+              <DialogDescription className="text-xs text-slate-300 mt-1">
+                Upload photos to your vision board, tag the category, and add any design notes.
+              </DialogDescription>
+            )}
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
@@ -620,8 +668,9 @@ export default function VisionBoardPage() {
                   id="item-date"
                   type="date"
                   value={itemDate}
+                  disabled={isReadOnly}
                   onChange={(e) => setItemDate(e.target.value)}
-                  className="h-9 text-xs"
+                  className={`h-9 text-xs ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 />
               </div>
 
@@ -630,8 +679,9 @@ export default function VisionBoardPage() {
                 <select
                   id="item-category"
                   value={itemCategory}
+                  disabled={isReadOnly}
                   onChange={(e) => setItemCategory(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {(categories || []).filter(c => c !== "All Categories").map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -647,8 +697,9 @@ export default function VisionBoardPage() {
                 rows={3}
                 placeholder="Describe this idea, color code, or inspiration..."
                 value={itemNotes}
+                disabled={isReadOnly}
                 onChange={(e) => setItemNotes(e.target.value)}
-                className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
             
@@ -658,32 +709,35 @@ export default function VisionBoardPage() {
                 id="item-url"
                 placeholder="e.g. https://pinterest.com/... or Home Depot link"
                 value={itemUrl}
+                disabled={isReadOnly}
                 onChange={(e) => setItemUrl(e.target.value)}
-                className="h-9 text-xs bg-white border-slate-200"
+                className={`h-9 text-xs bg-white border-slate-200 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
             <div className="grid gap-1.5 border-t pt-3">
-              <Label className="font-semibold text-slate-700 text-xs">Attach Board Photos</Label>
+              <Label className="font-semibold text-slate-700 text-xs">Attached Board Photos</Label>
               
-              <div className="flex gap-2 mt-1">
-                {/* Camera Button */}
-                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-                  Camera
-                  <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoUpload} className="hidden" />
-                </label>
+              {!isReadOnly && (
+                <div className="flex gap-2 mt-1">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                    Camera
+                    <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoUpload} className="hidden" />
+                  </label>
 
-                {/* File Upload Button */}
-                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                  Upload File
-                  <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
-                </label>
-              </div>
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    Upload File
+                    <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
+                  </label>
+                </div>
+              )}
 
-              {(itemPhotos || []).length > 0 && (
-                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 mt-2">
+              {(!itemPhotos || itemPhotos.length === 0) && isReadOnly ? (
+                <p className="text-sm text-slate-500 italic">No photos attached.</p>
+              ) : (
+                <div className={`grid grid-cols-5 sm:grid-cols-6 gap-2 ${!isReadOnly ? "mt-2" : ""}`}>
                   {(itemPhotos || []).map((p, index) => (
                     <div key={index} className="relative group aspect-square rounded border border-slate-200 overflow-hidden shadow-sm">
                       <img
@@ -691,13 +745,15 @@ export default function VisionBoardPage() {
                         alt="Preview"
                         className="h-full w-full object-cover"
                       />
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePhoto(index)}
-                        className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 hover:bg-rose-600 transition-all"
-                      >
-                        ✕
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(index)}
+                          className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 hover:bg-rose-600 transition-all"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -705,25 +761,40 @@ export default function VisionBoardPage() {
             </div>
           </div>
 
-          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
-  <Button 
-    size="sm" 
-    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-    onClick={handleSaveItem}
-    disabled={isSubmitting}
-  >
-    {isSubmitting ? "Saving..." : editingItem ? "Update Entry" : "Save to Board"}
-  </Button>
-  
-  <Button 
-    variant="outline" 
-    size="sm" 
-    onClick={() => setIsModalOpen(false)} 
-    className="flex-1 shadow-sm font-semibold text-slate-700"
-  >
-    Cancel
-  </Button>
-</div>
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+            {isReadOnly ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsModalOpen(false)} 
+                className="w-full shadow-sm font-semibold text-slate-700"
+              >
+                Close View
+              </Button>
+            ) : (
+              <>
+                <div className="flex gap-2 w-full sm:order-2">
+                  <Button 
+                    size="sm" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    onClick={handleSaveItem}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Saving..." : editingItem ? "Update Entry" : "Save to Board"}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setIsModalOpen(false)} 
+                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
