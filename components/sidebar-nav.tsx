@@ -95,26 +95,21 @@ export default function SidebarNav() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        // 1. Build Workspace List
-        let availableWorkspaces: Workspace[] = [
-          { id: user.id, name: "🏠 My Build", isOwner: true }
-        ]
-
-        // FIX: Search by invite_email, not user_id!
-        const { data: shared } = await supabase
-          .from("project_members")
-          .select("project_id, projects(owner_id)")
-          .eq("invite_email", user.email) 
-          .eq("status", "Active")
-
-        if (shared) {
-          shared.forEach((member: any) => {
-            const ownerId = member.projects?.owner_id || member.projects?.[0]?.owner_id
-            if (ownerId) {
-              availableWorkspaces.push({ id: ownerId, name: "🤝 Shared Build", isOwner: false })
-            }
-          })
+        // 1. Fetch all workspaces using our new VIP database function
+        const { data: workspaceData, error: rpcError } = await supabase.rpc("get_all_workspaces")
+        
+        let availableWorkspaces: Workspace[] = []
+        if (workspaceData && !rpcError) {
+          availableWorkspaces = workspaceData.map((w: any) => ({
+            id: w.id,
+            name: w.name,
+            isOwner: w.is_owner
+          }))
+        } else {
+          // Fallback if network fails
+          availableWorkspaces = [{ id: user.id, name: "🏠 My Build", isOwner: true }]
         }
+        
         setWorkspaces(availableWorkspaces)
 
         // 2. Set Active Workspace
@@ -129,7 +124,7 @@ export default function SidebarNav() {
         if (currentWorkspaceId === user.id) {
           setIsGuest(false) 
         } else {
-          // FIX: Search by invite_email here too!
+          // You are a guest in this workspace, fetch your exact permissions
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
