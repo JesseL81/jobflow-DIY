@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { get } from "idb-keyval"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
+import { supabase } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -64,6 +65,9 @@ export default function SchedulePage() {
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
 
+  // 🔥 NEW: Read-Only State for Guests
+  const [isReadOnly, setIsReadOnly] = useState(false)
+
   const [selectedDate, setSelectedDate] = useState<string>(getLocalTodayStr())
   const [modalEndDate, setModalEndDate] = useState<string>(getLocalTodayStr())
   
@@ -82,7 +86,6 @@ export default function SchedulePage() {
   const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
   const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
 
-  // 1. Universal Auto-Sync Hooks (Replaces all custom load and cloud logic!)
   const [tasks, setTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", INITIAL_TASKS)
   const [customNonWorkdays, setCustomNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", [])
   const [explicitWorkingDays, setExplicitWorkingDays] = useOfflineSync<string[]>("cleanbuild_explicit_working_days", [])
@@ -90,12 +93,43 @@ export default function SchedulePage() {
   const [sundaysOff, setSundaysOff] = useOfflineSync<boolean>("cleanbuild_sundays_off", true)
   const [nonWorkdaysMap, setNonWorkdaysMap] = useOfflineSync<Record<string, string>>("cleanbuild_non_workdays_map", {})
 
-  // Project Dates Sync & State
   const [projectDates, setProjectDates] = useOfflineSync<{startDate: string, endDate: string}>("cleanbuild_project_dates", { startDate: "2026-06-29", endDate: "2026-07-30" })
   
   const [isDatesModalOpen, setIsDatesModalOpen] = useState(false)
   const [tempStartDate, setTempStartDate] = useState("")
   const [tempEndDate, setTempEndDate] = useState("")
+
+  // 🔥 NEW: Fetch Permissions on Load
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user?.email) return
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("owner_id", user.id)
+          .single()
+
+        // If they are not the owner, check their guest permissions
+        if (!project) {
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", user.email)
+            .single()
+
+          if (guestInvite?.permissions?.schedule === "read-only") {
+            setIsReadOnly(true)
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load schedule permissions:", error)
+      }
+    }
+    fetchPermissions()
+  }, [])
 
   const handleOpenDatesModal = () => {
     setTempStartDate(projectDates?.startDate || "2026-06-29")
@@ -108,7 +142,6 @@ export default function SchedulePage() {
     setIsDatesModalOpen(false)
   }
 
-  // Keep Log Non-Workdays mapped if updated from another tab
   useEffect(() => {
     const handleSync = async () => {
       const map = await get<Record<string, string>>("cleanbuild_non_workdays_map")
@@ -120,7 +153,6 @@ export default function SchedulePage() {
     return () => window.removeEventListener("logs-updated", handleSync)
   }, [setNonWorkdaysMap])
 
-  // Automatically parse the logs map into the array format the calendar needs
   const logNonWorkdays = useMemo(() => {
     return Object.entries(nonWorkdaysMap).map(([date, reason]) => ({
       date,
@@ -218,7 +250,6 @@ export default function SchedulePage() {
     setIsDialogOpen(true)
   }
 
-  // Generate calendar weeks, tracking current month boundaries
   const calendarWeeks = useMemo(() => {
     const weeks = []
     const year = currentDate.getFullYear()
@@ -278,6 +309,10 @@ export default function SchedulePage() {
   }, [tasks])
 
   const handleDragStart = (e: React.DragEvent, taskId: number) => {
+    if (isReadOnly) {
+      e.preventDefault()
+      return
+    }
     e.stopPropagation()
     setDraggedTaskId(taskId)
     e.dataTransfer.setData("text/plain", taskId.toString())
@@ -285,29 +320,30 @@ export default function SchedulePage() {
   }
 
   const handleDragOver = (e: React.DragEvent, dateStr: string) => {
+    if (isReadOnly) return
     e.preventDefault()
     e.dataTransfer.dropEffect = "move"
     if (dragOverDate !== dateStr) setDragOverDate(dateStr)
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
+    if (isReadOnly) return
     e.preventDefault()
     setDragOverDate(null)
   }
 
   const handleDrop = (e: React.DragEvent, newDropDate: string) => {
+    if (isReadOnly) return
     e.preventDefault()
     setDragOverDate(null)
     if (!draggedTaskId) return
 
-    // Helper to check if a specific date string is a non-workday
     const isNonWork = (dStr: string) => 
       isDateNonWorkdayCheck(dStr, allNonWorkdays, saturdaysOff, sundaysOff, explicitWorkingDays)
 
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
         if (task.id === draggedTaskId) {
-          // 1. Find out how many WORKING days the original task took
           let workingDays = 0
           let currCountDate = new Date(task.startDate + "T00:00:00")
           const oldEnd = new Date(task.endDate + "T00:00:00")
@@ -318,19 +354,17 @@ export default function SchedulePage() {
             currCountDate.setDate(currCountDate.getDate() + 1)
           }
 
-          if (workingDays === 0) workingDays = 1 // Safety fallback
+          if (workingDays === 0) workingDays = 1
 
-          // 2. If dropped on a weekend/holiday, push the start date to the next available working day
           let newStart = new Date(newDropDate + "T00:00:00")
           while (isNonWork(newStart.toISOString().split("T")[0])) {
             newStart.setDate(newStart.getDate() + 1)
           }
           const finalStartStr = newStart.toISOString().split("T")[0]
 
-          // 3. Add the working days to find the true end date
           let finalEndStr = finalStartStr
           let currAddDate = new Date(finalStartStr + "T00:00:00")
-          let daysAdded = 1 // The start date itself counts as Day 1
+          let daysAdded = 1 
 
           while (daysAdded < workingDays) {
             currAddDate.setDate(currAddDate.getDate() + 1)
@@ -355,6 +389,9 @@ export default function SchedulePage() {
   }
 
   const handleDateClick = (dateStr: string) => {
+    // If read-only, block clicking empty dates so they can't add tasks
+    if (isReadOnly) return
+
     setSelectedDate(dateStr)
     setModalEndDate(dateStr)
     setTaskStartDate(dateStr)
@@ -383,7 +420,7 @@ export default function SchedulePage() {
   }
 
   const handleSaveModal = async () => {
-    if (!selectedDate) return
+    if (isReadOnly || !selectedDate) return
 
     let updatedCustomNonWorkdays = [...customNonWorkdays]
     let updatedExplicitWorkingDays = [...explicitWorkingDays]
@@ -478,7 +515,7 @@ export default function SchedulePage() {
   }
 
   const handleDeleteTask = () => {
-    if (!editingTask) return
+    if (isReadOnly || !editingTask) return
     setTasks(tasks.filter((t) => t.id !== editingTask.id))
     setIsDialogOpen(false)
     setEditingTask(null)
@@ -495,10 +532,10 @@ export default function SchedulePage() {
         {/* Left Column */}
         <div className="flex flex-col justify-center">
           <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
-            📅 Schedule
+            📅 Schedule {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
           </h1>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed">
-            Click a day or drag tasks to schedule.
+            {isReadOnly ? "View the project schedule." : "Click a day or drag tasks to schedule."}
           </p>
         </div>
 
@@ -543,7 +580,6 @@ export default function SchedulePage() {
         {/* Right Column */}
         <div className="flex flex-col justify-center w-full md:w-auto md:justify-self-end gap-2 shrink-0">
           
-          {/* Top Row: Today & Add Event */}
           <div className="flex gap-2 w-full">
             <Button
               variant="outline"
@@ -553,45 +589,45 @@ export default function SchedulePage() {
             >
               Today
             </Button>
-            <Button
-              size="sm"
-              onClick={handleOpenAddEventModal}
-              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
-            >
-              + Add Event
-            </Button>
+            {/* 🔥 Hide Add Event button if Read-Only */}
+            {!isReadOnly && (
+              <Button
+                size="sm"
+                onClick={handleOpenAddEventModal}
+                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              >
+                + Add Event
+              </Button>
+            )}
           </div>
 
-          {/* Bottom Row: Full-Width Project Dates */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleOpenDatesModal}
-            className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
-          >
-            📅 Project Dates
-          </Button>
+          {/* 🔥 Hide Project Dates button if Read-Only */}
+          {!isReadOnly && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleOpenDatesModal}
+              className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            >
+              📅 Project Dates
+            </Button>
+          )}
           
         </div>
 
       </div>
 
-      {/* Schedule Main Card Wrapper */}
       <Card className="overflow-hidden border shadow-sm bg-white flex-1 flex flex-col">
         
-        {/* Days Header - Colored Orange to match Theme */}
         <div className="grid grid-cols-7 border-b text-center text-[11px] font-bold text-orange-600 uppercase tracking-wider bg-slate-50 py-2.5 shrink-0 shadow-sm z-10">
           {daysOfWeek.map((day) => (
             <div key={day.full}>
-              {/* Shows full word on screens larger than mobile */}
               <span className="hidden sm:inline">{day.full}</span>
-              {/* Shows 3-letter abbreviation on mobile screens */}
               <span className="sm:hidden">{day.short}</span>
             </div>
           ))}
         </div>
 
-        {/* Calendar Grid */}
         <div className="bg-slate-200 gap-[1px] grid flex-col flex-1">
           {calendarWeeks.map((week, wIndex) => {
             const weekStart = week[0].dateStr
@@ -674,18 +710,19 @@ export default function SchedulePage() {
                       onDragOver={(e) => handleDragOver(e, day.dateStr)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day.dateStr)}
-                      className={`p-1 pb-2 transition-all cursor-pointer flex flex-col justify-start h-full ${
-                        isBeingDraggedOver
+                      className={`p-1 pb-2 transition-all flex flex-col justify-start h-full ${
+                        isReadOnly ? "cursor-default" : "cursor-pointer"
+                      } ${
+                        isBeingDraggedOver && !isReadOnly
                           ? "bg-indigo-50/80 ring-2 ring-indigo-500 ring-inset"
                           : day.isNonWorkday 
                             ? "bg-slate-300 bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:8px_8px]" 
                             : day.isCurrentMonth
                               ? "bg-white hover:bg-slate-50"
-                              : "bg-slate-100 hover:bg-slate-200" // Grey background for non-current month
+                              : "bg-slate-100 hover:bg-slate-200"
                       } ${!day.isCurrentMonth ? "opacity-50" : ""}`}
                       style={{ minHeight: `${dynamicWeekHeight}px` }}
                     >
-                      {/* Date Header */}
                       <div className="flex justify-between items-start mb-1 px-1 pointer-events-none">
                         <span
                           className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
@@ -699,7 +736,6 @@ export default function SchedulePage() {
                           {day.dayNum === 1 ? `${day.monthName} ${day.dayNum}` : day.dayNum}
                         </span>
                         
-                        {/* BADGE LOGIC: Hides default 'Saturday', 'Sunday', and blank 'Non-workday' tags */}
                         {day.isNonWorkday && day.nonWorkdayTitle && !["Saturday", "Sunday", "Non-workday"].includes(day.nonWorkdayTitle) && (
                           <div className="flex items-center gap-1">
                             {day.isFromLog && (
@@ -730,10 +766,12 @@ export default function SchedulePage() {
                     return (
                       <div
                         key={`${task.id}-${seg.startCol}-${idx}`}
-                        draggable={true}
+                        draggable={!isReadOnly}
                         onDragStart={(e) => handleDragStart(e, task.id)}
                         onClick={(e) => handleTaskClick(e, task)}
-                        className={`pointer-events-auto h-6 ${task.color} ${task.textColor || "text-white"} text-[11px] font-medium px-2 shadow-xs flex items-center overflow-visible cursor-grab active:cursor-grabbing hover:brightness-110 transition-all ${
+                        className={`pointer-events-auto h-6 ${task.color} ${task.textColor || "text-white"} text-[11px] font-medium px-2 shadow-xs flex items-center overflow-visible transition-all ${
+                          isReadOnly ? "cursor-pointer" : "cursor-grab active:cursor-grabbing hover:brightness-110"
+                        } ${
                           seg.startCol === 1 ? "ml-1.5" : "mx-0.5"
                         } ${
                           isDraggingThis ? "opacity-40 scale-95" : "opacity-100"
@@ -747,7 +785,7 @@ export default function SchedulePage() {
                           gridColumnEnd: seg.endCol + 1,
                           gridRowStart: slotRow,
                         }}
-                        title={`Drag to reschedule • Click to edit (${task.title})`}
+                        title={isReadOnly ? `View Details (${task.title})` : `Drag to reschedule • Click to edit (${task.title})`}
                       >
                         <span className="truncate leading-none">{task.title}</span>
                       </div>
@@ -765,44 +803,45 @@ export default function SchedulePage() {
         <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col p-6 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
           <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 shrink-0 mb-2">
             <DialogTitle className="text-lg font-bold text-orange-400">
-              {editingTask ? `Edit Task: ${editingTask.title}` : "Date Settings & Status"}
+              {editingTask 
+                ? (isReadOnly ? `Task Details: ${editingTask.title}` : `Edit Task: ${editingTask.title}`) 
+                : "Date Settings & Status"}
             </DialogTitle>
           </DialogHeader>
 
-          {/* SCROLLABLE INNER BODY */}
           <div className="flex-1 overflow-y-auto space-y-5 py-3 pr-1">
             
-            {/* GREY UPPER SECTION: Non-Workdays & Rules */}
             <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 space-y-4">
               
-              {/* Weekend Schedule Rules */}
               <div className="space-y-2">
                 <Label className="font-bold text-slate-500 block text-[10px] uppercase tracking-wider">
                   Global Weekend Rules
                 </Label>
                 <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div className="flex items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                  <div className={`flex items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm transition-colors ${isReadOnly ? 'opacity-70' : 'cursor-pointer hover:border-indigo-300'}`}>
                     <input
                       id="saturdays-off-toggle"
                       type="checkbox"
                       checked={saturdaysOff}
+                      disabled={isReadOnly}
                       onChange={(e) => setSaturdaysOff(e.target.checked)}
-                      className="h-4 w-4 accent-orange-400 rounded cursor-pointer"
+                      className={`h-4 w-4 accent-orange-400 rounded ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}
                     />
-                    <Label htmlFor="saturdays-off-toggle" className="text-xs font-semibold text-slate-700 cursor-pointer w-full">
+                    <Label htmlFor="saturdays-off-toggle" className={`text-xs font-semibold text-slate-700 w-full ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}>
                       Saturdays Off
                     </Label>
                   </div>
 
-                  <div className="flex items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                  <div className={`flex items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm transition-colors ${isReadOnly ? 'opacity-70' : 'cursor-pointer hover:border-indigo-300'}`}>
                     <input
                       id="sundays-off-toggle"
                       type="checkbox"
                       checked={sundaysOff}
+                      disabled={isReadOnly}
                       onChange={(e) => setSundaysOff(e.target.checked)}
-                      className="h-4 w-4 accent-orange-400 rounded cursor-pointer"
+                      className={`h-4 w-4 accent-orange-400 rounded ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}
                     />
-                    <Label htmlFor="sundays-off-toggle" className="text-xs font-semibold text-slate-700 cursor-pointer w-full">
+                    <Label htmlFor="sundays-off-toggle" className={`text-xs font-semibold text-slate-700 w-full ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}>
                       Sundays Off
                     </Label>
                   </div>
@@ -812,11 +851,10 @@ export default function SchedulePage() {
                 </p>
               </div>
 
-              {/* Custom Non-Workday Toggle & Title Input with Multi-Day Range */}
               <div className="space-y-3 pt-3 border-t border-slate-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="non-workday-mode" className="font-bold text-slate-800 cursor-pointer text-sm">
+                    <Label htmlFor="non-workday-mode" className={`font-bold text-slate-800 text-sm ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}>
                       Non-workday(s)
                     </Label>
                     <p className="text-[11px] text-slate-500 mt-0.5">
@@ -827,8 +865,9 @@ export default function SchedulePage() {
                     id="non-workday-mode"
                     type="checkbox"
                     checked={isNonWorkdayToggle}
+                    disabled={isReadOnly}
                     onChange={(e) => setIsNonWorkdayToggle(e.target.checked)}
-                    className="h-5 w-5 accent-orange-500 rounded cursor-pointer shadow-sm"
+                    className={`h-5 w-5 accent-orange-500 rounded shadow-sm ${isReadOnly ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
                   />
                 </div>
 
@@ -841,8 +880,9 @@ export default function SchedulePage() {
                           id="modal-start-date"
                           type="date"
                           value={selectedDate}
+                          disabled={isReadOnly}
                           onChange={(e) => setSelectedDate(e.target.value)}
-                          className="mt-1 text-xs bg-white h-9 shadow-sm"
+                          className={`mt-1 text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                         />
                       </div>
                       <div>
@@ -851,8 +891,9 @@ export default function SchedulePage() {
                           id="modal-end-date"
                           type="date"
                           value={modalEndDate}
+                          disabled={isReadOnly}
                           onChange={(e) => setModalEndDate(e.target.value)}
-                          className="mt-1 text-xs bg-white h-9 shadow-sm"
+                          className={`mt-1 text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                         />
                       </div>
                     </div>
@@ -865,8 +906,9 @@ export default function SchedulePage() {
                         id="non-workday-title"
                         placeholder="e.g. 4th of July, Rain Day, Holiday"
                         value={nonWorkdayTitle}
+                        disabled={isReadOnly}
                         onChange={(e) => setNonWorkdayTitle(e.target.value)}
-                        className="mt-1 text-xs bg-white shadow-sm"
+                        className={`mt-1 text-xs bg-white shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                       />
                     </div>
                   </div>
@@ -874,10 +916,9 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            {/* LOWER SECTION: Task Scheduling */}
             <div className="space-y-4 px-1">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                {editingTask ? "Update Task Details" : "Schedule New Task"}
+                {editingTask ? "Task Details" : "Schedule New Task"}
               </h4>
               
               <div className="grid gap-2">
@@ -886,12 +927,12 @@ export default function SchedulePage() {
                   id="title"
                   placeholder="e.g. Electrical Rough-in"
                   value={newTaskTitle}
+                  disabled={isReadOnly}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="shadow-sm"
+                  className={`shadow-sm ${isReadOnly ? 'opacity-70 text-slate-900 font-medium' : ''}`}
                 />
               </div>
 
-              {/* Task Start and End Date Pickers */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1">
                   <Label htmlFor="task-start-input" className="text-xs font-semibold text-slate-700">Task Start Date</Label>
@@ -899,8 +940,9 @@ export default function SchedulePage() {
                     id="task-start-input"
                     type="date"
                     value={taskStartDate}
+                    disabled={isReadOnly}
                     onChange={(e) => setTaskStartDate(e.target.value)}
-                    className="text-xs bg-white h-9 shadow-sm"
+                    className={`text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                   />
                 </div>
                 <div className="grid gap-1">
@@ -909,22 +951,25 @@ export default function SchedulePage() {
                     id="task-end-input"
                     type="date"
                     value={taskEndDate}
+                    disabled={isReadOnly}
                     onChange={(e) => setTaskEndDate(e.target.value)}
-                    className="text-xs bg-white h-9 shadow-sm"
+                    className={`text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                   />
                 </div>
               </div>
 
-              {/* 16-Color Palette Grid */}
               <div className="grid gap-2">
-                <Label className="text-xs font-semibold text-slate-700">Select Timeline Color</Label>
-                <div className="grid grid-cols-8 gap-2 p-2.5 bg-slate-50 rounded-lg border shadow-sm">
+                <Label className="text-xs font-semibold text-slate-700">Timeline Color</Label>
+                <div className={`grid grid-cols-8 gap-2 p-2.5 bg-slate-50 rounded-lg border shadow-sm ${isReadOnly ? 'opacity-80' : ''}`}>
                   {COLOR_PALETTE.map((color, index) => (
                     <button
                       key={index}
                       type="button"
+                      disabled={isReadOnly}
                       onClick={() => setSelectedColor(color)}
-                      className={`h-7 w-7 rounded-md ${color.bg} flex items-center justify-center transition-transform hover:scale-110 ${
+                      className={`h-7 w-7 rounded-md ${color.bg} flex items-center justify-center transition-transform ${
+                        !isReadOnly ? "hover:scale-110" : "cursor-default"
+                      } ${
                         selectedColor.bg === color.bg ? "ring-2 ring-blue-600 ring-offset-1 scale-105 shadow-md" : "shadow-xs"
                       }`}
                       title={color.label}
@@ -941,42 +986,52 @@ export default function SchedulePage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
-            {/* 1. SAVE & CANCEL (Always side-by-side) */}
-            <div className="flex gap-2 w-full sm:order-2">
-              <Button 
-                size="sm"
-                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-                onClick={handleSaveModal} 
-              >
-                {editingTask ? "Update Task" : "Save Changes"}
-              </Button>
-              
+            {isReadOnly ? (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsDialogOpen(false)} 
-                className="flex-1 shadow-sm font-semibold text-slate-700"
+                className="w-full shadow-sm font-semibold text-slate-700"
               >
-                Cancel
+                Close View
               </Button>
-            </div>
+            ) : (
+              <>
+                <div className="flex gap-2 w-full sm:order-2">
+                  <Button 
+                    size="sm"
+                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    onClick={handleSaveModal} 
+                  >
+                    {editingTask ? "Update Task" : "Save Changes"}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsDialogOpen(false)} 
+                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                  >
+                    Cancel
+                  </Button>
+                </div>
 
-            {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
-            {editingTask && (
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                onClick={handleDeleteTask} 
-                className="w-full sm:w-auto sm:order-1 shadow-sm"
-              >
-                Delete
-              </Button>
+                {editingTask && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={handleDeleteTask} 
+                    className="w-full sm:w-auto sm:order-1 shadow-sm"
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </DialogContent>
       </Dialog>
       
-      {/* MODAL: PROJECT DATES */}
       <Dialog open={isDatesModalOpen} onOpenChange={setIsDatesModalOpen}>
         <DialogContent className="sm:max-w-[400px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-6">
           <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-4">
