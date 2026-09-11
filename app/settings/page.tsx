@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState<string>("")
   const [isPushEnabled, setIsPushEnabled] = useState(false)
   
-  // 🔥 NEW: Loading State to prevent UI flicker
+  // 🔥 Loading State to prevent UI flicker
   const [isLoadingData, setIsLoadingData] = useState(true)
   
   // Password State
@@ -63,32 +63,43 @@ export default function SettingsPage() {
         if (user?.email) {
           setUserEmail(user.email)
           
-          const { data: project } = await supabase
-            .from("projects")
-            .select("id")
-            .eq("owner_id", user.id)
-            .single()
+          // 🔥 NEW: Check which workspace is currently active
+          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
-          if (project) {
-            const { data: members } = await supabase
-              .from("project_members")
-              .select("*")
-              .eq("project_id", project.id)
+          if (activeWorkspaceId === user.id) {
+            // 1. THEY OWN THIS WORKSPACE
+            setIsGuest(false)
+            
+            const { data: project } = await supabase
+              .from("projects")
+              .select("id")
+              .eq("owner_id", user.id)
+              .maybeSingle()
 
-            if (members && members.length > 0) {
-              const partner = members[0]
-              setActivePartner({ email: partner.invite_email, status: partner.status || "Pending" })
-              
-              if (partner.permissions) {
-                setPermissions(partner.permissions)
-              }
+            if (project) {
+              const { data: members } = await supabase
+                .from("project_members")
+                .select("*")
+                .eq("project_id", project.id)
 
-              if (partner.status?.includes("Pending")) {
-                const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
-                setInviteLink(`${baseUrl}/login?invite=${encodeURIComponent(partner.invite_email)}`)
+              if (members && members.length > 0) {
+                const partner = members[0]
+                setActivePartner({ email: partner.invite_email, status: partner.status || "Pending" })
+                
+                if (partner.permissions) {
+                  setPermissions(partner.permissions)
+                }
+
+                if (partner.status?.includes("Pending")) {
+                  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
+                  setInviteLink(`${baseUrl}/login?invite=${encodeURIComponent(partner.invite_email)}`)
+                }
               }
             }
           } else {
+            // 2. THEY ARE A GUEST IN THIS WORKSPACE
+            setIsGuest(true)
+            
             const { data: guestInvite } = await supabase
               .from("project_members")
               .select("*")
@@ -96,7 +107,6 @@ export default function SettingsPage() {
               .single()
 
             if (guestInvite) {
-              setIsGuest(true)
               if (guestInvite.permissions) {
                 setPermissions(guestInvite.permissions)
               }
@@ -113,7 +123,7 @@ export default function SettingsPage() {
       } catch (error) {
         console.error("Error fetching user data:", error)
       } finally {
-        setIsLoadingData(false) // 🔥 Tell UI it's safe to render the cards
+        setIsLoadingData(false)
       }
     }
     fetchUserData()
@@ -214,7 +224,9 @@ export default function SettingsPage() {
       await clear()
       const { data: userData } = await supabase.auth.getUser()
       if (userData?.user?.id) {
-        await supabase.from("cloud_sync").delete().eq("user_id", userData.user.id)
+        // Because we are now in their personal workspace, we just clear their own tutorial data
+        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || userData.user.id
+        await supabase.from("cloud_sync").delete().eq("user_id", activeWorkspaceId)
       }
       window.location.href = "/"
     } catch (error) {}
@@ -230,6 +242,7 @@ export default function SettingsPage() {
         "cleanbuild_explicit_working_days", "cleanbuild_project_dates"
       ]
 
+      // This will automatically wipe the active workspace thanks to the new syncManager!
       for (const key of keysToClear) {
         await set(key, [])
         await syncManager.pushToCloud(key, [])
@@ -548,6 +561,7 @@ export default function SettingsPage() {
                   <h3 className="text-red-900 font-bold text-sm">Delete Account</h3>
                   <p className="text-red-700 text-xs mt-1">Permanently destroy this account and all associated data.</p>
                 </div>
+                {/* Note: Delete Account is NEVER disabled by isGuest because users should always be able to delete themselves! */}
                 <Button onClick={handleDeleteAccount} className="shrink-0 shadow-sm font-bold bg-red-700 hover:bg-red-600 text-white w-full sm:w-auto">
                   🧨 Delete Account
                 </Button>
