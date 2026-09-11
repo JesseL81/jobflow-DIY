@@ -224,7 +224,7 @@ export default function SidebarNav() {
           </h1>
         </div>
         
-        <div className="flex items-center group h-7 mt-2">
+        <div className="flex items-center gap-3 h-7 mt-2">
           {isEditingName && !isGuest ? (
             <input
               autoFocus
@@ -237,18 +237,18 @@ export default function SidebarNav() {
             />
           ) : (
             <>
-              <span className="text-base font-bold text-slate-200 truncate max-w-[160px]" title={projectName}>
-                {projectName}
-              </span>
               {!isGuest && (
                 <button 
                   onClick={() => { setTempName(projectName); setIsEditingName(true); }}
-                  className="opacity-0 group-hover:opacity-100 ml-2 text-sm text-slate-500 hover:text-orange-400 transition-opacity"
+                  className="text-base text-slate-500 hover:text-orange-400 transition-colors shrink-0"
                   title="Edit Project Name"
                 >
                   ✏️
                 </button>
               )}
+              <span className="text-base font-bold text-slate-200 truncate max-w-[160px]" title={projectName}>
+                {projectName}
+              </span>
             </>
           )}
         </div>
