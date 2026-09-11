@@ -40,6 +40,9 @@ export default function SettingsPage() {
   // Share Link State
   const [inviteLink, setInviteLink] = useState("")
   const [copied, setCopied] = useState(false)
+
+  // 🔥 NEW: Guest State
+  const [isGuest, setIsGuest] = useState(false)
   
   const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({
     schedule: "edit",
@@ -50,14 +53,14 @@ export default function SettingsPage() {
     contacts: "edit",
   })
 
-  // 🔥 UPDATED: Now checks the database on page load for existing invites
+  // 🔥 UPDATED: Checks database for existing invites AND handles the Guest Handshake
   useEffect(() => {
     const fetchUserData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user?.email) {
         setUserEmail(user.email)
         
-        // Check for an existing project folder
+        // 1. Check if they OWN a master project folder
         const { data: project } = await supabase
           .from("projects")
           .select("id")
@@ -83,6 +86,28 @@ export default function SettingsPage() {
             if (partner.status?.includes("Pending")) {
               const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
               setInviteLink(`${baseUrl}/login?invite=${encodeURIComponent(partner.invite_email)}`)
+            }
+          }
+        } else {
+          // 2. 🔥 NEW: If they don't own a project, check if they are an INVITED GUEST
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("*")
+            .eq("invite_email", user.email)
+            .single()
+
+          if (guestInvite) {
+            setIsGuest(true)
+            if (guestInvite.permissions) {
+              setPermissions(guestInvite.permissions)
+            }
+            
+            // The Handshake: Change status to Active and link their user ID permanently
+            if (guestInvite.status?.includes("Pending")) {
+              await supabase
+                .from("project_members")
+                .update({ status: "Active", user_id: user.id })
+                .eq("id", guestInvite.id)
             }
           }
         }
@@ -281,7 +306,6 @@ export default function SettingsPage() {
     }
   }
 
-  // 🔥 UPDATED: Now deletes the partner from the actual database
   const handleRevokeAccess = async () => {
     const isConfirmed = window.confirm("Are you sure you want to remove this partner? They will immediately lose access to this project.")
     if (isConfirmed && activePartner) {
@@ -302,7 +326,6 @@ export default function SettingsPage() {
     }
   }
 
-  // 🔥 UPDATED: Changing permissions now auto-saves to the database
   const handlePermissionChange = async (key: string, value: PermissionLevel) => {
     const newPermissions = { ...permissions, [key]: value }
     setPermissions(newPermissions)
@@ -361,15 +384,48 @@ export default function SettingsPage() {
                 🤝 Project Collaboration
               </CardTitle>
               <CardDescription className="text-xs text-blue-700/80">
-                {activePartner 
+                {isGuest 
+                  ? "Your access level for this shared project." 
+                  : activePartner 
                   ? "Manage access for your project partner." 
                   : "Invite one partner or co-owner to share this project with you."}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-5">
               
-              {/* STATE 1: ACTIVE OR PENDING PARTNER */}
-              {activePartner ? (
+              {/* 🔥 STATE 1: GUEST VIEW */}
+              {isGuest ? (
+                <div className="space-y-5">
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm">
+                    <p className="text-sm font-bold text-emerald-900">✅ Active Project Partner</p>
+                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                      You have been granted access to collaborate on this build. Your permissions are listed below.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Your Permissions</Label>
+                    <div className="grid gap-3 pt-1">
+                      {Object.keys(permissions).map((key) => {
+                        const typedKey = key as keyof typeof permissions;
+                        const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                        const permValue = permissions[typedKey];
+                        
+                        return (
+                          <div key={key} className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-semibold text-slate-700 w-1/3">{label}</span>
+                            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
+                              {permValue === "edit" ? "Full Access" : permValue === "read-only" ? "Read-Only" : "Hidden"}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+              ) : activePartner ? (
+                /* STATE 2: ACTIVE OR PENDING PARTNER (OWNER VIEW) */
                 <div className="space-y-5">
                   <div className="flex flex-col gap-3 bg-blue-50 border border-blue-100 p-3 rounded-lg">
                     <div className="flex justify-between items-center">
@@ -435,7 +491,7 @@ export default function SettingsPage() {
 
               ) : (
                 
-                /* STATE 2: INVITE FORM */
+                /* STATE 3: INVITE FORM */
                 <form onSubmit={handleSendInvite} className="space-y-5">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold text-slate-700">Partner Email Address</Label>
@@ -563,11 +619,11 @@ export default function SettingsPage() {
           </Card>
 
           {/* Danger Zone Card */}
-          <Card className="bg-white border border-rose-200 shadow-sm rounded-xl overflow-hidden">
-            <CardHeader className="pb-4 border-b border-rose-200 bg-rose-100">
-              <CardTitle className="text-lg font-bold text-rose-900 flex items-center gap-2">⚠️ Danger Zone</CardTitle>
-              <CardDescription className="text-xs text-rose-700">
-                Manage your raw database and project state.
+          <Card className={`bg-white border shadow-sm rounded-xl overflow-hidden ${isGuest ? 'border-slate-200 opacity-50 pointer-events-none' : 'border-rose-200'}`}>
+            <CardHeader className={`pb-4 border-b ${isGuest ? 'border-slate-200 bg-slate-50' : 'border-rose-200 bg-rose-100'}`}>
+              <CardTitle className={`text-lg font-bold flex items-center gap-2 ${isGuest ? 'text-slate-500' : 'text-rose-900'}`}>⚠️ Danger Zone</CardTitle>
+              <CardDescription className={`text-xs ${isGuest ? 'text-slate-400' : 'text-rose-700'}`}>
+                {isGuest ? "Only the project owner can manage raw data." : "Manage your raw database and project state."}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
@@ -579,6 +635,7 @@ export default function SettingsPage() {
                 </div>
                 <Button 
                   onClick={handleRestoreTutorial}
+                  disabled={isGuest}
                   className="shrink-0 shadow-sm font-bold bg-rose-600 hover:bg-rose-500 text-white w-full sm:w-auto"
                 >
                   👋 Load Examples
@@ -592,6 +649,7 @@ export default function SettingsPage() {
                 </div>
                 <Button 
                   onClick={handleClearAllData}
+                  disabled={isGuest}
                   className="shrink-0 shadow-sm font-bold bg-rose-600 hover:bg-rose-500 text-white w-full sm:w-auto"
                 >
                   🗑️ Clear All Data
