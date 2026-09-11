@@ -197,26 +197,8 @@ export default function SidebarNav() {
         </div>
       )}
 
-      {/* Workspace Dropdown Switcher */}
-      {workspaces.length > 1 && (
-        <div className="px-4 pt-4 pb-2 shrink-0">
-          <select
-            value={activeWorkspaceId}
-            onChange={handleWorkspaceChange}
-            className="w-full bg-slate-800 text-white text-xs font-bold py-1.5 px-3 rounded-md border border-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-orange-400 appearance-none cursor-pointer"
-          >
-            {workspaces.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-          <div className="pointer-events-none absolute right-7 top-[22px] text-slate-400 text-[10px]">▼</div>
-        </div>
-      )}
-
-      {/* Brand Header */}
-      <div className={`px-4 pb-5 flex flex-col gap-4 shrink-0 ${workspaces.length > 1 ? 'pt-2' : 'pt-4'}`}>
+      {/* Brand Header & Unified Workspace Switcher */}
+      <div className="px-4 pt-5 pb-5 flex flex-col gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <LogoCBBlock className="h-10 w-10 shrink-0 drop-shadow-md" />
           <h1 className="text-2xl font-extrabold tracking-tight text-white leading-none">
@@ -236,33 +218,60 @@ export default function SidebarNav() {
               placeholder="Project Name..."
             />
           ) : (
-            <button 
-              onClick={() => { 
-                if (!isGuest) {
-                  setTempName(projectName); 
-                  setIsEditingName(true); 
-                }
-              }}
-              disabled={isGuest}
-              className={`flex items-center gap-3 text-left w-full transition-colors ${!isGuest ? "group" : ""}`}
-              title={!isGuest ? "Edit Project Name" : projectName}
-            >
+            <div className="flex items-center gap-3 w-full group">
+              
+              {/* 1. Edit Pencil (Only visible to the Owner) */}
               {!isGuest && (
-                <span className="text-base text-slate-500 group-hover:text-orange-400 transition-colors shrink-0">
+                <button 
+                  onClick={() => { setTempName(projectName); setIsEditingName(true); }}
+                  className="text-base text-slate-500 hover:text-orange-400 transition-colors shrink-0 z-20"
+                  title="Edit Project Name"
+                >
                   ✏️
-                </span>
+                </button>
               )}
-              <span className="text-base font-bold text-slate-200 truncate max-w-[160px] group-hover:text-white transition-colors">
-                {projectName}
-              </span>
-            </button>
+
+              {/* 2. Project Name / Workspace Switcher */}
+              <div className="relative flex items-center flex-1 overflow-hidden">
+                {workspaces.length > 1 ? (
+                  <>
+                    {/* Invisible Native Select layered over the text */}
+                    <select
+                      value={activeWorkspaceId}
+                      onChange={handleWorkspaceChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      title="Switch Workspace"
+                    >
+                      {workspaces.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    {/* Visual Text layer */}
+                    <div className="flex items-center gap-1.5 w-full pointer-events-none">
+                      <span className="text-base font-bold text-slate-200 group-hover:text-white transition-colors truncate" title={projectName}>
+                        {projectName}
+                      </span>
+                      <span className="text-[9px] text-slate-400 mt-0.5 group-hover:text-slate-300">▼</span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-base font-bold text-slate-200 group-hover:text-white transition-colors truncate w-full" title={projectName}>
+                    {projectName}
+                  </span>
+                )}
+              </div>
+              
+            </div>
           )}
         </div>
       </div>
 
       <div className="mx-4 mb-4 h-[3px] bg-orange-500 rounded-full shrink-0" />
 
-      {/* Navigation Links */}
+      {/* Navigation Links (Keep your existing nav code below this) */}
       <nav className="space-y-1.5 text-sm font-medium px-2 flex-1 overflow-y-auto pb-4">
         {isNavLoading ? (
           <div className="flex justify-center py-6">
