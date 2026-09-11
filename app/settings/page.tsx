@@ -41,7 +41,7 @@ export default function SettingsPage() {
   const [inviteLink, setInviteLink] = useState("")
   const [copied, setCopied] = useState(false)
 
-  // 🔥 NEW: Guest State
+  // Guest State
   const [isGuest, setIsGuest] = useState(false)
   
   const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({
@@ -53,7 +53,6 @@ export default function SettingsPage() {
     contacts: "edit",
   })
 
-  // 🔥 UPDATED: Checks database for existing invites AND handles the Guest Handshake
   useEffect(() => {
     const fetchUserData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -89,7 +88,7 @@ export default function SettingsPage() {
             }
           }
         } else {
-          // 2. 🔥 NEW: If they don't own a project, check if they are an INVITED GUEST
+          // 2. If they don't own a project, check if they are an INVITED GUEST
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("*")
@@ -265,7 +264,47 @@ export default function SettingsPage() {
     }
   }
 
-  // --- Handlers for Collaboration ---
+  // 🔥 NEW: Handle Permanent Account Deletion
+  const handleDeleteAccount = async () => {
+    const isConfirmed = window.confirm(
+      "🚨 WARNING: Are you sure you want to permanently delete your account and all associated project data? This cannot be undone."
+    )
+    if (!isConfirmed) return
+
+    const typeConfirm = window.prompt("Type 'DELETE' to confirm account deletion:")
+    if (typeConfirm !== "DELETE") {
+      if (typeConfirm !== null) alert("Account deletion cancelled.")
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const response = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session?.access_token}`
+        }
+      })
+
+      const result = await response.json()
+      
+      if (!response.ok) {
+        alert(`Error: ${result.error}`)
+        return
+      }
+
+      // Wipe local storage data
+      await clear()
+      
+      await supabase.auth.signOut()
+      window.location.href = "/login"
+    } catch (error) {
+      console.error("Delete Account Error:", error)
+      alert("Failed to delete account. Please check your connection.")
+    }
+  }
+
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsInviting(true)
@@ -393,7 +432,6 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="pt-6 space-y-5">
               
-              {/* 🔥 STATE 1: GUEST VIEW */}
               {isGuest ? (
                 <div className="space-y-5">
                   <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm">
@@ -425,7 +463,6 @@ export default function SettingsPage() {
                 </div>
 
               ) : activePartner ? (
-                /* STATE 2: ACTIVE OR PENDING PARTNER (OWNER VIEW) */
                 <div className="space-y-5">
                   <div className="flex flex-col gap-3 bg-blue-50 border border-blue-100 p-3 rounded-lg">
                     <div className="flex justify-between items-center">
@@ -443,7 +480,6 @@ export default function SettingsPage() {
                       </Button>
                     </div>
 
-                    {/* COPY LINK SECTION */}
                     {inviteLink && activePartner.status.includes("Pending") && (
                       <div className="pt-3 border-t border-blue-100 flex items-center gap-2">
                         <Input 
@@ -490,8 +526,6 @@ export default function SettingsPage() {
                 </div>
 
               ) : (
-                
-                /* STATE 3: INVITE FORM */
                 <form onSubmit={handleSendInvite} className="space-y-5">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold text-slate-700">Partner Email Address</Label>
@@ -619,17 +653,17 @@ export default function SettingsPage() {
           </Card>
 
           {/* Danger Zone Card */}
-          <Card className={`bg-white border shadow-sm rounded-xl overflow-hidden ${isGuest ? 'border-slate-200 opacity-50 pointer-events-none' : 'border-rose-200'}`}>
+          <Card className={`bg-white border shadow-sm rounded-xl overflow-hidden ${isGuest ? 'border-slate-200' : 'border-rose-200'}`}>
             <CardHeader className={`pb-4 border-b ${isGuest ? 'border-slate-200 bg-slate-50' : 'border-rose-200 bg-rose-100'}`}>
               <CardTitle className={`text-lg font-bold flex items-center gap-2 ${isGuest ? 'text-slate-500' : 'text-rose-900'}`}>⚠️ Danger Zone</CardTitle>
               <CardDescription className={`text-xs ${isGuest ? 'text-slate-400' : 'text-rose-700'}`}>
-                {isGuest ? "Only the project owner can manage raw data." : "Manage your raw database and project state."}
+                {isGuest ? "Guests cannot manage raw data, but you can delete your account." : "Manage your raw database and project state."}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
               
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
-                <div>
+                <div className={isGuest ? "opacity-50" : ""}>
                   <h3 className="text-slate-900 font-bold text-sm">Load Tutorial Data</h3>
                   <p className="text-slate-500 text-xs mt-1">Reset this account to see example project data.</p>
                 </div>
@@ -642,8 +676,8 @@ export default function SettingsPage() {
                 </Button>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div className={isGuest ? "opacity-50" : ""}>
                   <h3 className="text-rose-900 font-bold text-sm">Start Real Project</h3>
                   <p className="text-rose-700 text-xs mt-1">Permanently delete all data to start a blank slate.</p>
                 </div>
@@ -653,6 +687,20 @@ export default function SettingsPage() {
                   className="shrink-0 shadow-sm font-bold bg-rose-600 hover:bg-rose-500 text-white w-full sm:w-auto"
                 >
                   🗑️ Clear All Data
+                </Button>
+              </div>
+
+              {/* Account Deletion - Active for both Owners and Guests */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-red-900 font-bold text-sm">Delete Account</h3>
+                  <p className="text-red-700 text-xs mt-1">Permanently destroy this account and all associated data.</p>
+                </div>
+                <Button 
+                  onClick={handleDeleteAccount}
+                  className="shrink-0 shadow-sm font-bold bg-red-700 hover:bg-red-600 text-white w-full sm:w-auto"
+                >
+                  🧨 Delete Account
                 </Button>
               </div>
 
