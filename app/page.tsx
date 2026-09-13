@@ -98,7 +98,6 @@ export default function DashboardPage() {
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
   
-  // 🔥 Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
@@ -112,23 +111,15 @@ export default function DashboardPage() {
         if (user?.email) {
           setCurrentUserEmail(user.email)
           
-          // 1. Fetch Billing Tier
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("tier")
-            .eq("id", user.id)
-            .maybeSingle()
-            
+          const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
           if (profile) setAccountTier(profile.tier)
           
-          // 2. Evaluate Workspace
           const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
           if (activeWorkspaceId === user.id) {
             setIsGuest(false)
           } else {
             setIsGuest(true)
-            
             const { data: guestInvite } = await supabase
               .from("project_members")
               .select("permissions")
@@ -151,6 +142,9 @@ export default function DashboardPage() {
   const hideExpenses = isGuest && permissions?.expenses === "hidden"
   const hidePunchList = isGuest && permissions?.punch_list === "hidden"
   const hideSchedule = isGuest && permissions?.schedule === "hidden"
+  
+  // 🔥 Trigger for the Glass Wall Overlay
+  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const handleOpenAddModal = () => {
     if (!newPunchText.trim()) return
@@ -298,47 +292,46 @@ export default function DashboardPage() {
 
   const isNewTask = editingPunch && !punchList.some(p => p.id === editingPunch.id)
 
-  // 🔥 MARKETING PAYWALL INTERCEPTOR
-  if (!isCheckingAuth && !isGuest && accountTier === "free") {
-    return (
-      <main className="p-6 bg-slate-100 min-h-screen flex items-center justify-center text-slate-900">
-        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden text-center">
-          <div className="bg-slate-900 p-8 flex flex-col items-center">
-            <span className="text-5xl mb-4">🏗️</span>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Ready to build your own project?</h1>
-            <p className="text-orange-400 text-sm font-medium mt-2">
-              You are currently using a free guest account.
-            </p>
-          </div>
-          
-          <div className="p-8 space-y-6">
-            <p className="text-slate-600 text-sm leading-relaxed">
-              To unlock your personal workspace and start managing your own builds, upgrade to <strong className="text-slate-900">CleanBuild Pro</strong>.
-            </p>
+  return (
+    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
+      
+      {/* 🔥 THE GLASS WALL OVERLAY */}
+      {showPaywall && (
+        <div className="absolute inset-0 z-50 bg-slate-100/50 backdrop-blur-[6px] flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden text-center relative z-50 mt-[-10vh]">
+            <div className="bg-slate-900 p-8 flex flex-col items-center">
+              <span className="text-5xl mb-4">🏗️</span>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Ready to manage your own build?</h1>
+              <p className="text-orange-400 text-sm font-medium mt-2">
+                You are currently using a free guest account.
+              </p>
+            </div>
             
-            <ul className="text-left space-y-3 text-sm font-medium text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <li className="flex items-center gap-2">✅ <span className="flex-1">Unlimited Projects & Schedules</span></li>
-              <li className="flex items-center gap-2">✅ <span className="flex-1">Live Budget & Expense Tracking</span></li>
-              <li className="flex items-center gap-2">✅ <span className="flex-1">Invite Unlimited Guests & Vendors</span></li>
-              <li className="flex items-center gap-2">✅ <span className="flex-1">Automated Email Task Reminders</span></li>
-            </ul>
+            <div className="p-8 space-y-6">
+              <p className="text-slate-600 text-sm leading-relaxed">
+                To unlock your personal workspace and start managing your own builds, upgrade to <strong className="text-slate-900">CleanBuild Pro</strong>.
+              </p>
+              
+              <ul className="text-left space-y-3 text-sm font-medium text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <li className="flex items-center gap-2">✅ <span className="flex-1">Unlimited Projects & Schedules</span></li>
+                <li className="flex items-center gap-2">✅ <span className="flex-1">Live Budget & Expense Tracking</span></li>
+                <li className="flex items-center gap-2">✅ <span className="flex-1">Invite Unlimited Guests & Vendors</span></li>
+                <li className="flex items-center gap-2">✅ <span className="flex-1">Automated Email Task Reminders</span></li>
+              </ul>
 
-            <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-12 text-base shadow-sm">
-              Upgrade to Pro (Coming Soon)
-            </Button>
-            
-            <p className="text-xs text-slate-400 mt-4">
-              Toggle back to the <strong className="text-slate-500">Shared Build</strong> in your sidebar to continue collaborating for free.
-            </p>
+              <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-12 text-base shadow-sm">
+                Upgrade to Pro (Coming Soon)
+              </Button>
+              
+              <p className="text-xs text-slate-400 mt-4">
+                Toggle back to the <strong className="text-slate-500">Shared Build</strong> in your sidebar to continue collaborating for free.
+              </p>
+            </div>
           </div>
         </div>
-      </main>
-    )
-  }
-  
-  return (
-    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
-      
+      )}
+
+      {/* --- STANDARD DASHBOARD UI RENDERED BEHIND THE GLASS WALL --- */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">

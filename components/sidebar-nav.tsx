@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation"
 import { syncManager } from "@/lib/syncManager"
 import { supabase } from "@/lib/supabase"
 import { clear } from "idb-keyval"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: "📊" },
@@ -70,6 +72,9 @@ export default function SidebarNav() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
   const [isSwitching, setIsSwitching] = useState(false)
+  
+  // Modal State for Guest Restrictions
+  const [restrictedModalOpen, setRestrictedModalOpen] = useState(false)
 
   useEffect(() => {
     const savedName = localStorage.getItem("cleanbuild_project_name")
@@ -94,11 +99,9 @@ export default function SidebarNav() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        // 1. Fetch Billing Tier
         const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
         if (profile) setAccountTier(profile.tier)
 
-        // 2. Fetch all workspaces using our new bulletproof database function
         const { data: workspaceData, error: rpcError } = await supabase.rpc("get_workspace_list", {
           current_user_id: user.id,
           current_email: user.email
@@ -117,7 +120,6 @@ export default function SidebarNav() {
         
         setWorkspaces(availableWorkspaces)
 
-        // 3. Set Active Workspace with Guest Priority Routing
         let currentWorkspaceId = localStorage.getItem("cleanbuild_active_workspace")
         
         if (!currentWorkspaceId || !availableWorkspaces.find(w => w.id === currentWorkspaceId)) {
@@ -128,7 +130,6 @@ export default function SidebarNav() {
         
         setActiveWorkspaceId(currentWorkspaceId)
 
-        // 4. Set Permissions based on Active Workspace
         if (currentWorkspaceId === user.id) {
           setIsGuest(false) 
         } else {
@@ -176,21 +177,6 @@ export default function SidebarNav() {
     window.location.href = "/"
   }
 
-  const visibleNavItems = navItems.filter((item) => {
-    // 🔥 1. PAYWALL LOCKOUT: Hide all links except Dashboard and Settings if they are free and on their own project
-    if (!isGuest && accountTier === "free") {
-      return item.href === "/" || item.href === "/settings"
-    }
-
-    // 2. GUEST LOCKOUT: Hide specific modules based on Owner's permissions
-    if (isGuest && permissions) {
-      const permKey = routeToPermissionKey[item.href]
-      if (permKey && permissions[permKey] === "hidden") return false
-    }
-
-    return true
-  })
-
   return (
     <div className="w-full flex flex-col h-full relative">
       
@@ -231,7 +217,7 @@ export default function SidebarNav() {
                 </button>
               )}
               <span className="text-base font-bold text-slate-200 truncate" title={projectName}>
-                {(!isGuest && accountTier === "free") ? "Workspace Locked" : projectName}
+                {projectName}
               </span>
             </div>
           )}
@@ -270,20 +256,36 @@ export default function SidebarNav() {
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-400"></div>
           </div>
         ) : (
-          visibleNavItems.map((item) => {
+          navItems.map((item) => {
             const isActive = pathname === item.href
+            
+            // 🔥 Check Lock Statuses
+            const permKey = routeToPermissionKey[item.href]
+            const isOwnerRestricted = isGuest && permissions && permKey && permissions[permKey] === "hidden"
+            const isPaywallLocked = !isGuest && accountTier === "free" && item.href !== "/settings"
+            const isLocked = isOwnerRestricted || isPaywallLocked
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={(e) => {
+                  // If Owner Restricted, block navigation entirely. 
+                  // If Paywall Locked, allow navigation so they see the blurred glass wall page!
+                  if (isOwnerRestricted) {
+                    e.preventDefault()
+                    setRestrictedModalOpen(true)
+                  }
+                }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                   isActive
                     ? "bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30 shadow-xs"
                     : "text-slate-300 hover:text-white hover:bg-slate-800/60"
                 }`}
               >
-                <span className="text-base">{item.icon}</span>
-                <span>{item.label}</span>
+                <span className="text-base shrink-0">{item.icon}</span>
+                <span className="flex-1 truncate">{item.label}</span>
+                {isLocked && <span className="text-slate-500 text-xs shrink-0" title="Restricted Access">🔒</span>}
               </Link>
             )
           })
@@ -295,6 +297,24 @@ export default function SidebarNav() {
           CleanBuild v1.01
         </span>
       </div>
+
+      {/* Guest Restriction Modal */}
+      <Dialog open={restrictedModalOpen} onOpenChange={setRestrictedModalOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-white border-2 border-slate-900 rounded-xl">
+          <DialogHeader className="mb-2">
+            <div className="flex justify-center mb-4 text-4xl">🔒</div>
+            <DialogTitle className="text-lg font-bold text-slate-900 text-center">
+              Access Restricted
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500 text-center mt-2">
+              The project owner has disabled your access to this specific module. Reach out to them directly if you need permissions changed.
+            </DialogDescription>
+          </DialogHeader>
+          <Button onClick={() => setRestrictedModalOpen(false)} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold">
+            Understood
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
