@@ -65,7 +65,7 @@ export default function SchedulePage() {
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
 
-  // 🔥 NEW: Read-Only State for Guests
+  // 🔥 Read-Only State for Guests
   const [isReadOnly, setIsReadOnly] = useState(false)
 
   const [selectedDate, setSelectedDate] = useState<string>(getLocalTodayStr())
@@ -99,29 +99,31 @@ export default function SchedulePage() {
   const [tempStartDate, setTempStartDate] = useState("")
   const [tempEndDate, setTempEndDate] = useState("")
 
-  // 🔥 NEW: Fetch Permissions on Load
+  // 🔥 Fetch Permissions on Load (Updated with Active Workspace Pointer)
   useEffect(() => {
     const fetchPermissions = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        const { data: project } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("owner_id", user.id)
-          .single()
+        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
-        // If they are not the owner, check their guest permissions
-        if (!project) {
+        if (activeWorkspaceId === user.id) {
+          // 1. They are the Owner of this workspace
+          setIsReadOnly(false)
+        } else {
+          // 2. They are a Guest in this workspace, fetch specific permissions
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
             .eq("invite_email", user.email)
-            .single()
+            .ilike("status", "active")
+            .maybeSingle()
 
           if (guestInvite?.permissions?.schedule === "read-only") {
             setIsReadOnly(true)
+          } else {
+            setIsReadOnly(false) // explicitly unlock if they have edit access
           }
         }
       } catch (error) {
