@@ -295,9 +295,9 @@ export default function DashboardPage() {
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
-      {/* 🔥 THE GLASS WALL OVERLAY */}
+      {/* 🔥 THE GLASS WALL OVERLAY (Light Gray Wash) */}
       {showPaywall && (
-        <div className="absolute inset-0 z-50 bg-slate-100/50 backdrop-blur-[6px] flex items-center justify-center p-6">
+        <div className="absolute inset-0 z-50 bg-slate-300/70 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden text-center relative z-50 mt-[-10vh]">
             <div className="bg-slate-900 p-8 flex flex-col items-center">
               <span className="text-5xl mb-4">🏗️</span>
