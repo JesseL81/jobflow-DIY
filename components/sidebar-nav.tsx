@@ -95,8 +95,11 @@ export default function SidebarNav() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        // 1. Fetch all workspaces using our VIP database function
-        const { data: workspaceData, error: rpcError } = await supabase.rpc("get_all_workspaces")
+        // 1. Fetch all workspaces using our new bulletproof database function
+        const { data: workspaceData, error: rpcError } = await supabase.rpc("get_workspace_list", {
+          current_user_id: user.id,
+          current_email: user.email
+        })
         
         let availableWorkspaces: Workspace[] = []
         if (workspaceData && !rpcError) {
