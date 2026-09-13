@@ -64,9 +64,9 @@ export default function SidebarNav() {
 
   const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
   const [isGuest, setIsGuest] = useState(false)
+  const [accountTier, setAccountTier] = useState<string>("free")
   const [isNavLoading, setIsNavLoading] = useState(true)
 
-  // 🔥 Workspace State
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
   const [isSwitching, setIsSwitching] = useState(false)
@@ -88,14 +88,17 @@ export default function SidebarNav() {
     verifyCloudName()
   }, [])
 
-  // 🔥 Fetch Workspaces & Permissions
   useEffect(() => {
     const fetchCoreData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        // 1. Fetch all workspaces using our new bulletproof database function
+        // 1. Fetch Billing Tier
+        const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+        if (profile) setAccountTier(profile.tier)
+
+        // 2. Fetch all workspaces using our new bulletproof database function
         const { data: workspaceData, error: rpcError } = await supabase.rpc("get_workspace_list", {
           current_user_id: user.id,
           current_email: user.email
@@ -109,34 +112,27 @@ export default function SidebarNav() {
             isOwner: w.is_owner
           }))
         } else {
-          // Fallback if network fails
           availableWorkspaces = [{ id: user.id, name: "🏠 My Build", isOwner: true }]
         }
         
         setWorkspaces(availableWorkspaces)
 
-        // 2. Set Active Workspace with Guest Priority Routing
+        // 3. Set Active Workspace with Guest Priority Routing
         let currentWorkspaceId = localStorage.getItem("cleanbuild_active_workspace")
         
-        // 🔥 If no workspace is saved (like a brand new login on a phone)
         if (!currentWorkspaceId || !availableWorkspaces.find(w => w.id === currentWorkspaceId)) {
-          // Automatically drop new users into the Shared Build first!
           const sharedWorkspace = availableWorkspaces.find(w => !w.isOwner)
           currentWorkspaceId = sharedWorkspace ? sharedWorkspace.id : user.id
-          
           localStorage.setItem("cleanbuild_active_workspace", currentWorkspaceId)
         }
         
         setActiveWorkspaceId(currentWorkspaceId)
 
-        // 3. Set Permissions based on Active Workspace
+        // 4. Set Permissions based on Active Workspace
         if (currentWorkspaceId === user.id) {
           setIsGuest(false) 
         } else {
-          // 🔥 Lock them into Guest Mode immediately
           setIsGuest(true) 
-          
-          // Fetch exact permissions (using .ilike to ignore capitalization)
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
@@ -170,44 +166,40 @@ export default function SidebarNav() {
     setIsEditingName(false)
   }
 
-  // 🔥 Perform the Hard Switch via Toggle
   const handleWorkspaceChange = async (newWorkspaceId: string) => {
     if (newWorkspaceId === activeWorkspaceId) return
 
     setIsSwitching(true)
-    
-    // Wipe local cache so old project data doesn't leak
     await clear()
-    
-    // Set the new pointer
     localStorage.setItem("cleanbuild_active_workspace", newWorkspaceId)
     localStorage.removeItem("cleanbuild_project_name")
-    
-    // Hard reload to boot up the new project state cleanly
     window.location.href = "/"
   }
 
   const visibleNavItems = navItems.filter((item) => {
-    if (!isGuest) return true 
-    if (!permissions) return true 
-    
-    const permKey = routeToPermissionKey[item.href]
-    if (!permKey) return true 
-    
-    return permissions[permKey] !== "hidden"
+    // 🔥 1. PAYWALL LOCKOUT: Hide all links except Dashboard and Settings if they are free and on their own project
+    if (!isGuest && accountTier === "free") {
+      return item.href === "/" || item.href === "/settings"
+    }
+
+    // 2. GUEST LOCKOUT: Hide specific modules based on Owner's permissions
+    if (isGuest && permissions) {
+      const permKey = routeToPermissionKey[item.href]
+      if (permKey && permissions[permKey] === "hidden") return false
+    }
+
+    return true
   })
 
   return (
     <div className="w-full flex flex-col h-full relative">
       
-      {/* Loading Overlay when switching projects */}
       {isSwitching && (
         <div className="absolute inset-0 bg-slate-900/80 z-50 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400"></div>
         </div>
       )}
 
-      {/* Brand Header */}
       <div className="px-4 pt-5 pb-4 flex flex-col gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <LogoCBBlock className="h-10 w-10 shrink-0 drop-shadow-md" />
@@ -216,9 +208,8 @@ export default function SidebarNav() {
           </h1>
         </div>
         
-        {/* Project Name Editor */}
         <div className="flex items-center h-7 mt-1 w-full">
-          {isEditingName && !isGuest ? (
+          {isEditingName && !isGuest && accountTier !== "free" ? (
             <input
               autoFocus
               value={tempName}
@@ -230,7 +221,7 @@ export default function SidebarNav() {
             />
           ) : (
             <div className="flex items-center gap-3 w-full group">
-              {!isGuest && (
+              {!isGuest && accountTier !== "free" && (
                 <button 
                   onClick={() => { setTempName(projectName); setIsEditingName(true); }}
                   className="text-base text-slate-500 hover:text-orange-400 transition-colors shrink-0"
@@ -240,14 +231,13 @@ export default function SidebarNav() {
                 </button>
               )}
               <span className="text-base font-bold text-slate-200 truncate" title={projectName}>
-                {projectName}
+                {(!isGuest && accountTier === "free") ? "Workspace Locked" : projectName}
               </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* 🔥 Explicit Workspace Toggle Switch */}
       {workspaces.length > 1 && (
         <div className="px-4 pb-4 shrink-0">
           <div className="bg-slate-900 p-1.5 rounded-lg flex items-center border border-slate-700 shadow-inner gap-1">
@@ -274,7 +264,6 @@ export default function SidebarNav() {
 
       <div className="mx-4 mb-4 h-[3px] bg-orange-500 rounded-full shrink-0" />
 
-      {/* Navigation Links */}
       <nav className="space-y-1.5 text-sm font-medium px-2 flex-1 overflow-y-auto pb-4">
         {isNavLoading ? (
           <div className="flex justify-center py-6">
