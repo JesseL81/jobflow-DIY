@@ -127,16 +127,18 @@ export default function SidebarNav() {
         if (currentWorkspaceId === user.id) {
           setIsGuest(false) 
         } else {
-          // You are a guest in this workspace, fetch your exact permissions
+          // 🔥 Lock them into Guest Mode immediately
+          setIsGuest(true) 
+          
+          // Fetch exact permissions (using .ilike to ignore capitalization)
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
             .eq("invite_email", user.email)
-            .eq("status", "Active")
-            .single()
+            .ilike("status", "active")
+            .maybeSingle()
 
           if (guestInvite?.permissions) {
-            setIsGuest(true)
             setPermissions(guestInvite.permissions)
           }
         }
