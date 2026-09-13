@@ -115,12 +115,18 @@ export default function SidebarNav() {
         
         setWorkspaces(availableWorkspaces)
 
-        // 2. Set Active Workspace
+        // 2. Set Active Workspace with Guest Priority Routing
         let currentWorkspaceId = localStorage.getItem("cleanbuild_active_workspace")
+        
+        // 🔥 If no workspace is saved (like a brand new login on a phone)
         if (!currentWorkspaceId || !availableWorkspaces.find(w => w.id === currentWorkspaceId)) {
-          currentWorkspaceId = user.id
-          localStorage.setItem("cleanbuild_active_workspace", user.id)
+          // Automatically drop new users into the Shared Build first!
+          const sharedWorkspace = availableWorkspaces.find(w => !w.isOwner)
+          currentWorkspaceId = sharedWorkspace ? sharedWorkspace.id : user.id
+          
+          localStorage.setItem("cleanbuild_active_workspace", currentWorkspaceId)
         }
+        
         setActiveWorkspaceId(currentWorkspaceId)
 
         // 3. Set Permissions based on Active Workspace
