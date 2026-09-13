@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
 export interface SelectionItem {
@@ -35,7 +35,7 @@ interface ExpenseItem {
   date?: string
 }
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   "All Categories",
   "Plumbing Fixtures",
   "Tile & Flooring",
@@ -47,7 +47,7 @@ const CATEGORIES = [
   "Other",
 ]
 
-const ROOMS = [
+const DEFAULT_ROOMS = [
   "All Rooms",
   "Kitchen",
   "Master Bathroom",
@@ -117,6 +117,11 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
 
 export default function SelectionsPage() {
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
+  
+  // Dynamic Rooms & Categories
+  const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
+  const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_selections_rooms_list", DEFAULT_ROOMS)
+  
   const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
     "Plumbing Fixtures": 500,
     "Tile & Flooring": 800,
@@ -124,7 +129,7 @@ export default function SelectionsPage() {
     "Cabinetry & Hardware": 1200,
   })
 
-  // 🔥 Auth, Permissions & Billing State
+  // Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
@@ -136,6 +141,12 @@ export default function SelectionsPage() {
   
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Custom Adding States
+  const [isAddingRoom, setIsAddingRoom] = useState(false)
+  const [newRoomName, setNewRoomName] = useState("")
+  const [isAddingCategory, setIsAddingCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState("")
 
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
   const [tempBudgetVal, setTempBudgetVal] = useState("")
@@ -153,7 +164,6 @@ export default function SelectionsPage() {
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Selected")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
 
-  // 🔥 Fetch Permissions & Tier on Load
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
       try {
@@ -180,11 +190,7 @@ export default function SelectionsPage() {
             .maybeSingle()
 
           if (guestInvite?.permissions) {
-            if (guestInvite.permissions.selections === "read-only") {
-              setIsReadOnly(true)
-            } else {
-              setIsReadOnly(false)
-            }
+            setIsReadOnly(guestInvite.permissions.selections === "read-only")
           }
         }
       } catch (error) {
@@ -196,25 +202,25 @@ export default function SelectionsPage() {
     fetchUserAndPermissions()
   }, [])
 
-  // 🔥 Trigger for the Glass Wall Overlay
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
+
+  const extractPrice = (priceStr: string) => {
+    if (!priceStr) return 0
+    const rawNum = parseFloat(priceStr.replace(/[^0-9.]/g, ""))
+    return isNaN(rawNum) ? 0 : rawNum
+  }
 
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items])
 
   const totalCost = useMemo(() => {
-    return items.reduce((sum, item) => {
-      if (!item.checked || !item.price) return sum
-      const rawNum = parseFloat(item.price.replace(/[^0-9.]/g, ""))
-      return sum + (isNaN(rawNum) ? 0 : rawNum)
-    }, 0)
+    return items.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
   }, [items])
 
   const activeCategoryCost = useMemo(() => {
     if (selectedCategory === "All Categories") return totalCost
     return items.reduce((sum, item) => {
-      if (item.category !== selectedCategory || !item.checked || !item.price) return sum
-      const rawNum = parseFloat(item.price.replace(/[^0-9.]/g, ""))
-      return sum + (isNaN(rawNum) ? 0 : rawNum)
+      if (item.category !== selectedCategory || !item.checked) return sum
+      return sum + extractPrice(item.price)
     }, 0)
   }, [items, selectedCategory, totalCost])
 
@@ -235,6 +241,29 @@ export default function SelectionsPage() {
       return matchesCategory && matchesRoom && matchesSearch
     })
   }, [items, selectedCategory, selectedRoom, searchQuery])
+
+  // --- Custom Rooms & Categories Handlers ---
+  const handleAddRoom = async () => {
+    if (isReadOnly || !newRoomName.trim()) return
+    const trimmed = newRoomName.trim()
+    if (!rooms.includes(trimmed)) {
+      await setRooms([...rooms, trimmed])
+    }
+    setNewRoomName("")
+    setIsAddingRoom(false)
+    setSelectedRoom(trimmed)
+  }
+
+  const handleAddCategory = async () => {
+    if (isReadOnly || !newCategoryName.trim()) return
+    const trimmed = newCategoryName.trim()
+    if (!categories.includes(trimmed)) {
+      await setCategories([...categories, trimmed])
+    }
+    setNewCategoryName("")
+    setIsAddingCategory(false)
+    setSelectedCategory(trimmed)
+  }
 
   const handleSaveBudget = async () => {
     if (isReadOnly) return
@@ -280,7 +309,7 @@ export default function SelectionsPage() {
     setIsSubmitting(true)
 
     try {
-      const itemPriceNumber = parseFloat(formPrice.replace(/[^0-9.]/g, "")) || 0
+      const itemPriceNumber = extractPrice(formPrice)
       let updatedItem: SelectionItem
 
       if (editingItem) {
@@ -317,6 +346,7 @@ export default function SelectionsPage() {
         await setItems(updatedItemsList)
       }
 
+      // Sync to expenses logic
       if (formSyncToExpenses) {
         try {
           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
@@ -336,9 +366,7 @@ export default function SelectionsPage() {
           await set("cleanbuild_expenses", newExpenseList)
           await syncManager.pushToCloud("cleanbuild_expenses", newExpenseList)
           window.dispatchEvent(new Event("expenses-updated"))
-        } catch (err) {
-          console.error(err)
-        }
+        } catch (err) {}
       } else if (editingItem && editingItem.syncToExpenses && !formSyncToExpenses) {
         try {
           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
@@ -346,9 +374,7 @@ export default function SelectionsPage() {
           await set("cleanbuild_expenses", filteredExpenses)
           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
           window.dispatchEvent(new Event("expenses-updated"))
-        } catch (err) {
-          console.error(err)
-        }
+        } catch (err) {}
       }
 
       setIsModalOpen(false)
@@ -359,34 +385,25 @@ export default function SelectionsPage() {
 
   const handleDeleteItem = async () => {
     if (isReadOnly || !editingItem) return
-    
     const updatedItems = items.filter((i) => i.id !== editingItem.id)
     await setItems(updatedItems)
-    
     try {
       const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
       const filteredExpenses = existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
       await set("cleanbuild_expenses", filteredExpenses)
       await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
       window.dispatchEvent(new Event("expenses-updated"))
-    } catch (err) {
-      console.error(err)
-    }
+    } catch (err) {}
     setIsModalOpen(false)
   }
 
   const getStatusBadge = (status: SelectionItem["status"]) => {
     switch (status) {
-      case "Selected":
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Selected</Badge>
-      case "Under Review":
-        return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Under Review</Badge>
-      case "Ordered":
-        return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Ordered</Badge>
-      case "Delivered":
-        return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Delivered</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
+      case "Selected": return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Selected</Badge>
+      case "Under Review": return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Under Review</Badge>
+      case "Ordered": return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Ordered</Badge>
+      case "Delivered": return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Delivered</Badge>
+      default: return <Badge variant="outline">{status}</Badge>
     }
   }
 
@@ -436,15 +453,16 @@ export default function SelectionsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
             <div className="md:col-span-1 space-y-4">
-              {/* Rooms Filter */}
+              
+              {/* --- ROOMS FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
                   Filter by Room
                 </span>
-                {ROOMS.map((rm) => {
-                  const rmCount = rm === "All Rooms" 
-                    ? items.length 
-                    : items.filter((i) => (i.room || "Other") === rm).length
+                {rooms.map((rm) => {
+                  const rmItems = rm === "All Rooms" ? items : items.filter((i) => (i.room || "Other") === rm)
+                  const rmCount = rmItems.length
+                  const rmCheckedCost = rmItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedRoom === rm
 
                   return (
@@ -455,24 +473,61 @@ export default function SelectionsPage() {
                         isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
                       }`}
                     >
-                      <span className="truncate">{rm}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-500"}`}>
-                        {rmCount}
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"}`}>
+                          {rmCount}
+                        </span>
+                        <span className="truncate text-left">{rm}</span>
+                      </div>
+                      <span className={`text-[10px] shrink-0 ml-2 ${isActive ? "text-emerald-400" : rmCheckedCost > 0 ? "text-emerald-600 font-bold" : "text-slate-400 font-medium"}`}>
+                        ${rmCheckedCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </span>
                     </button>
                   )
                 })}
+
+                {/* Add Custom Room */}
+                {isAddingRoom ? (
+                  <div className="flex flex-col gap-2 mt-2 px-1 py-1">
+                    <Input
+                      value={newRoomName}
+                      onChange={(e) => setNewRoomName(e.target.value)}
+                      placeholder="New room name..."
+                      className="h-8 text-xs bg-slate-50 border-slate-300"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddRoom()
+                        if (e.key === "Escape") {
+                          setIsAddingRoom(false)
+                          setNewRoomName("")
+                        }
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" onClick={handleAddRoom} className="flex-1 h-7 text-[10px] bg-blue-600 hover:bg-blue-700 text-white">Save</Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => { setIsAddingRoom(false); setNewRoomName(""); }} className="h-7 px-3 text-[10px] text-slate-500 hover:bg-slate-100">Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  !isReadOnly && (
+                    <div className="pt-2 px-1">
+                      <button type="button" onClick={() => setIsAddingRoom(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-dashed border-slate-300">
+                        + Add Custom Room
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
 
-              {/* Categories Filter */}
+              {/* --- CATEGORIES FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
                   Filter by Category
                 </span>
-                {CATEGORIES.map((cat) => {
-                  const catCount = cat === "All Categories" 
-                    ? items.length 
-                    : items.filter((i) => i.category === cat).length
+                {categories.map((cat) => {
+                  const catItems = cat === "All Categories" ? items : items.filter((i) => i.category === cat)
+                  const catCount = catItems.length
+                  const catCheckedCost = catItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedCategory === cat
 
                   return (
@@ -483,13 +538,50 @@ export default function SelectionsPage() {
                         isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
                       }`}
                     >
-                      <span className="truncate">{cat}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-500"}`}>
-                        {catCount}
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"}`}>
+                          {catCount}
+                        </span>
+                        <span className="truncate text-left">{cat}</span>
+                      </div>
+                      <span className={`text-[10px] shrink-0 ml-2 ${isActive ? "text-emerald-400" : catCheckedCost > 0 ? "text-emerald-600 font-bold" : "text-slate-400 font-medium"}`}>
+                        ${catCheckedCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </span>
                     </button>
                   )
                 })}
+
+                {/* Add Custom Category */}
+                {isAddingCategory ? (
+                  <div className="flex flex-col gap-2 mt-2 px-1 py-1">
+                    <Input
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="New category name..."
+                      className="h-8 text-xs bg-slate-50 border-slate-300"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddCategory()
+                        if (e.key === "Escape") {
+                          setIsAddingCategory(false)
+                          setNewCategoryName("")
+                        }
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" onClick={handleAddCategory} className="flex-1 h-7 text-[10px] bg-blue-600 hover:bg-blue-700 text-white">Save</Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => { setIsAddingCategory(false); setNewCategoryName(""); }} className="h-7 px-3 text-[10px] text-slate-500 hover:bg-slate-100">Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  !isReadOnly && (
+                    <div className="pt-2 px-1">
+                      <button type="button" onClick={() => setIsAddingCategory(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-dashed border-slate-300">
+                        + Add Custom Category
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
             </div>
 
@@ -531,7 +623,7 @@ export default function SelectionsPage() {
                         }}
                         className="h-8 text-xs bg-blue-600 hover:bg-blue-400 text-white font-semibold"
                       >
-                        🎯 Set Budget Target
+                        🎯 Set Target
                       </Button>
                     )}
                   </div>
@@ -702,8 +794,8 @@ export default function SelectionsPage() {
 
       {/* Main Item Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2 shrink-0">
             <DialogTitle className="text-orange-400 font-bold">
               {isReadOnly ? "View Material Selection" : editingItem ? "Edit Material Selection" : "Add New Material Selection"}
             </DialogTitle>
@@ -732,7 +824,7 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormRoom(e.target.value)}
                   className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
-                  {ROOMS.filter((r) => r !== "All Rooms").map((r) => (
+                  {rooms.filter((r) => r !== "All Rooms").map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
@@ -749,7 +841,7 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormCategory(e.target.value)}
                   className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
-                  {CATEGORIES.filter((c) => c !== "All Categories").map((c) => (
+                  {categories.filter((c) => c !== "All Categories").map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -843,7 +935,7 @@ export default function SelectionsPage() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100 shrink-0">
             {isReadOnly ? (
               <Button 
                 variant="outline" 
