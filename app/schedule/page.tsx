@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PaywallOverlay } from "@/components/paywall-overlay"
 
 interface CalendarTask {
   id: number
@@ -65,8 +66,12 @@ export default function SchedulePage() {
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
 
-  // 🔥 Read-Only State for Guests
+  // 🔥 Auth, Permissions & Billing State
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+  const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
+  const [accountTier, setAccountTier] = useState<string>("free")
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   const [selectedDate, setSelectedDate] = useState<string>(getLocalTodayStr())
   const [modalEndDate, setModalEndDate] = useState<string>(getLocalTodayStr())
@@ -99,20 +104,27 @@ export default function SchedulePage() {
   const [tempStartDate, setTempStartDate] = useState("")
   const [tempEndDate, setTempEndDate] = useState("")
 
-  // 🔥 Fetch Permissions on Load (Updated with Active Workspace Pointer)
+  // 🔥 Fetch Permissions & Tier on Load
   useEffect(() => {
-    const fetchPermissions = async () => {
+    const fetchUserAndPermissions = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
+
+        setCurrentUserEmail(user.email)
+        
+        const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+        if (profile) setAccountTier(profile.tier)
 
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
         if (activeWorkspaceId === user.id) {
           // 1. They are the Owner of this workspace
+          setIsGuest(false)
           setIsReadOnly(false)
         } else {
-          // 2. They are a Guest in this workspace, fetch specific permissions
+          // 2. They are a Guest in this workspace
+          setIsGuest(true)
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
@@ -128,10 +140,15 @@ export default function SchedulePage() {
         }
       } catch (error) {
         console.error("Failed to load schedule permissions:", error)
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
-    fetchPermissions()
+    fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Trigger for the Glass Wall Overlay
+  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const handleOpenDatesModal = () => {
     setTempStartDate(projectDates?.startDate || "2026-06-29")
@@ -391,7 +408,6 @@ export default function SchedulePage() {
   }
 
   const handleDateClick = (dateStr: string) => {
-    // If read-only, block clicking empty dates so they can't add tasks
     if (isReadOnly) return
 
     setSelectedDate(dateStr)
@@ -526,8 +542,10 @@ export default function SchedulePage() {
   const activeDropdownValue = `${currentDate.getFullYear()}-${currentDate.getMonth()}`
 
   return (
-    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
+      <PaywallOverlay show={showPaywall} />
+
       {/* LOCKED HEIGHT HEADER BUBBLE */}
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-4 mb-6 md:h-[140px] shrink-0">
         
@@ -591,7 +609,6 @@ export default function SchedulePage() {
             >
               Today
             </Button>
-            {/* 🔥 Hide Add Event button if Read-Only */}
             {!isReadOnly && (
               <Button
                 size="sm"
@@ -603,7 +620,6 @@ export default function SchedulePage() {
             )}
           </div>
 
-          {/* 🔥 Hide Project Dates button if Read-Only */}
           {!isReadOnly && (
             <Button
               variant="outline"

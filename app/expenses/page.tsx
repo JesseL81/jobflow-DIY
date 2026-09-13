@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PaywallOverlay } from "@/components/paywall-overlay"
 
 interface Expense {
   id: number
@@ -39,9 +40,6 @@ export default function ExpenseTracker() {
   const [expenses, setExpenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
   const [totalBudget, setTotalBudget] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
   
-  // 🔥 NEW: Read-Only State for Guests
-  const [isReadOnly, setIsReadOnly] = useState(false)
-  
   const [projectName, setProjectName] = useState("My Project")
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -58,6 +56,14 @@ export default function ExpenseTracker() {
   const [tempBudget, setTempBudget] = useState<string>("23402")
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 
+  // 🔥 Auth, Permissions & Billing State
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+  const [isGuest, setIsGuest] = useState(false)
+  const [isReadOnly, setIsReadOnly] = useState(false)
+  const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
+  const [accountTier, setAccountTier] = useState<string>("free")
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
   useEffect(() => {
     setTempBudget(totalBudget.toString())
   }, [totalBudget])
@@ -72,36 +78,47 @@ export default function ExpenseTracker() {
     return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
 
-  // 🔥 NEW: Fetch Permissions on Load
+  // 🔥 Fetch Permissions & Tier on Load
   useEffect(() => {
-    const fetchPermissions = async () => {
+    const fetchUserAndPermissions = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user?.email) return
+        if (user?.email) {
+          setCurrentUserEmail(user.email)
+          
+          const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+          if (profile) setAccountTier(profile.tier)
+          
+          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
-        const { data: project } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("owner_id", user.id)
-          .single()
+          if (activeWorkspaceId === user.id) {
+            setIsGuest(false)
+          } else {
+            setIsGuest(true)
+            const { data: guestInvite } = await supabase
+              .from("project_members")
+              .select("permissions")
+              .eq("invite_email", user.email)
+              .ilike("status", "active")
+              .maybeSingle()
 
-        if (!project) {
-          const { data: guestInvite } = await supabase
-            .from("project_members")
-            .select("permissions")
-            .eq("invite_email", user.email)
-            .single()
-
-          if (guestInvite?.permissions?.expenses === "read-only") {
-            setIsReadOnly(true)
+            if (guestInvite?.permissions) {
+              setPermissions(guestInvite.permissions)
+              if (guestInvite.permissions.expenses === "read-only") {
+                setIsReadOnly(true)
+              }
+            }
           }
         }
-      } catch (error) {
-        console.error("Failed to load expenses permissions:", error)
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
-    fetchPermissions()
+    fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Trigger for the Glass Wall Overlay
+  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const totalMaterials = expenses.reduce((sum, item) => sum + (item.materials || 0), 0)
   const totalLabor = expenses.reduce((sum, item) => sum + (item.labor || 0), 0)
@@ -248,9 +265,12 @@ export default function ExpenseTracker() {
   }
 
   return (
-    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
+      {/* 🔥 THE GLASS WALL OVERLAY */}
+      <PaywallOverlay show={showPaywall} />
+
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">

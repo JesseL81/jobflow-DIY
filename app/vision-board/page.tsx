@@ -12,10 +12,10 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogDescription, 
-  DialogFooter 
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PaywallOverlay } from "@/components/paywall-overlay"
 
 import html2canvas from "html2canvas-pro"
 import jsPDF from "jspdf"
@@ -74,8 +74,12 @@ export default function VisionBoardPage() {
   const [boardItems, setBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", INITIAL_BOARD)
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_vision_board_categories", DEFAULT_CATEGORIES)
   
-  // 🔥 NEW: Read-Only State for Guests
+  // 🔥 Auth, Permissions & Billing State
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+  const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
+  const [accountTier, setAccountTier] = useState<string>("free")
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
@@ -102,36 +106,51 @@ export default function VisionBoardPage() {
     setIsMounted(true)
   }, [])
 
-  // 🔥 NEW: Fetch Permissions on Load
+  // 🔥 Fetch Permissions & Tier on Load
   useEffect(() => {
-    const fetchPermissions = async () => {
+    const fetchUserAndPermissions = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        const { data: project } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("owner_id", user.id)
-          .single()
+        setCurrentUserEmail(user.email)
 
-        if (!project) {
+        const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+        if (profile) setAccountTier(profile.tier)
+
+        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
+
+        if (activeWorkspaceId === user.id) {
+          // 1. They are the Owner of this workspace
+          setIsGuest(false)
+          setIsReadOnly(false)
+        } else {
+          // 2. They are a Guest in this workspace
+          setIsGuest(true)
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
             .eq("invite_email", user.email)
-            .single()
+            .ilike("status", "active")
+            .maybeSingle()
 
           if (guestInvite?.permissions?.vision_board === "read-only") {
             setIsReadOnly(true)
+          } else {
+            setIsReadOnly(false)
           }
         }
       } catch (error) {
         console.error("Failed to load vision board permissions:", error)
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
-    fetchPermissions()
+    fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Trigger for the Glass Wall Overlay
+  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const handleAddCategory = async () => {
     if (isReadOnly || !newCategoryName.trim()) return
@@ -422,7 +441,10 @@ export default function VisionBoardPage() {
   if (!isMounted) return null;
 
   return (
-    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
+      
+      <PaywallOverlay show={showPaywall} />
+
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">

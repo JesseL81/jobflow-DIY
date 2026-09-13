@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { PaywallOverlay } from "@/components/paywall-overlay"
 
 export interface SelectionItem {
   id: string
@@ -105,8 +106,12 @@ export default function SelectionsPage() {
     "Cabinetry & Hardware": 1200,
   })
 
-  // 🔥 NEW: Read-Only State for Guests
+  // 🔥 Auth, Permissions & Billing State
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+  const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
+  const [accountTier, setAccountTier] = useState<string>("free")
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
@@ -127,36 +132,53 @@ export default function SelectionsPage() {
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Selected")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
 
-  // 🔥 NEW: Fetch Permissions on Load
+  // 🔥 Fetch Permissions & Tier on Load
   useEffect(() => {
-    const fetchPermissions = async () => {
+    const fetchUserAndPermissions = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        const { data: project } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("owner_id", user.id)
-          .single()
+        setCurrentUserEmail(user.email)
 
-        if (!project) {
+        const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+        if (profile) setAccountTier(profile.tier)
+
+        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
+
+        if (activeWorkspaceId === user.id) {
+          // 1. They are the Owner of this workspace
+          setIsGuest(false)
+          setIsReadOnly(false)
+        } else {
+          // 2. They are a Guest in this workspace
+          setIsGuest(true)
           const { data: guestInvite } = await supabase
             .from("project_members")
             .select("permissions")
             .eq("invite_email", user.email)
-            .single()
+            .ilike("status", "active")
+            .maybeSingle()
 
-          if (guestInvite?.permissions?.selections === "read-only") {
-            setIsReadOnly(true)
+          if (guestInvite?.permissions) {
+            if (guestInvite.permissions.selections === "read-only") {
+              setIsReadOnly(true)
+            } else {
+              setIsReadOnly(false)
+            }
           }
         }
       } catch (error) {
         console.error("Failed to load selections permissions:", error)
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
-    fetchPermissions()
+    fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Trigger for the Glass Wall Overlay
+  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items])
 
@@ -348,8 +370,10 @@ export default function SelectionsPage() {
   const allowanceDiff = currentCategoryAllowance - activeCategoryCost
 
   return (
-    <main className="p-6 bg-slate-100 min-h-screen space-y-6 text-slate-950 flex flex-col">
+    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
+      <PaywallOverlay show={showPaywall} />
+
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
         <div>
           <div className="flex items-center gap-3">

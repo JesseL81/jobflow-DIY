@@ -14,8 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog"
+import { PaywallOverlay } from "@/components/paywall-overlay"
 
 interface Contact {
   id: string
@@ -57,9 +57,6 @@ const INITIAL_CONTACTS: Contact[] = [
 export default function ContactsPage() {
   const [contacts, setContacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", INITIAL_CONTACTS)
   
-  // 🔥 NEW: Read-Only State for Guests
-  const [isReadOnly, setIsReadOnly] = useState(false)
-  
   const [activeContactId, setActiveContactId] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   
@@ -76,36 +73,54 @@ export default function ContactsPage() {
   const [newNotes, setNewNotes] = useState("")
   const [newStatus, setNewStatus] = useState<"Active" | "Preferred" | "On Hold">("Active")
 
-  // 🔥 NEW: Fetch Permissions on Load
+  // 🔥 Auth, Permissions & Billing State
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+  const [isGuest, setIsGuest] = useState(false)
+  const [isReadOnly, setIsReadOnly] = useState(false)
+  const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
+  const [accountTier, setAccountTier] = useState<string>("free")
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
   useEffect(() => {
-    const fetchPermissions = async () => {
+    const fetchUserAndPermissions = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user?.email) return
+        if (user?.email) {
+          setCurrentUserEmail(user.email)
+          
+          const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+          if (profile) setAccountTier(profile.tier)
+          
+          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
-        const { data: project } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("owner_id", user.id)
-          .single()
+          if (activeWorkspaceId === user.id) {
+            setIsGuest(false)
+          } else {
+            setIsGuest(true)
+            const { data: guestInvite } = await supabase
+              .from("project_members")
+              .select("permissions")
+              .eq("invite_email", user.email)
+              .ilike("status", "active")
+              .maybeSingle()
 
-        if (!project) {
-          const { data: guestInvite } = await supabase
-            .from("project_members")
-            .select("permissions")
-            .eq("invite_email", user.email)
-            .single()
-
-          if (guestInvite?.permissions?.contacts === "read-only") {
-            setIsReadOnly(true)
+            if (guestInvite?.permissions) {
+              setPermissions(guestInvite.permissions)
+              if (guestInvite.permissions.contacts === "read-only") {
+                setIsReadOnly(true)
+              }
+            }
           }
         }
-      } catch (error) {
-        console.error("Failed to load contacts permissions:", error)
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
-    fetchPermissions()
+    fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Trigger for the Glass Wall Overlay
+  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const filteredContacts = contacts.filter((c) => {
     const term = searchTerm.toLowerCase()
@@ -194,8 +209,10 @@ export default function ContactsPage() {
   }
 
   return (
-    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
+      <PaywallOverlay show={showPaywall} />
+
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -554,10 +571,7 @@ export default function ContactsPage() {
             </Card>
           )}
         </div>
-
       </div>
-
-      
     </main>
   )
 }

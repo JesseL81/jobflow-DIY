@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { PaywallOverlay } from "@/components/paywall-overlay"
 
 export interface PunchItem {
   id: number
@@ -65,44 +66,55 @@ export default function PunchListPage() {
   const [items, setItems] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
   const [calendarTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
   
-  // 🔥 NEW: Read-Only State for Guests
-  const [isReadOnly, setIsReadOnly] = useState(false)
-  
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
 
+  // 🔥 Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+  const [isGuest, setIsGuest] = useState(false)
+  const [isReadOnly, setIsReadOnly] = useState(false)
+  const [accountTier, setAccountTier] = useState<string>("free")
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
-  // 🔥 UPDATED: Fetch user email AND permissions on load
   useEffect(() => {
-    const fetchUserAccess = async () => {
-      const { data } = await supabase.auth.getUser()
-      if (data?.user?.email) {
-        setCurrentUserEmail(data.user.email)
-        
-        // Check if Owner
-        const { data: project } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("owner_id", data.user.id)
-          .single()
+    const fetchUserAndPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) {
+          setCurrentUserEmail(user.email)
+          
+          const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+          if (profile) setAccountTier(profile.tier)
+          
+          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
-        // If not owner, check guest permissions
-        if (!project) {
-          const { data: guestInvite } = await supabase
-            .from("project_members")
-            .select("permissions")
-            .eq("invite_email", data.user.email)
-            .single()
+          if (activeWorkspaceId === user.id) {
+            setIsGuest(false)
+          } else {
+            setIsGuest(true)
+            const { data: guestInvite } = await supabase
+              .from("project_members")
+              .select("permissions")
+              .eq("invite_email", user.email)
+              .ilike("status", "active")
+              .maybeSingle()
 
-          if (guestInvite?.permissions?.punch_list === "read-only") {
-            setIsReadOnly(true)
+            if (guestInvite?.permissions) {
+              if (guestInvite.permissions.punch_list === "read-only") {
+                setIsReadOnly(true)
+              }
+            }
           }
         }
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
-    fetchUserAccess()
+    fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Trigger for the Glass Wall Overlay
+  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [editingItem, setEditingItem] = useState<PunchItem | null>(null)
@@ -166,7 +178,7 @@ export default function PunchListPage() {
   }, [items, selectedCategory, searchQuery, calendarTasks])
 
   const handleToggleComplete = (id: number) => {
-    if (isReadOnly) return // Extra safety
+    if (isReadOnly) return
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i)))
   }
 
@@ -269,8 +281,10 @@ export default function PunchListPage() {
   }
 
   return (
-    <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
+    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
+      <PaywallOverlay show={showPaywall} />
+
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -291,7 +305,6 @@ export default function PunchListPage() {
             </span>
           </div>
 
-          {/* 🔥 Hide Add Button if Read-Only */}
           {!isReadOnly && (
             <Button
               size="sm"
@@ -471,11 +484,9 @@ export default function PunchListPage() {
         </div>
       </Card>
 
-      {/* STRICT MOBILE LAYOUT MODAL */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[90dvh] p-0 gap-0 flex flex-col overflow-hidden border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
           
-          {/* HEADER */}
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-lg font-bold text-orange-400">
               {isReadOnly ? "View Task Details" : (editingItem ? "Edit Task" : "Add New Task")}
@@ -487,7 +498,6 @@ export default function PunchListPage() {
             )}
           </DialogHeader>
 
-          {/* SCROLLABLE BODY */}
           <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
             <div>
               <Label htmlFor="task-text" className="text-xs font-semibold text-slate-700">Task Title / Description {isReadOnly ? "" : "*"}</Label>
