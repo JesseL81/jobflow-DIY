@@ -66,7 +66,7 @@ export default function SidebarNav() {
   const [isGuest, setIsGuest] = useState(false)
   const [isNavLoading, setIsNavLoading] = useState(true)
 
-  // 🔥 NEW: Workspace State
+  // 🔥 Workspace State
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
   const [isSwitching, setIsSwitching] = useState(false)
@@ -95,7 +95,7 @@ export default function SidebarNav() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
 
-        // 1. Fetch all workspaces using our new VIP database function
+        // 1. Fetch all workspaces using our VIP database function
         const { data: workspaceData, error: rpcError } = await supabase.rpc("get_all_workspaces")
         
         let availableWorkspaces: Workspace[] = []
@@ -159,21 +159,20 @@ export default function SidebarNav() {
     setIsEditingName(false)
   }
 
-  // 🔥 Perform the Hard Switch
-  const handleWorkspaceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newWorkspaceId = e.target.value
+  // 🔥 Perform the Hard Switch via Toggle
+  const handleWorkspaceChange = async (newWorkspaceId: string) => {
     if (newWorkspaceId === activeWorkspaceId) return
 
     setIsSwitching(true)
     
-    // 1. Wipe the local offline cache so old project data doesn't leak
+    // Wipe local cache so old project data doesn't leak
     await clear()
     
-    // 2. Set the new pointer
+    // Set the new pointer
     localStorage.setItem("cleanbuild_active_workspace", newWorkspaceId)
     localStorage.removeItem("cleanbuild_project_name")
     
-    // 3. Hard reload to boot up the new project state cleanly
+    // Hard reload to boot up the new project state cleanly
     window.location.href = "/"
   }
 
@@ -197,8 +196,8 @@ export default function SidebarNav() {
         </div>
       )}
 
-      {/* Brand Header & Unified Workspace Switcher */}
-      <div className="px-4 pt-5 pb-5 flex flex-col gap-4 shrink-0">
+      {/* Brand Header */}
+      <div className="px-4 pt-5 pb-4 flex flex-col gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <LogoCBBlock className="h-10 w-10 shrink-0 drop-shadow-md" />
           <h1 className="text-2xl font-extrabold tracking-tight text-white leading-none">
@@ -206,7 +205,8 @@ export default function SidebarNav() {
           </h1>
         </div>
         
-        <div className="flex items-center h-7 mt-2 w-full">
+        {/* Project Name Editor */}
+        <div className="flex items-center h-7 mt-1 w-full">
           {isEditingName && !isGuest ? (
             <input
               autoFocus
@@ -219,59 +219,51 @@ export default function SidebarNav() {
             />
           ) : (
             <div className="flex items-center gap-3 w-full group">
-              
-              {/* 1. Edit Pencil (Only visible to the Owner) */}
               {!isGuest && (
                 <button 
                   onClick={() => { setTempName(projectName); setIsEditingName(true); }}
-                  className="text-base text-slate-500 hover:text-orange-400 transition-colors shrink-0 z-20"
+                  className="text-base text-slate-500 hover:text-orange-400 transition-colors shrink-0"
                   title="Edit Project Name"
                 >
                   ✏️
                 </button>
               )}
-
-              {/* 2. Project Name / Workspace Switcher */}
-              <div className="relative flex items-center flex-1 overflow-hidden">
-                {workspaces.length > 1 ? (
-                  <>
-                    {/* Invisible Native Select layered over the text */}
-                    <select
-                      value={activeWorkspaceId}
-                      onChange={handleWorkspaceChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      title="Switch Workspace"
-                    >
-                      {workspaces.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.name}
-                        </option>
-                      ))}
-                    </select>
-                    
-                    {/* Visual Text layer */}
-                    <div className="flex items-center gap-1.5 w-full pointer-events-none">
-                      <span className="text-base font-bold text-slate-200 group-hover:text-white transition-colors truncate" title={projectName}>
-                        {projectName}
-                      </span>
-                      <span className="text-[9px] text-slate-400 mt-0.5 group-hover:text-slate-300">▼</span>
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-base font-bold text-slate-200 group-hover:text-white transition-colors truncate w-full" title={projectName}>
-                    {projectName}
-                  </span>
-                )}
-              </div>
-              
+              <span className="text-base font-bold text-slate-200 truncate" title={projectName}>
+                {projectName}
+              </span>
             </div>
           )}
         </div>
       </div>
 
+      {/* 🔥 Explicit Workspace Toggle Switch */}
+      {workspaces.length > 1 && (
+        <div className="px-4 pb-4 shrink-0">
+          <div className="bg-slate-900 p-1.5 rounded-lg flex items-center border border-slate-700 shadow-inner gap-1">
+            {workspaces.map((w) => {
+              const isActive = activeWorkspaceId === w.id
+              return (
+                <button
+                  key={w.id}
+                  onClick={() => handleWorkspaceChange(w.id)}
+                  className={`flex-1 text-[11px] font-bold py-2 px-2 rounded-md transition-all truncate ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  }`}
+                  title={w.name}
+                >
+                  {w.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="mx-4 mb-4 h-[3px] bg-orange-500 rounded-full shrink-0" />
 
-      {/* Navigation Links (Keep your existing nav code below this) */}
+      {/* Navigation Links */}
       <nav className="space-y-1.5 text-sm font-medium px-2 flex-1 overflow-y-auto pb-4">
         {isNavLoading ? (
           <div className="flex justify-center py-6">
@@ -300,7 +292,7 @@ export default function SidebarNav() {
 
       <div className="mt-auto px-4 pb-2 pt-2 text-center shrink-0 border-t border-slate-800/80">
         <span className="text-[11px] font-bold text-slate-600 tracking-widest uppercase">
-          CleanBuild v1.00
+          CleanBuild v1.01
         </span>
       </div>
     </div>
