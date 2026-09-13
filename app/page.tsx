@@ -97,17 +97,47 @@ export default function DashboardPage() {
   
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
+  
+  // 🔥 Auth & Permissions State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
+  const [isGuest, setIsGuest] = useState(false)
+  const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
 
   useEffect(() => {
-    const fetchUserEmail = async () => {
-      const { data } = await supabase.auth.getUser()
-      if (data?.user?.email) {
-        setCurrentUserEmail(data.user.email)
+    const fetchUserAndPermissions = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        setCurrentUserEmail(user.email)
+        
+        // 1. Get the current active workspace we switched into
+        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
+
+        if (activeWorkspaceId === user.id) {
+          setIsGuest(false)
+        } else {
+          setIsGuest(true)
+          
+          // 2. Fetch the guest permissions using the case-insensitive ILIKE rule
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", user.email)
+            .ilike("status", "active")
+            .maybeSingle()
+
+          if (guestInvite?.permissions) {
+            setPermissions(guestInvite.permissions)
+          }
+        }
       }
     }
-    fetchUserEmail()
+    fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Permission Masks
+  const hideExpenses = isGuest && permissions?.expenses === "hidden"
+  const hidePunchList = isGuest && permissions?.punch_list === "hidden"
+  const hideSchedule = isGuest && permissions?.schedule === "hidden"
 
   const handleOpenAddModal = () => {
     if (!newPunchText.trim()) return
@@ -248,14 +278,10 @@ export default function DashboardPage() {
   const totalTimeMs = Math.max(0, projEnd.getTime() - projStart.getTime())
   const elapsedTimeMs = today.getTime() - projStart.getTime()
   
-  // FIX: Unclamped day calculations to allow the percentage to exceed 100%
   const totalDays = Math.max(1, Math.round(totalTimeMs / (1000 * 60 * 60 * 24)) + 1)
   const currentDay = Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1
   
-  // Prevent percentage from going below 0 (if project hasn't started yet), but allow it to exceed 100
   const percentTimeUsed = Math.max(0, Math.round((currentDay / totalDays) * 100))
-  
-  // Cap the visual bar width at 100% so it doesn't break the UI
   const barVisualWidth = Math.min(100, percentTimeUsed)
 
   const isNewTask = editingPunch && !punchList.some(p => p.id === editingPunch.id)
@@ -281,22 +307,26 @@ export default function DashboardPage() {
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs">Total Budget</CardDescription>
-                <CardTitle className="text-xl font-bold">${totalBudget.toLocaleString()}</CardTitle>
+                <CardTitle className={`text-xl font-bold ${hideExpenses ? "text-slate-400" : "text-slate-900"}`}>
+                  {hideExpenses ? "🔒 $ - - -" : `$${totalBudget.toLocaleString()}`}
+                </CardTitle>
               </CardHeader>
             </Card>
 
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs">Total Spent</CardDescription>
-                <CardTitle className="text-xl font-bold text-blue-600">${totalSpent.toLocaleString()}</CardTitle>
+                <CardTitle className={`text-xl font-bold ${hideExpenses ? "text-slate-400" : "text-blue-600"}`}>
+                  {hideExpenses ? "🔒 $ - - -" : `$${totalSpent.toLocaleString()}`}
+                </CardTitle>
               </CardHeader>
             </Card>
 
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs">Remaining Funds</CardDescription>
-                <CardTitle className={`text-xl font-bold ${remainingBudget < 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                  ${remainingBudget.toLocaleString()}
+                <CardTitle className={`text-xl font-bold ${hideExpenses ? "text-slate-400" : remainingBudget < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                  {hideExpenses ? "🔒 $ - - -" : `$${remainingBudget.toLocaleString()}`}
                 </CardTitle>
               </CardHeader>
             </Card>
@@ -304,8 +334,8 @@ export default function DashboardPage() {
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs">Active Delays</CardDescription>
-                <CardTitle className="text-xl font-bold text-rose-600">
-                  {customNonWorkdays.length} {customNonWorkdays.length === 1 ? "Day" : "Days"}
+                <CardTitle className={`text-xl font-bold ${hideSchedule ? "text-slate-400" : "text-rose-600"}`}>
+                  {hideSchedule ? "🔒 - - -" : `${customNonWorkdays.length} ${customNonWorkdays.length === 1 ? "Day" : "Days"}`}
                 </CardTitle>
               </CardHeader>
             </Card>
@@ -316,16 +346,16 @@ export default function DashboardPage() {
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-sm font-semibold">Budget Utilization</CardTitle>
-                  <span className="text-xs font-bold text-slate-600">
-                    {percentBudgetUsed}% Used (${totalSpent.toLocaleString()} / ${totalBudget.toLocaleString()})
+                  <span className={`text-xs font-bold ${hideExpenses ? "text-slate-400" : "text-slate-600"}`}>
+                    {hideExpenses ? "🔒 View Restricted" : `${percentBudgetUsed}% Used ($${totalSpent.toLocaleString()} / $${totalBudget.toLocaleString()})`}
                   </span>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                   <div 
-                    className="h-full bg-emerald-500 transition-all duration-500" 
-                    style={{ width: isAppLoaded ? `${percentBudgetUsed}%` : "0%" }} 
+                    className={`h-full transition-all duration-500 ${hideExpenses ? "bg-slate-300" : "bg-emerald-500"}`} 
+                    style={{ width: isAppLoaded && !hideExpenses ? `${percentBudgetUsed}%` : "0%" }} 
                   />
                 </div>
               </CardContent>
@@ -335,16 +365,16 @@ export default function DashboardPage() {
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-sm font-semibold">Project Timeline Progress</CardTitle>
-                  <span className={`text-xs font-bold ${percentTimeUsed > 100 ? "text-rose-600" : "text-slate-600"}`}>
-                    Day {Math.max(0, currentDay)} of {totalDays} Calendar Days ({percentTimeUsed}%)
+                  <span className={`text-xs font-bold ${hideSchedule ? "text-slate-400" : percentTimeUsed > 100 ? "text-rose-600" : "text-slate-600"}`}>
+                    {hideSchedule ? "🔒 View Restricted" : `Day ${Math.max(0, currentDay)} of ${totalDays} Calendar Days (${percentTimeUsed}%)`}
                   </span>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                   <div 
-                    className={`h-full transition-all duration-500 ${percentTimeUsed > 100 ? "bg-rose-500" : "bg-blue-600"}`}
-                    style={{ width: isAppLoaded ? `${barVisualWidth}%` : "0%" }} 
+                    className={`h-full transition-all duration-500 ${hideSchedule ? "bg-slate-300" : percentTimeUsed > 100 ? "bg-rose-500" : "bg-blue-600"}`}
+                    style={{ width: isAppLoaded && !hideSchedule ? `${barVisualWidth}%` : "0%" }} 
                   />
                 </div>
               </CardContent>
@@ -359,17 +389,19 @@ export default function DashboardPage() {
                   <CardTitle className="text-sm font-bold text-slate-900">✅ Site Punch List / To-Do's</CardTitle>
                   
                   <div className="flex items-center gap-3">
-                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2.5 py-0.5 rounded">
-                      {completedPunchItems} of {totalPunchItems} Completed ({percentPunchCompleted}%)
+                    <span className={`border text-xs font-semibold px-2.5 py-0.5 rounded ${hidePunchList ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+                      {hidePunchList ? "🔒 View Restricted" : `${completedPunchItems} of ${totalPunchItems} Completed (${percentPunchCompleted}%)`}
                     </span>
-                    <Link href="/punch-list" className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
-                      View All →
-                    </Link>
+                    {!hidePunchList && (
+                      <Link href="/punch-list" className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                        View All →
+                      </Link>
+                    )}
                   </div>
                 </div>
                 <CardDescription className="text-xs">Track quick daily tasks, alerts, and send email reminders.</CardDescription>
 
-                {totalPunchItems > 0 && (
+                {totalPunchItems > 0 && !hidePunchList && (
                   <div className="pt-2">
                     <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                       <div 
@@ -382,137 +414,146 @@ export default function DashboardPage() {
               </CardHeader>
 
               <CardContent className="space-y-3">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add quick task (e.g. Call inspector)..."
-                    value={newPunchText}
-                    onChange={(e) => setNewPunchText(e.target.value)}
-                    className="text-xs h-9 shadow-sm"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && newPunchText.trim()) {
-                        handleOpenAddModal()
-                      }
-                    }}
-                  />
-                  <Button 
-                    size="sm" 
-                    disabled={!newPunchText.trim()}
-                    className={`text-xs h-9 px-4 shadow-sm transition-colors ${
-                      newPunchText.trim() 
-                        ? "bg-blue-600 hover:bg-blue-400 text-white font-semibold" 
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed hover:bg-slate-200"
-                    }`} 
-                    onClick={handleOpenAddModal}
-                  >
-                    Add Task
-                  </Button>
-                </div>
+                {hidePunchList ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg py-12 flex flex-col items-center justify-center text-center px-4">
+                    <span className="text-3xl mb-3">🔒</span>
+                    <h3 className="text-sm font-bold text-slate-900">Access Restricted</h3>
+                    <p className="text-xs text-slate-500 mt-1">The project owner has hidden the Punch List module.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Add quick task (e.g. Call inspector)..."
+                        value={newPunchText}
+                        onChange={(e) => setNewPunchText(e.target.value)}
+                        className="text-xs h-9 shadow-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newPunchText.trim()) {
+                            handleOpenAddModal()
+                          }
+                        }}
+                      />
+                      <Button 
+                        size="sm" 
+                        disabled={!newPunchText.trim()}
+                        className={`text-xs h-9 px-4 shadow-sm transition-colors ${
+                          newPunchText.trim() 
+                            ? "bg-blue-600 hover:bg-blue-400 text-white font-semibold" 
+                            : "bg-slate-200 text-slate-400 cursor-not-allowed hover:bg-slate-200"
+                        }`} 
+                        onClick={handleOpenAddModal}
+                      >
+                        Add Task
+                      </Button>
+                    </div>
 
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pt-2">
-                  {sortedPunchList.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic py-3 text-center border border-dashed rounded">
-                      No punch list items yet.
-                    </p>
-                  ) : (
-                    sortedPunchList.map((item) => {
-                      const legacyEmail = (item as any).assignedEmail
-                      const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
-                        ? item.assignedEmails 
-                        : (legacyEmail ? [legacyEmail] : [])
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pt-2">
+                      {sortedPunchList.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic py-3 text-center border border-dashed rounded">
+                          No punch list items yet.
+                        </p>
+                      ) : (
+                        sortedPunchList.map((item) => {
+                          const legacyEmail = (item as any).assignedEmail
+                          const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
+                            ? item.assignedEmails 
+                            : (legacyEmail ? [legacyEmail] : [])
 
-                      const linkedTask = item.linkedTaskId ? calendarTasks.find(t => t.id === item.linkedTaskId) : null
-                      let displayDueDate = item.dueDate
-                      
-                      if (linkedTask) {
-                        const baseDate = new Date(linkedTask.endDate + "T00:00:00")
-                        if (item.linkedTaskOffset) {
-                          baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
-                        }
-                        displayDueDate = baseDate.toISOString().split("T")[0]
-                      }
+                          const linkedTask = item.linkedTaskId ? calendarTasks.find(t => t.id === item.linkedTaskId) : null
+                          let displayDueDate = item.dueDate
+                          
+                          if (linkedTask) {
+                            const baseDate = new Date(linkedTask.endDate + "T00:00:00")
+                            if (item.linkedTaskOffset) {
+                              baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
+                            }
+                            displayDueDate = baseDate.toISOString().split("T")[0]
+                          }
 
-                      const alertStatus = getAlertStatus(displayDueDate, item.completed)
+                          const alertStatus = getAlertStatus(displayDueDate, item.completed)
 
-                      // Dynamic Background Tint based on Due Date proximity
-                      let rowStyle = "bg-white border-slate-200 hover:border-slate-300"
-                      if (item.completed) {
-                        rowStyle = "bg-slate-50 border-slate-200 opacity-60"
-                      } else if (displayDueDate) {
-                        const todayMs = new Date(getLocalTodayStr() + "T00:00:00").getTime()
-                        const dueMs = new Date(displayDueDate + "T00:00:00").getTime()
-                        const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24))
+                          let rowStyle = "bg-white border-slate-200 hover:border-slate-300"
+                          if (item.completed) {
+                            rowStyle = "bg-slate-50 border-slate-200 opacity-60"
+                          } else if (displayDueDate) {
+                            const todayMs = new Date(getLocalTodayStr() + "T00:00:00").getTime()
+                            const dueMs = new Date(displayDueDate + "T00:00:00").getTime()
+                            const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24))
 
-                        if (diffDays < 0) {
-                          rowStyle = "bg-rose-50 border-rose-200 hover:border-rose-300" // Past Due
-                        } else if (diffDays <= 3) {
-                          rowStyle = "bg-amber-50 border-amber-200 hover:border-amber-300" // 0-3 Days
-                        } else {
-                          rowStyle = "bg-emerald-50 border-emerald-200 hover:border-emerald-300" // 4+ Days
-                        }
-                      }
+                            if (diffDays < 0) {
+                              rowStyle = "bg-rose-50 border-rose-200 hover:border-rose-300"
+                            } else if (diffDays <= 3) {
+                              rowStyle = "bg-amber-50 border-amber-200 hover:border-amber-300"
+                            } else {
+                              rowStyle = "bg-emerald-50 border-emerald-200 hover:border-emerald-300"
+                            }
+                          }
 
-                      return (
-                        <div key={item.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-3 transition-colors ${rowStyle}`}>
-                          <div className="flex items-start sm:items-center gap-3 flex-1">
-                            <input
-                              type="checkbox"
-                              checked={item.completed}
-                              onChange={() => handleTogglePunch(item.id)}
-                              className="h-4 w-4 accent-blue-600 rounded mt-0.5 sm:mt-0 cursor-pointer shrink-0"
-                            />
-                            <div className="flex flex-col">
-                              <span className={`text-sm font-semibold ${item.completed ? "line-through text-slate-400" : "text-slate-800"}`}>
-                                {item.text}
-                              </span>
-                              
-                              {(!item.completed && (displayDueDate || emailsToDisplay.length > 0 || item.category !== "General To-Do")) && (
-                                <div className="flex flex-wrap items-center gap-2 mt-1">
-                                  {item.category !== "General To-Do" && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                      {item.category}
-                                    </span>
-                                  )}
+                          return (
+                            <div key={item.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-3 transition-colors ${rowStyle}`}>
+                              <div className="flex items-start sm:items-center gap-3 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={item.completed}
+                                  onChange={() => handleTogglePunch(item.id)}
+                                  className="h-4 w-4 accent-blue-600 rounded mt-0.5 sm:mt-0 cursor-pointer shrink-0"
+                                />
+                                <div className="flex flex-col">
+                                  <span className={`text-sm font-semibold ${item.completed ? "line-through text-slate-400" : "text-slate-800"}`}>
+                                    {item.text}
+                                  </span>
                                   
-                                  {displayDueDate && (
-                                    <Badge variant="outline" className={`text-[10px] bg-white/60 ${
-                                      item.linkedTaskId 
-                                        ? "text-indigo-700 border-indigo-200" 
-                                        : "text-slate-600 border-slate-200"
-                                    }`}>
-                                      {item.linkedTaskId ? `🔗 Linked: ${linkedTask?.title || "Task"} (Due: ` : "📅 Due: "}
-                                      {formatDisplayDate(displayDueDate)}
-                                      {item.linkedTaskOffset ? ` [${item.linkedTaskOffset > 0 ? '+' : ''}${item.linkedTaskOffset}d]` : ""}
-                                      {item.linkedTaskId ? ")" : ""}
-                                    </Badge>
+                                  {(!item.completed && (displayDueDate || emailsToDisplay.length > 0 || item.category !== "General To-Do")) && (
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                      {item.category !== "General To-Do" && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                          {item.category}
+                                        </span>
+                                      )}
+                                      
+                                      {displayDueDate && (
+                                        <Badge variant="outline" className={`text-[10px] bg-white/60 ${
+                                          item.linkedTaskId 
+                                            ? "text-indigo-700 border-indigo-200" 
+                                            : "text-slate-600 border-slate-200"
+                                        }`}>
+                                          {item.linkedTaskId ? `🔗 Linked: ${linkedTask?.title || "Task"} (Due: ` : "📅 Due: "}
+                                          {formatDisplayDate(displayDueDate)}
+                                          {item.linkedTaskOffset ? ` [${item.linkedTaskOffset > 0 ? '+' : ''}${item.linkedTaskOffset}d]` : ""}
+                                          {item.linkedTaskId ? ")" : ""}
+                                        </Badge>
+                                      )}
+
+                                      {emailsToDisplay.map(email => (
+                                        <span key={email} className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
+                                          ✉️ {email}
+                                        </span>
+                                      ))}
+                                    </div>
                                   )}
-
-                                  {emailsToDisplay.map(email => (
-                                    <span key={email} className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
-                                      ✉️ {email}
-                                    </span>
-                                  ))}
                                 </div>
-                              )}
-                            </div>
-                          </div>
+                              </div>
 
-                          <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleOpenEditModal(item)} 
-                              className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
-                            >
-                              EDIT
-                            </Button>
-                            <button onClick={() => handleDeletePunch(item.id)} className="text-slate-400 hover:text-rose-600 h-7 w-7 flex items-center justify-center rounded hover:bg-rose-50 transition-colors">
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
+                              <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleOpenEditModal(item)} 
+                                  className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
+                                >
+                                  EDIT
+                                </Button>
+                                <button onClick={() => handleDeletePunch(item.id)} className="text-slate-400 hover:text-rose-600 h-7 w-7 flex items-center justify-center rounded hover:bg-rose-50 transition-colors">
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -520,37 +561,47 @@ export default function DashboardPage() {
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-sm font-bold text-slate-900">🚫 Logged Delays</CardTitle>
-                  <Link href="/schedule" className="text-xs text-blue-600 hover:underline">
-                    View Schedule →
-                  </Link>
+                  {!hideSchedule && (
+                    <Link href="/schedule" className="text-xs text-blue-600 hover:underline">
+                      View Schedule →
+                    </Link>
+                  )}
                 </div>
                 <CardDescription className="text-xs">Days flagged as off from the calendar.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
-                  {[...customNonWorkdays]
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .map((day, idx) => (
-                      <div key={idx} className="bg-rose-50 border border-rose-100 rounded-lg p-3">
-                        <div className="text-sm font-bold text-rose-900">
-                          {new Date(day.date + "T00:00:00").toLocaleDateString("en-US", {
-                            month: "numeric",
-                            day: "numeric",
-                            year: "2-digit"
-                          })}
+                {hideSchedule ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg py-12 flex flex-col items-center justify-center text-center px-4 mt-1">
+                    <span className="text-3xl mb-3">🔒</span>
+                    <h3 className="text-sm font-bold text-slate-900">Access Restricted</h3>
+                    <p className="text-xs text-slate-500 mt-1">Schedule visibility is disabled.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
+                    {[...customNonWorkdays]
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((day, idx) => (
+                        <div key={idx} className="bg-rose-50 border border-rose-100 rounded-lg p-3">
+                          <div className="text-sm font-bold text-rose-900">
+                            {new Date(day.date + "T00:00:00").toLocaleDateString("en-US", {
+                              month: "numeric",
+                              day: "numeric",
+                              year: "2-digit"
+                            })}
+                          </div>
+                          <div className="text-xs text-rose-700 mt-0.5">
+                            {day.title || "Non-workday"}
+                          </div>
                         </div>
-                        <div className="text-xs text-rose-700 mt-0.5">
-                          {day.title || "Non-workday"}
-                        </div>
-                      </div>
-                    ))}
-                    
-                  {customNonWorkdays.length === 0 && (
-                    <p className="text-xs text-slate-400 italic text-center py-6 border-2 border-dashed border-slate-100 rounded-lg mt-2">
-                      No delays logged.
-                    </p>
-                  )}
-                </div>
+                      ))}
+                      
+                    {customNonWorkdays.length === 0 && (
+                      <p className="text-xs text-slate-400 italic text-center py-6 border-2 border-dashed border-slate-100 rounded-lg mt-2">
+                        No delays logged.
+                      </p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -723,45 +774,38 @@ export default function DashboardPage() {
           )}
 
           <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
-  
-  {/* 1. SAVE & CANCEL (Always side-by-side) */}
-  <div className="flex gap-2 w-full sm:order-2">
-    <Button 
-      size="sm"
-      className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-      onClick={handleSavePunchEdit} /* Change to page's save function */
-    >
-      {isNewTask ? "Create Task" : "Save Changes"}
-    </Button>
-    
-    <Button 
-      variant="outline" 
-      size="sm"
-      onClick={() => setEditingPunch(null)} /* Change to page's close function */
-      className="flex-1 shadow-sm font-semibold text-slate-700"
-    >
-      Cancel
-    </Button>
-  </div>
+            <div className="flex gap-2 w-full sm:order-2">
+              <Button 
+                size="sm"
+                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                onClick={handleSavePunchEdit}
+              >
+                {isNewTask ? "Create Task" : "Save Changes"}
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setEditingPunch(null)}
+                className="flex-1 shadow-sm font-semibold text-slate-700"
+              >
+                Cancel
+              </Button>
+            </div>
 
-  {/* 2. DELETE BUTTON (Underneath on mobile, far left on desktop) */}
-  {editingPunch && !isNewTask && ( /* Change 'editingPunch' to the page's state */
-    <Button 
-      variant="destructive" 
-      size="sm" 
-      onClick={() => handleDeletePunch(editingPunch.id)} /* Change to page's delete function */
-      className="w-full sm:w-auto sm:order-1 shadow-sm"
-    >
-      Delete
-    </Button>
-  )}
-
-</div>
-
-          
+            {editingPunch && !isNewTask && (
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={() => handleDeletePunch(editingPunch.id)}
+                className="w-full sm:w-auto sm:order-1 shadow-sm"
+              >
+                Delete
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
-
     </main>
   )
 }
