@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
@@ -98,43 +98,56 @@ export default function DashboardPage() {
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
   
-  // 🔥 Auth & Permissions State
+  // 🔥 Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
+  const [accountTier, setAccountTier] = useState<string>("free")
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user?.email) {
-        setCurrentUserEmail(user.email)
-        
-        // 1. Get the current active workspace we switched into
-        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
-
-        if (activeWorkspaceId === user.id) {
-          setIsGuest(false)
-        } else {
-          setIsGuest(true)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) {
+          setCurrentUserEmail(user.email)
           
-          // 2. Fetch the guest permissions using the case-insensitive ILIKE rule
-          const { data: guestInvite } = await supabase
-            .from("project_members")
-            .select("permissions")
-            .eq("invite_email", user.email)
-            .ilike("status", "active")
+          // 1. Fetch Billing Tier
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("tier")
+            .eq("id", user.id)
             .maybeSingle()
+            
+          if (profile) setAccountTier(profile.tier)
+          
+          // 2. Evaluate Workspace
+          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
-          if (guestInvite?.permissions) {
-            setPermissions(guestInvite.permissions)
+          if (activeWorkspaceId === user.id) {
+            setIsGuest(false)
+          } else {
+            setIsGuest(true)
+            
+            const { data: guestInvite } = await supabase
+              .from("project_members")
+              .select("permissions")
+              .eq("invite_email", user.email)
+              .ilike("status", "active")
+              .maybeSingle()
+
+            if (guestInvite?.permissions) {
+              setPermissions(guestInvite.permissions)
+            }
           }
         }
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
     fetchUserAndPermissions()
   }, [])
 
-  // 🔥 Permission Masks
   const hideExpenses = isGuest && permissions?.expenses === "hidden"
   const hidePunchList = isGuest && permissions?.punch_list === "hidden"
   const hideSchedule = isGuest && permissions?.schedule === "hidden"
@@ -268,7 +281,6 @@ export default function DashboardPage() {
   const remainingBudget = totalBudget - totalSpent
   const percentBudgetUsed = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0
 
-  // 1. Dynamic Dates Pulled From Settings
   const projStart = new Date((projectDates?.startDate || "2026-06-29") + "T00:00:00")
   const projEnd = new Date((projectDates?.endDate || "2026-07-30") + "T00:00:00")
   
@@ -285,6 +297,44 @@ export default function DashboardPage() {
   const barVisualWidth = Math.min(100, percentTimeUsed)
 
   const isNewTask = editingPunch && !punchList.some(p => p.id === editingPunch.id)
+
+  // 🔥 MARKETING PAYWALL INTERCEPTOR
+  if (!isCheckingAuth && !isGuest && accountTier === "free") {
+    return (
+      <main className="p-6 bg-slate-100 min-h-screen flex items-center justify-center text-slate-900">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden text-center">
+          <div className="bg-slate-900 p-8 flex flex-col items-center">
+            <span className="text-5xl mb-4">🏗️</span>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Ready to build your own project?</h1>
+            <p className="text-orange-400 text-sm font-medium mt-2">
+              You are currently using a free guest account.
+            </p>
+          </div>
+          
+          <div className="p-8 space-y-6">
+            <p className="text-slate-600 text-sm leading-relaxed">
+              To unlock your personal workspace and start managing your own builds, upgrade to <strong className="text-slate-900">CleanBuild Pro</strong>.
+            </p>
+            
+            <ul className="text-left space-y-3 text-sm font-medium text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <li className="flex items-center gap-2">✅ <span className="flex-1">Unlimited Projects & Schedules</span></li>
+              <li className="flex items-center gap-2">✅ <span className="flex-1">Live Budget & Expense Tracking</span></li>
+              <li className="flex items-center gap-2">✅ <span className="flex-1">Invite Unlimited Guests & Vendors</span></li>
+              <li className="flex items-center gap-2">✅ <span className="flex-1">Automated Email Task Reminders</span></li>
+            </ul>
+
+            <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-12 text-base shadow-sm">
+              Upgrade to Pro (Coming Soon)
+            </Button>
+            
+            <p className="text-xs text-slate-400 mt-4">
+              Toggle back to the <strong className="text-slate-500">Shared Build</strong> in your sidebar to continue collaborating for free.
+            </p>
+          </div>
+        </div>
+      </main>
+    )
+  }
   
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
