@@ -22,18 +22,11 @@ const urlBase64ToUint8Array = (base64String: string) => {
 
 type PermissionLevel = "edit" | "read-only" | "hidden"
 
-const DEFAULT_PERMISSIONS: Record<string, PermissionLevel> = {
-  schedule: "edit",
-  punch_list: "edit",
-  vision_board: "edit",
-  expenses: "hidden", 
-  selections: "edit",
-  contacts: "edit",
-}
-
 export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState<string>("")
   const [isPushEnabled, setIsPushEnabled] = useState(false)
+  
+  // 🔥 Loading State to prevent UI flicker
   const [isLoadingData, setIsLoadingData] = useState(true)
   
   // Password State
@@ -42,18 +35,26 @@ export default function SettingsPage() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" })
 
-  // --- Multi-Partner Collaboration State ---
+  // --- Collaboration State ---
   const [inviteEmail, setInviteEmail] = useState("")
   const [isInviting, setIsInviting] = useState(false)
-  const [newInvitePermissions, setNewInvitePermissions] = useState<Record<string, PermissionLevel>>(DEFAULT_PERMISSIONS)
+  const [activePartner, setActivePartner] = useState<{ email: string, status: string } | null>(null)
   
-  // This stores ALL guests for the primary owner
-  const [partners, setPartners] = useState<any[]>([]) 
-  const [copiedLink, setCopiedLink] = useState<string | null>(null)
+  // Share Link State
+  const [inviteLink, setInviteLink] = useState("")
+  const [copied, setCopied] = useState(false)
 
-  // Guest State (When the logged-in user IS the guest)
+  // Guest State
   const [isGuest, setIsGuest] = useState(false)
-  const [guestPermissions, setGuestPermissions] = useState<Record<string, PermissionLevel>>(DEFAULT_PERMISSIONS)
+  
+  const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({
+    schedule: "edit",
+    punch_list: "edit",
+    vision_board: "edit",
+    expenses: "hidden", 
+    selections: "edit",
+    contacts: "edit",
+  })
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -62,10 +63,11 @@ export default function SettingsPage() {
         if (user?.email) {
           setUserEmail(user.email)
           
+          // 🔥 NEW: Check which workspace is currently active
           const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
           if (activeWorkspaceId === user.id) {
-            // 1. THEY OWN THIS WORKSPACE - Fetch ALL guests
+            // 1. THEY OWN THIS WORKSPACE
             setIsGuest(false)
             
             const { data: project } = await supabase
@@ -79,10 +81,19 @@ export default function SettingsPage() {
                 .from("project_members")
                 .select("*")
                 .eq("project_id", project.id)
-                .order("created_at", { ascending: true })
 
-              if (members) {
-                setPartners(members)
+              if (members && members.length > 0) {
+                const partner = members[0]
+                setActivePartner({ email: partner.invite_email, status: partner.status || "Pending" })
+                
+                if (partner.permissions) {
+                  setPermissions(partner.permissions)
+                }
+
+                if (partner.status?.includes("Pending")) {
+                  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
+                  setInviteLink(`${baseUrl}/login?invite=${encodeURIComponent(partner.invite_email)}`)
+                }
               }
             }
           } else {
@@ -97,8 +108,9 @@ export default function SettingsPage() {
 
             if (guestInvite) {
               if (guestInvite.permissions) {
-                setGuestPermissions(guestInvite.permissions)
+                setPermissions(guestInvite.permissions)
               }
+              
               if (guestInvite.status?.includes("Pending")) {
                 await supabase
                   .from("project_members")
@@ -161,6 +173,7 @@ export default function SettingsPage() {
       alert("Push notifications are not supported by this browser. Try installing the app to your home screen first!")
       return
     }
+
     try {
       const registration = await navigator.serviceWorker.getRegistration()
       if (!registration) return
@@ -211,6 +224,7 @@ export default function SettingsPage() {
       await clear()
       const { data: userData } = await supabase.auth.getUser()
       if (userData?.user?.id) {
+        // Because we are now in their personal workspace, we just clear their own tutorial data
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || userData.user.id
         await supabase.from("cloud_sync").delete().eq("user_id", activeWorkspaceId)
       }
@@ -227,6 +241,8 @@ export default function SettingsPage() {
         "cleanbuild_selections_items", "cleanbuild_contacts", "cleanbuild_non_workdays_map",
         "cleanbuild_explicit_working_days", "cleanbuild_project_dates"
       ]
+
+      // This will automatically wipe the active workspace thanks to the new syncManager!
       for (const key of keysToClear) {
         await set(key, [])
         await syncManager.pushToCloud(key, [])
@@ -257,8 +273,6 @@ export default function SettingsPage() {
     } catch (error) {}
   }
 
-  // --- NEW: Multi-Partner Collaboration Functions ---
-
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsInviting(true)
@@ -270,63 +284,45 @@ export default function SettingsPage() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ email: inviteEmail, permissions: newInvitePermissions })
+        body: JSON.stringify({ email: inviteEmail, permissions: permissions })
       })
       if (!response.ok) {
         setIsInviting(false)
         return
       }
-      
-      // Fetch the updated list of members to get the new ID
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-         const { data: project } = await supabase.from("projects").select("id").eq("owner_id", user.id).single()
-         if (project) {
-           const { data: members } = await supabase.from("project_members").select("*").eq("project_id", project.id).order("created_at", { ascending: true })
-           if (members) setPartners(members)
-         }
-      }
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
+      setInviteLink(`${baseUrl}/login?invite=${encodeURIComponent(inviteEmail)}`)
+      setActivePartner({ email: inviteEmail, status: "Pending (Invite Sent)" })
       setInviteEmail("")
-      setNewInvitePermissions(DEFAULT_PERMISSIONS)
     } catch (error) {
     } finally {
       setIsInviting(false)
     }
   }
 
-  const handleRevokeAccess = async (partnerId: string) => {
-    if (window.confirm("Are you sure you want to remove this partner? They will immediately lose access to this project.")) {
+  const handleRevokeAccess = async () => {
+    if (window.confirm("Are you sure you want to remove this partner? They will immediately lose access to this project.") && activePartner) {
       try {
-        await supabase.from("project_members").delete().eq("id", partnerId)
-        setPartners(partners.filter(p => p.id !== partnerId))
+        await supabase.from("project_members").delete().eq("invite_email", activePartner.email)
+        setActivePartner(null)
+        setInviteLink("")
       } catch (error) {}
     }
   }
 
-  const handleUpdateExistingPartnerPermission = async (partnerId: string, key: string, value: PermissionLevel) => {
-    // 1. Optimistic UI update
-    setPartners(prev => prev.map(p => {
-      if (p.id === partnerId) {
-        return { ...p, permissions: { ...p.permissions, [key]: value } }
-      }
-      return p
-    }))
-
-    // 2. Database Update using the exact ID
-    const partner = partners.find(p => p.id === partnerId)
-    if (partner) {
-      const updatedPermissions = { ...partner.permissions, [key]: value }
-      await supabase.from("project_members").update({ permissions: updatedPermissions }).eq("id", partnerId)
+  const handlePermissionChange = async (key: string, value: PermissionLevel) => {
+    const newPermissions = { ...permissions, [key]: value }
+    setPermissions(newPermissions)
+    if (activePartner) {
+      await supabase.from("project_members").update({ permissions: newPermissions }).eq("invite_email", activePartner.email)
     }
   }
 
-  const handleCopyLink = async (email: string) => {
+  const handleCopyLink = async () => {
     try {
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://diy.cleanbuild.us'
-      const link = `${baseUrl}/login?invite=${encodeURIComponent(email)}`
-      await navigator.clipboard.writeText(link)
-      setCopiedLink(email)
-      setTimeout(() => setCopiedLink(null), 2000)
+      await navigator.clipboard.writeText(inviteLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     } catch (err) {}
   }
 
@@ -355,10 +351,10 @@ export default function SettingsPage() {
             <CardHeader className="pb-4 border-b border-blue-200 bg-blue-100">
               <CardTitle className="text-lg font-bold flex items-center gap-2 text-blue-950">🤝 Project Collaboration</CardTitle>
               <CardDescription className="text-xs text-blue-700/80">
-                {isLoadingData ? "Loading..." : isGuest ? "Your access level for this shared project." : "Invite partners or co-owners to share this project with you."}
+                {isLoadingData ? "Loading..." : isGuest ? "Your access level for this shared project." : activePartner ? "Manage access for your project partner." : "Invite one partner or co-owner to share this project with you."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="pt-6 space-y-6">
+            <CardContent className="pt-6 space-y-5">
               
               {isLoadingData ? (
                 <div className="flex justify-center items-center py-8">
@@ -376,10 +372,10 @@ export default function SettingsPage() {
                   <div className="space-y-3">
                     <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Your Permissions</Label>
                     <div className="grid gap-3 pt-1">
-                      {Object.keys(guestPermissions).map((key) => {
-                        const typedKey = key as keyof typeof guestPermissions;
+                      {Object.keys(permissions).map((key) => {
+                        const typedKey = key as keyof typeof permissions;
                         const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                        const permValue = guestPermissions[typedKey];
+                        const permValue = permissions[typedKey];
                         
                         return (
                           <div key={key} className="flex items-center justify-between gap-4">
@@ -393,101 +389,90 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-8">
-                  {/* List of Active/Pending Partners */}
-                  {partners.map((partner, index) => (
-                    <div key={partner.id} className="space-y-4">
-                      <div className="flex flex-col gap-3 bg-blue-50 border border-blue-100 p-3 rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{partner.invite_email}</p>
-                            <p className="text-xs font-semibold text-blue-600 mt-0.5">{partner.status}</p>
-                          </div>
-                          <Button variant="outline" size="sm" onClick={() => handleRevokeAccess(partner.id)} className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 h-8 text-xs font-bold shadow-sm">
-                            Revoke
-                          </Button>
-                        </div>
-
-                        {partner.status?.toLowerCase().includes("pending") && (
-                          <div className="pt-3 border-t border-blue-100 flex items-center gap-2">
-                            <Button onClick={() => handleCopyLink(partner.invite_email)} className="h-8 shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold w-full">
-                              {copiedLink === partner.invite_email ? "Copied! ✅" : "Copy Invite Link"}
-                            </Button>
-                          </div>
-                        )}
+              ) : activePartner ? (
+                <div className="space-y-5">
+                  <div className="flex flex-col gap-3 bg-blue-50 border border-blue-100 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{activePartner.email}</p>
+                        <p className="text-xs font-semibold text-blue-600 mt-0.5">{activePartner.status}</p>
                       </div>
-
-                      <div className="space-y-3 px-1">
-                        <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Manage Permissions for {partner.invite_email.split("@")[0]}</Label>
-                        <div className="grid gap-3 pt-1">
-                          {Object.keys(partner.permissions || DEFAULT_PERMISSIONS).map((key) => {
-                            const typedKey = key as keyof typeof DEFAULT_PERMISSIONS;
-                            const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                            
-                            return (
-                              <div key={`${partner.id}-${key}`} className="flex items-center justify-between gap-4">
-                                <span className="text-sm font-semibold text-slate-700 w-1/3">{label}</span>
-                                <select
-                                  value={partner.permissions?.[typedKey] || "hidden"}
-                                  onChange={(e) => handleUpdateExistingPartnerPermission(partner.id, typedKey, e.target.value as PermissionLevel)}
-                                  className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
-                                >
-                                  <option value="edit">Full Access (Edit)</option>
-                                  <option value="read-only">Read-Only (View)</option>
-                                  <option value="hidden">Hidden</option>
-                                </select>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                      
-                      {/* Divider between partners */}
-                      {index < partners.length - 1 && <div className="h-px bg-slate-200 my-6" />}
-                    </div>
-                  ))}
-
-                  {/* Add New Partner Form */}
-                  <div className={partners.length > 0 ? "pt-6 border-t border-slate-200" : ""}>
-                    <form onSubmit={handleSendInvite} className="space-y-5">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-bold text-slate-700">Invite New Partner (Email)</Label>
-                        <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="name@example.com" className="h-9 text-sm" required />
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Starting Permissions</Label>
-                        <div className="grid gap-3 pt-1">
-                          {Object.keys(newInvitePermissions).map((key) => {
-                            const typedKey = key as keyof typeof newInvitePermissions;
-                            const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                            
-                            return (
-                              <div key={`new-${key}`} className="flex items-center justify-between gap-4">
-                                <span className="text-sm font-semibold text-slate-700 w-1/3">{label}</span>
-                                <select
-                                  value={newInvitePermissions[typedKey]}
-                                  onChange={(e) => setNewInvitePermissions({ ...newInvitePermissions, [typedKey]: e.target.value as PermissionLevel })}
-                                  className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
-                                >
-                                  <option value="edit">Full Access (Edit)</option>
-                                  <option value="read-only">Read-Only (View)</option>
-                                  <option value="hidden">Hidden</option>
-                                </select>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      <Button type="submit" disabled={isInviting || !inviteEmail} className="w-full bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold h-10 mt-2">
-                        {isInviting ? "Sending..." : "Send Invite"}
+                      <Button variant="outline" size="sm" onClick={handleRevokeAccess} className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 h-8 text-xs font-bold shadow-sm">
+                        Revoke
                       </Button>
-                    </form>
+                    </div>
+
+                    {inviteLink && activePartner.status.includes("Pending") && (
+                      <div className="pt-3 border-t border-blue-100 flex items-center gap-2">
+                        <Input readOnly value={inviteLink} className="h-8 text-xs bg-white text-slate-500 font-medium" />
+                        <Button onClick={handleCopyLink} className="h-8 shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold w-24">
+                          {copied ? "Copied! ✅" : "Copy Link"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Manage Permissions</Label>
+                    <div className="grid gap-3 pt-1">
+                      {Object.keys(permissions).map((key) => {
+                        const typedKey = key as keyof typeof permissions;
+                        const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                        
+                        return (
+                          <div key={key} className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-semibold text-slate-700 w-1/3">{label}</span>
+                            <select
+                              value={permissions[typedKey]}
+                              onChange={(e) => handlePermissionChange(typedKey, e.target.value as PermissionLevel)}
+                              className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
+                            >
+                              <option value="edit">Full Access (Edit)</option>
+                              <option value="read-only">Read-Only (View)</option>
+                              <option value="hidden">Hidden</option>
+                            </select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
+              ) : (
+                <form onSubmit={handleSendInvite} className="space-y-5">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Partner Email Address</Label>
+                    <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="name@example.com" className="h-9 text-sm" required />
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-700 block border-b pb-1">Starting Permissions</Label>
+                    <div className="grid gap-3 pt-1">
+                      {Object.keys(permissions).map((key) => {
+                        const typedKey = key as keyof typeof permissions;
+                        const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                        
+                        return (
+                          <div key={key} className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-semibold text-slate-700 w-1/3">{label}</span>
+                            <select
+                              value={permissions[typedKey]}
+                              onChange={(e) => handlePermissionChange(typedKey, e.target.value as PermissionLevel)}
+                              className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
+                            >
+                              <option value="edit">Full Access (Edit)</option>
+                              <option value="read-only">Read-Only (View)</option>
+                              <option value="hidden">Hidden</option>
+                            </select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <Button type="submit" disabled={isInviting || !inviteEmail} className="w-full bg-blue-600 hover:bg-blue-400 text-white shadow-sm font-semibold h-10 mt-2">
+                    {isInviting ? "Sending..." : "Send Invite Link"}
+                  </Button>
+                </form>
               )}
             </CardContent>
           </Card>
@@ -576,6 +561,7 @@ export default function SettingsPage() {
                   <h3 className="text-red-900 font-bold text-sm">Delete Account</h3>
                   <p className="text-red-700 text-xs mt-1">Permanently destroy this account and all associated data.</p>
                 </div>
+                {/* Note: Delete Account is NEVER disabled by isGuest because users should always be able to delete themselves! */}
                 <Button onClick={handleDeleteAccount} className="shrink-0 shadow-sm font-bold bg-red-700 hover:bg-red-600 text-white w-full sm:w-auto">
                   🧨 Delete Account
                 </Button>
