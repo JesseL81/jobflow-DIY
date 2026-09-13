@@ -17,6 +17,7 @@ export interface SelectionItem {
   id: string
   title: string
   category: string
+  room: string
   vendorUrl: string
   price: string
   modelNumber: string
@@ -46,11 +47,25 @@ const CATEGORIES = [
   "Other",
 ]
 
+const ROOMS = [
+  "All Rooms",
+  "Kitchen",
+  "Master Bathroom",
+  "Guest Bathroom",
+  "Powder Room",
+  "Living & Dining",
+  "Bedrooms",
+  "Laundry / Mudroom",
+  "Exterior",
+  "Other",
+]
+
 const INITIAL_SELECTIONS: SelectionItem[] = [
   {
     id: "1",
     title: "Matte Black Rain Showerhead Set",
     category: "Plumbing Fixtures",
+    room: "Master Bathroom",
     vendorUrl: "https://www.build.com",
     price: "$289.00",
     modelNumber: "KOH-K-22169-BL",
@@ -63,6 +78,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     id: "2",
     title: "12x24 Porcelain Tile - Cement Gray",
     category: "Tile & Flooring",
+    room: "Master Bathroom",
     vendorUrl: "https://www.homedepot.com",
     price: "$767.80",
     modelNumber: "HD-PORC-1224-GY",
@@ -75,6 +91,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     id: "3",
     title: "60-inch Double Vanity in Navy Blue",
     category: "Cabinetry & Hardware",
+    room: "Master Bathroom",
     vendorUrl: "https://www.wayfair.com",
     price: "$1,150.00",
     modelNumber: "WF-VAN-60-NV",
@@ -87,6 +104,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     id: "4",
     title: "Brushed Brass Vanity Sconce Lights (Pair)",
     category: "Lighting & Electrical",
+    room: "Powder Room",
     vendorUrl: "https://www.amazon.com",
     price: "$145.00",
     modelNumber: "B08X3P912",
@@ -114,6 +132,8 @@ export default function SelectionsPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
+  const [selectedRoom, setSelectedRoom] = useState<string>("All Rooms")
+  
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -125,6 +145,7 @@ export default function SelectionsPage() {
 
   const [formTitle, setFormTitle] = useState("")
   const [formCategory, setFormCategory] = useState("Plumbing Fixtures")
+  const [formRoom, setFormRoom] = useState("Kitchen")
   const [formUrl, setFormUrl] = useState("")
   const [formPrice, setFormPrice] = useState("")
   const [formModel, setFormModel] = useState("")
@@ -147,11 +168,9 @@ export default function SelectionsPage() {
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
         if (activeWorkspaceId === user.id) {
-          // 1. They are the Owner of this workspace
           setIsGuest(false)
           setIsReadOnly(false)
         } else {
-          // 2. They are a Guest in this workspace
           setIsGuest(true)
           const { data: guestInvite } = await supabase
             .from("project_members")
@@ -208,13 +227,14 @@ export default function SelectionsPage() {
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesCategory = selectedCategory === "All Categories" || item.category === selectedCategory
+      const matchesRoom = selectedRoom === "All Rooms" || (item.room || "Other") === selectedRoom
       const matchesSearch =
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.modelNumber.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchesCategory && matchesSearch
+      return matchesCategory && matchesRoom && matchesSearch
     })
-  }, [items, selectedCategory, searchQuery])
+  }, [items, selectedCategory, selectedRoom, searchQuery])
 
   const handleSaveBudget = async () => {
     if (isReadOnly) return
@@ -230,6 +250,7 @@ export default function SelectionsPage() {
     setEditingItem(null)
     setFormTitle("")
     setFormCategory(selectedCategory !== "All Categories" ? selectedCategory : "Plumbing Fixtures")
+    setFormRoom(selectedRoom !== "All Rooms" ? selectedRoom : "Kitchen")
     setFormUrl("")
     setFormPrice("")
     setFormModel("")
@@ -244,6 +265,7 @@ export default function SelectionsPage() {
     setEditingItem(item)
     setFormTitle(item.title)
     setFormCategory(item.category)
+    setFormRoom(item.room || "Other")
     setFormUrl(item.vendorUrl)
     setFormPrice(item.price)
     setFormModel(item.modelNumber)
@@ -266,6 +288,7 @@ export default function SelectionsPage() {
           ...editingItem,
           title: formTitle.trim(),
           category: formCategory,
+          room: formRoom,
           vendorUrl: formUrl.trim(),
           price: formPrice.trim(),
           modelNumber: formModel.trim(),
@@ -281,6 +304,7 @@ export default function SelectionsPage() {
           id: Date.now().toString(),
           title: formTitle.trim(),
           category: formCategory,
+          room: formRoom,
           vendorUrl: formUrl.trim(),
           price: formPrice.trim(),
           modelNumber: formModel.trim(),
@@ -302,7 +326,7 @@ export default function SelectionsPage() {
 
           const newExpenseRecord: ExpenseItem = {
             id: parseInt(updatedItem.id) || Date.now(),
-            description: `Selection: ${updatedItem.title} (${updatedItem.category})`,
+            description: `Selection: ${updatedItem.title} (${updatedItem.room} - ${updatedItem.category})`,
             materials: itemPriceNumber,
             labor: 0,
             date: new Date().toISOString().split("T")[0],
@@ -374,7 +398,7 @@ export default function SelectionsPage() {
       
       <PaywallOverlay show={showPaywall} />
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -382,7 +406,7 @@ export default function SelectionsPage() {
             </h1>
           </div>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            {isReadOnly ? "View the material selections and budget allowances." : "Select items using checkboxes to calculate active project totals and track budget targets per category."}
+            {isReadOnly ? "View the material selections and budget allowances." : "Organize selections by room and category. Check items to calculate totals and sync directly to your expenses."}
           </p>
         </div>
 
@@ -411,13 +435,44 @@ export default function SelectionsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
-            <div className="md:col-span-1 space-y-2">
+            <div className="md:col-span-1 space-y-4">
+              {/* Rooms Filter */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
-                  Categories
+                  Filter by Room
+                </span>
+                {ROOMS.map((rm) => {
+                  const rmCount = rm === "All Rooms" 
+                    ? items.length 
+                    : items.filter((i) => (i.room || "Other") === rm).length
+                  const isActive = selectedRoom === rm
+
+                  return (
+                    <button
+                      key={rm}
+                      onClick={() => setSelectedRoom(rm)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span className="truncate">{rm}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-500"}`}>
+                        {rmCount}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Categories Filter */}
+              <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
+                  Filter by Category
                 </span>
                 {CATEGORIES.map((cat) => {
-                  const catCount = cat === "All Categories" ? items.length : items.filter((i) => i.category === cat).length
+                  const catCount = cat === "All Categories" 
+                    ? items.length 
+                    : items.filter((i) => i.category === cat).length
                   const isActive = selectedCategory === cat
 
                   return (
@@ -483,12 +538,12 @@ export default function SelectionsPage() {
                 </div>
               )}
 
-              <div className="bg-white p-3 rounded-xl border shadow-xs">
+              <div className="bg-white p-3 rounded-xl border shadow-xs flex gap-2">
                 <Input
                   placeholder="Search items, model specs, notes..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 text-xs bg-slate-50"
+                  className="h-9 text-xs bg-slate-50 w-full"
                 />
               </div>
 
@@ -515,8 +570,11 @@ export default function SelectionsPage() {
                             />
                             <div>
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <Badge variant="outline" className={`text-[10px] font-semibold bg-slate-900 text-white hover:bg-slate-800`}>
+                                  🏠 {item.room || "Other"}
+                                </Badge>
                                 <Badge variant="outline" className={`text-[10px] font-semibold ${item.syncToExpenses ? "bg-white text-emerald-800 border-emerald-300" : item.checked ? "bg-white text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-500"}`}>
-                                  {item.category}
+                                  📁 {item.category}
                                 </Badge>
                                 {getStatusBadge(item.status)}
                                 {item.syncToExpenses && (
@@ -584,7 +642,7 @@ export default function SelectionsPage() {
 
                 {filteredItems.length === 0 && (
                   <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-300">
-                    <p className="text-slate-500 text-sm font-medium">No items found in {selectedCategory}.</p>
+                    <p className="text-slate-500 text-sm font-medium">No items found matching your filters.</p>
                     {!isReadOnly && (
                       <Button 
                         size="sm" 
@@ -666,7 +724,24 @@ export default function SelectionsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="item-cat">Category</Label>
+                <Label htmlFor="item-room">Room / Location</Label>
+                <select
+                  id="item-room"
+                  value={formRoom}
+                  disabled={isReadOnly}
+                  onChange={(e) => setFormRoom(e.target.value)}
+                  className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                >
+                  {ROOMS.filter((r) => r !== "All Rooms").map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="item-cat">Material Category</Label>
                 <select
                   id="item-cat"
                   value={formCategory}
@@ -681,22 +756,22 @@ export default function SelectionsPage() {
                   ))}
                 </select>
               </div>
+            </div>
 
-              <div>
-                <Label htmlFor="item-status">Status</Label>
-                <select
-                  id="item-status"
-                  value={formStatus}
-                  disabled={isReadOnly}
-                  onChange={(e) => setFormStatus(e.target.value as SelectionItem["status"])}
-                  className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
-                >
-                  <option value="Selected">Selected</option>
-                  <option value="Under Review">Under Review</option>
-                  <option value="Ordered">Ordered</option>
-                  <option value="Delivered">Delivered</option>
-                </select>
-              </div>
+            <div>
+              <Label htmlFor="item-status">Status</Label>
+              <select
+                id="item-status"
+                value={formStatus}
+                disabled={isReadOnly}
+                onChange={(e) => setFormStatus(e.target.value as SelectionItem["status"])}
+                className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+              >
+                <option value="Selected">Selected</option>
+                <option value="Under Review">Under Review</option>
+                <option value="Ordered">Ordered</option>
+                <option value="Delivered">Delivered</option>
+              </select>
             </div>
 
             <div>
