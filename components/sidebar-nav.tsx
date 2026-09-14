@@ -10,15 +10,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 
 const navItems = [
-  { label: "Dashboard", href: "/", icon: "📊" },
-  { label: "Schedule & Tasks", href: "/schedule", icon: "📅" },
-  { label: "Punch List & To-Do's", href: "/punch-list", icon: "✅" },
+  { label: "Dashboard", href: "/dashboard", icon: "📊" },
   { label: "Vision Board", href: "/vision-board", icon: "📷" },
-  { label: "Expenses", href: "/expenses", icon: "💰" },
   { label: "Selections", href: "/selections", icon: "🛍️" },
+  { label: "Schedule & Tasks", href: "/schedule", icon: "📅" },
   { label: "Contacts & Vendors", href: "/contacts", icon: "📞" },
-  { label: "Templates", href: "/templates", icon: "📋" },
+  { label: "Punch List & To-Do's", href: "/punch-list", icon: "✅" },
+  { label: "Expenses", href: "/expenses", icon: "💰" },
+  { label: "Documents & Plans", href: "/documents", icon: "📄" },
   { label: "Tips & Tricks", href: "/tips", icon: "💡" },
+  { label: "Templates", href: "/templates", icon: "📋" },
   { label: "Settings", href: "/settings", icon: "⚙️" },
   { label: "Logo Showcase", href: "/logo-preview", icon: "🎨" },
 ]
@@ -27,6 +28,7 @@ const routeToPermissionKey: Record<string, string> = {
   "/schedule": "schedule",
   "/punch-list": "punch_list",
   "/vision-board": "vision_board",
+  "/documents": "documents",
   "/expenses": "expenses",
   "/selections": "selections",
   "/contacts": "contacts",
@@ -73,7 +75,6 @@ export default function SidebarNav() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
   const [isSwitching, setIsSwitching] = useState(false)
   
-  // Modal State for Guest Restrictions
   const [restrictedModalOpen, setRestrictedModalOpen] = useState(false)
 
   useEffect(() => {
@@ -174,7 +175,7 @@ export default function SidebarNav() {
     await clear()
     localStorage.setItem("cleanbuild_active_workspace", newWorkspaceId)
     localStorage.removeItem("cleanbuild_project_name")
-    window.location.href = "/"
+    window.location.href = "/dashboard"
   }
 
   return (
@@ -259,7 +260,6 @@ export default function SidebarNav() {
           navItems.map((item) => {
             const isActive = pathname === item.href
             
-            // 🔥 Check Lock Statuses
             const permKey = routeToPermissionKey[item.href]
             const isOwnerRestricted = isGuest && permissions && permKey && permissions[permKey] === "hidden"
             const isPaywallLocked = !isGuest && accountTier === "free" && item.href !== "/settings"
@@ -270,8 +270,6 @@ export default function SidebarNav() {
                 key={item.href}
                 href={item.href}
                 onClick={(e) => {
-                  // If Owner Restricted, block navigation entirely. 
-                  // If Paywall Locked, allow navigation so they see the blurred glass wall page!
                   if (isOwnerRestricted) {
                     e.preventDefault()
                     setRestrictedModalOpen(true)
@@ -298,7 +296,6 @@ export default function SidebarNav() {
         </span>
       </div>
 
-      {/* Guest Restriction Modal */}
       <Dialog open={restrictedModalOpen} onOpenChange={setRestrictedModalOpen}>
         <DialogContent className="sm:max-w-[400px] bg-white border-2 border-slate-900 rounded-xl">
           <DialogHeader className="mb-2">

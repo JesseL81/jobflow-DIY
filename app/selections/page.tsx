@@ -22,7 +22,7 @@ export interface SelectionItem {
   price: string
   modelNumber: string
   notes: string
-  status: "Selected" | "Under Review" | "Ordered" | "Delivered"
+  status: "Idea / Saved" | "Selected" | "Under Review" | "Ordered" | "Delivered"
   checked: boolean
   syncToExpenses?: boolean
 }
@@ -67,7 +67,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     category: "Plumbing Fixtures",
     room: "Master Bathroom",
     vendorUrl: "https://www.build.com",
-    price: "$289.00",
+    price: "289.00",
     modelNumber: "KOH-K-22169-BL",
     notes: "Requires rough-in valve body #K-8304.",
     status: "Selected",
@@ -80,7 +80,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     category: "Tile & Flooring",
     room: "Master Bathroom",
     vendorUrl: "https://www.homedepot.com",
-    price: "$767.80",
+    price: "767.80",
     modelNumber: "HD-PORC-1224-GY",
     notes: "Ordered 15% extra for waste/cuts (220 sqft total).",
     status: "Ordered",
@@ -93,7 +93,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     category: "Cabinetry & Hardware",
     room: "Master Bathroom",
     vendorUrl: "https://www.wayfair.com",
-    price: "$1,150.00",
+    price: "1150.00",
     modelNumber: "WF-VAN-60-NV",
     notes: "Includes quartz countertop & undermount sinks.",
     status: "Delivered",
@@ -106,7 +106,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     category: "Lighting & Electrical",
     room: "Powder Room",
     vendorUrl: "https://www.amazon.com",
-    price: "$145.00",
+    price: "145.00",
     modelNumber: "B08X3P912",
     notes: "Checking warm white 3000K LED compatibility.",
     status: "Under Review",
@@ -161,7 +161,7 @@ export default function SelectionsPage() {
   const [formPrice, setFormPrice] = useState("")
   const [formModel, setFormModel] = useState("")
   const [formNotes, setFormNotes] = useState("")
-  const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Selected")
+  const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Idea / Saved")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
 
   useEffect(() => {
@@ -284,7 +284,7 @@ export default function SelectionsPage() {
     setFormPrice("")
     setFormModel("")
     setFormNotes("")
-    setFormStatus("Selected")
+    setFormStatus("Idea / Saved")
     setFormSyncToExpenses(false)
     setIsModalOpen(true)
   }
@@ -296,10 +296,10 @@ export default function SelectionsPage() {
     setFormCategory(item.category)
     setFormRoom(item.room || "Other")
     setFormUrl(item.vendorUrl)
-    setFormPrice(item.price)
+    setFormPrice(item.price.replace(/[^0-9.]/g, "")) // strip $ for the input
     setFormModel(item.modelNumber)
     setFormNotes(item.notes)
-    setFormStatus(item.status)
+    setFormStatus(item.status || "Idea / Saved")
     setFormSyncToExpenses(!!item.syncToExpenses)
     setIsModalOpen(true)
   }
@@ -399,6 +399,7 @@ export default function SelectionsPage() {
 
   const getStatusBadge = (status: SelectionItem["status"]) => {
     switch (status) {
+      case "Idea / Saved": return <Badge className="bg-slate-100 text-slate-600 border-slate-200">Idea / Saved</Badge>
       case "Selected": return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Selected</Badge>
       case "Under Review": return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Under Review</Badge>
       case "Ordered": return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Ordered</Badge>
@@ -439,7 +440,7 @@ export default function SelectionsPage() {
             <Button
               size="sm"
               onClick={handleOpenAdd}
-              className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Add Item
             </Button>
@@ -621,9 +622,9 @@ export default function SelectionsPage() {
                           setTempBudgetVal(currentCategoryAllowance ? currentCategoryAllowance.toString() : "")
                           setIsBudgetModalOpen(true)
                         }}
-                        className="h-8 text-xs bg-blue-600 hover:bg-blue-400 text-white font-semibold"
+                        className="h-8 text-[11px] px-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-md shadow-sm"
                       >
-                        🎯 Set Target
+                        Set Budget
                       </Button>
                     )}
                   </div>
@@ -684,9 +685,9 @@ export default function SelectionsPage() {
                           <Button 
                             size="sm" 
                             onClick={() => handleOpenEdit(item)} 
-                            className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
+                            className={`h-8 px-4 text-white font-bold text-[11px] rounded-md shadow-sm shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-500"}`}
                           >
-                            {isReadOnly ? "VIEW" : "EDIT"}
+                            {isReadOnly ? "View" : "Edit"}
                           </Button>
                         </div>
                       </CardHeader>
@@ -695,7 +696,9 @@ export default function SelectionsPage() {
                         <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-lg border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : item.checked ? "bg-white/80 border-indigo-100" : "bg-slate-50 border-slate-100"}`}>
                           <div>
                             <span className="text-slate-400 font-medium block text-[10px] uppercase">Price</span>
-                            <span className="font-bold text-slate-900">{item.price || "N/A"}</span>
+                            <span className="font-bold text-slate-900">
+                              {item.price ? `$${extractPrice(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "N/A"}
+                            </span>
                           </div>
                           <div>
                             <span className="text-slate-400 font-medium block text-[10px] uppercase">Model / SKU</span>
@@ -757,25 +760,26 @@ export default function SelectionsPage() {
 
       {/* Budget Dialog */}
       <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
-        <DialogContent className="sm:max-w-[400px] border-2 border-slate-900 rounded-xl">
-          <DialogHeader>
-            <DialogTitle>Set Budget Target for {selectedCategory}</DialogTitle>
+        <DialogContent className="sm:max-w-[360px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+            <DialogTitle className="text-orange-400 font-bold">Set Budget Target</DialogTitle>
           </DialogHeader>
-          <div className="py-2 space-y-2">
-            <Label htmlFor="budget-input">Estimated Allowance / Budget ($)</Label>
+          <div className="grid gap-2 px-6 py-4 bg-white">
+            <Label htmlFor="budget-input" className="text-xs font-semibold text-slate-700">Estimated Allowance / Budget ($)</Label>
             <Input
               id="budget-input"
               type="number"
               placeholder="e.g. 1000"
               disabled={isReadOnly}
               value={tempBudgetVal}
+              className="h-9 text-sm shadow-sm"
               onChange={(e) => setTempBudgetVal(e.target.value)}
             />
           </div>
-          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white">
             <Button 
               size="sm"
-              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
               onClick={handleSaveBudget}
             >
               Save Target
@@ -784,7 +788,7 @@ export default function SelectionsPage() {
               variant="outline" 
               size="sm"
               onClick={() => setIsBudgetModalOpen(false)} 
-              className="flex-1 shadow-sm font-semibold text-slate-700"
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
             >
               Cancel
             </Button>
@@ -794,35 +798,35 @@ export default function SelectionsPage() {
 
       {/* Main Item Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2 shrink-0">
+        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-orange-400 font-bold">
               {isReadOnly ? "View Material Selection" : editingItem ? "Edit Material Selection" : "Add New Material Selection"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
             <div>
-              <Label htmlFor="item-title">Item Name / Title {isReadOnly ? "" : "*"}</Label>
+              <Label htmlFor="item-title" className="text-xs font-semibold text-slate-700">Item Name / Title {isReadOnly ? "" : "*"}</Label>
               <Input 
                 id="item-title" 
                 placeholder="e.g. Kohler Pull-Down Kitchen Faucet" 
                 value={formTitle} 
                 disabled={isReadOnly}
                 onChange={(e) => setFormTitle(e.target.value)} 
-                className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="item-room">Room / Location</Label>
+                <Label htmlFor="item-room" className="text-xs font-semibold text-slate-700">Room / Location</Label>
                 <select
                   id="item-room"
                   value={formRoom}
                   disabled={isReadOnly}
                   onChange={(e) => setFormRoom(e.target.value)}
-                  className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {rooms.filter((r) => r !== "All Rooms").map((r) => (
                     <option key={r} value={r}>
@@ -833,13 +837,13 @@ export default function SelectionsPage() {
               </div>
 
               <div>
-                <Label htmlFor="item-cat">Material Category</Label>
+                <Label htmlFor="item-cat" className="text-xs font-semibold text-slate-700">Material Category</Label>
                 <select
                   id="item-cat"
                   value={formCategory}
                   disabled={isReadOnly}
                   onChange={(e) => setFormCategory(e.target.value)}
-                  className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {categories.filter((c) => c !== "All Categories").map((c) => (
                     <option key={c} value={c}>
@@ -851,14 +855,15 @@ export default function SelectionsPage() {
             </div>
 
             <div>
-              <Label htmlFor="item-status">Status</Label>
+              <Label htmlFor="item-status" className="text-xs font-semibold text-slate-700">Status</Label>
               <select
                 id="item-status"
                 value={formStatus}
                 disabled={isReadOnly}
                 onChange={(e) => setFormStatus(e.target.value as SelectionItem["status"])}
-                className={`w-full h-9 border rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               >
+                <option value="Idea / Saved">Idea / Saved</option>
                 <option value="Selected">Selected</option>
                 <option value="Under Review">Under Review</option>
                 <option value="Ordered">Ordered</option>
@@ -867,60 +872,63 @@ export default function SelectionsPage() {
             </div>
 
             <div>
-              <Label htmlFor="item-url">Product Link / URL</Label>
+              <Label htmlFor="item-url" className="text-xs font-semibold text-slate-700">Product Link / URL</Label>
               <Input 
                 id="item-url" 
                 placeholder="https://www.homedepot.com/p/..." 
                 value={formUrl} 
                 disabled={isReadOnly}
                 onChange={(e) => setFormUrl(e.target.value)} 
-                className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="item-price">Est. Price</Label>
-                <Input 
-                  id="item-price" 
-                  placeholder="e.g. $249.00" 
-                  value={formPrice} 
-                  disabled={isReadOnly}
-                  onChange={(e) => setFormPrice(e.target.value)} 
-                  className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
-                />
+                <Label htmlFor="item-price" className="text-xs font-semibold text-slate-700">Est. Price</Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-medium">$</span>
+                  <Input 
+                    id="item-price" 
+                    placeholder="e.g. 249.00" 
+                    value={formPrice} 
+                    disabled={isReadOnly}
+                    onChange={(e) => setFormPrice(e.target.value)} 
+                    className={`pl-6 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  />
+                </div>
               </div>
               <div>
-                <Label htmlFor="item-model">Model / SKU #</Label>
+                <Label htmlFor="item-model" className="text-xs font-semibold text-slate-700">Model / SKU #</Label>
                 <Input 
                   id="item-model" 
                   placeholder="e.g. K-596-VS" 
                   value={formModel} 
                   disabled={isReadOnly}
                   onChange={(e) => setFormModel(e.target.value)} 
-                  className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                  className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="item-notes">Notes / Requirements</Label>
+              <Label htmlFor="item-notes" className="text-xs font-semibold text-slate-700">Notes / Requirements</Label>
               <Input 
                 id="item-notes" 
                 placeholder="e.g. Needs 3/8 valve connection, matte black finish" 
                 value={formNotes} 
                 disabled={isReadOnly}
                 onChange={(e) => setFormNotes(e.target.value)} 
-                className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg">
+            <div className="flex items-center justify-between p-3 mt-1 bg-emerald-50/80 border border-emerald-200 rounded-lg">
               <div>
                 <Label htmlFor="sync-expenses-toggle" className={`font-semibold text-emerald-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
                   💰 Sync to Expenses Tab
                 </Label>
-                <p className="text-[11px] text-emerald-800">
+                <p className="text-[11px] text-emerald-800 mt-1">
                   Automatically logs material price under Project Expenses & updates Dashboard totals.
                 </p>
               </div>
@@ -935,22 +943,22 @@ export default function SelectionsPage() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100 shrink-0">
+          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white items-center">
             {isReadOnly ? (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsModalOpen(false)} 
-                className="w-full shadow-sm font-semibold text-slate-700"
+                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Close View
               </Button>
             ) : (
               <>
-                <div className="flex gap-2 w-full sm:order-2">
+                <div className="flex gap-2 w-full">
                   <Button 
                     size="sm"
-                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
                     onClick={handleSaveItem}
                     disabled={isSubmitting}
                   >
@@ -961,7 +969,7 @@ export default function SelectionsPage() {
                     variant="outline" 
                     size="sm"
                     onClick={() => setIsModalOpen(false)} 
-                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                    className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
                   >
                     Cancel
                   </Button>
@@ -972,7 +980,7 @@ export default function SelectionsPage() {
                     variant="destructive" 
                     size="sm" 
                     onClick={handleDeleteItem} 
-                    className="w-full sm:w-auto sm:order-1 shadow-sm"
+                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold h-9"
                   >
                     Delete
                   </Button>

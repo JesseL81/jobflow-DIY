@@ -29,6 +29,10 @@ interface VisionBoardItem {
   notes: string
   url?: string
   photos: string[]
+  linkTitle?: string
+  linkDescription?: string
+  linkDomain?: string
+  linkImage?: string
 }
 
 const DEFAULT_CATEGORIES = [
@@ -46,7 +50,7 @@ const INITIAL_BOARD: VisionBoardItem[] = [
     id: 1,
     date: "2026-08-28",
     category: "Inspiration & Ideas",
-    notes: "👋 Welcome to the Vision Board! Click '+ Add Photos / Idea' to upload your own.",
+    notes: "👋 Welcome to the Vision Board! Paste a link to a product below, and we will automatically unfurl it into a rich image card just like an iMessage.",
     url: "https://diy.cleanbuild.us",
     photos: ["/Gemini_bathroom.jpeg"],
   }
@@ -95,10 +99,19 @@ export default function VisionBoardPage() {
   const [itemUrl, setItemUrl] = useState("")
   const [itemPhotos, setItemPhotos] = useState<string[]>([])
 
+  // Rich Link State
+  const [linkTitle, setLinkTitle] = useState("")
+  const [linkDescription, setLinkDescription] = useState("")
+  const [linkDomain, setLinkDomain] = useState("")
+  const [linkImage, setLinkImage] = useState("")
+  const [isFetchingPreview, setIsFetchingPreview] = useState(false)
+  const [fetchError, setFetchError] = useState(false) 
+
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null)
   
   const [isExporting, setIsExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState("")
+
   const exportCardRef = useRef<HTMLDivElement>(null)
   const [exportTarget, setExportTarget] = useState<VisionBoardItem | null>(null)
 
@@ -121,11 +134,9 @@ export default function VisionBoardPage() {
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
         if (activeWorkspaceId === user.id) {
-          // 1. They are the Owner of this workspace
           setIsGuest(false)
           setIsReadOnly(false)
         } else {
-          // 2. They are a Guest in this workspace
           setIsGuest(true)
           const { data: guestInvite } = await supabase
             .from("project_members")
@@ -149,7 +160,55 @@ export default function VisionBoardPage() {
     fetchUserAndPermissions()
   }, [])
 
-  // 🔥 Trigger for the Glass Wall Overlay
+  // 🔥 Auto-Fetch Link Preview Logic (Triggered on URL change)
+  useEffect(() => {
+    if (!itemUrl.trim()) {
+      setLinkTitle("")
+      setLinkDescription("")
+      setLinkDomain("")
+      setLinkImage("")
+      setFetchError(false)
+      return
+    }
+
+    const delayDebounceFn = setTimeout(() => {
+      if (itemUrl.startsWith("http") && !linkTitle && !isFetchingPreview && !fetchError) {
+        fetchLinkPreview(itemUrl)
+      }
+    }, 800)
+
+    return () => clearTimeout(delayDebounceFn)
+  }, [itemUrl])
+
+  const fetchLinkPreview = async (urlToFetch: string) => {
+    setIsFetchingPreview(true)
+    setFetchError(false)
+    try {
+      const res = await fetch(`/api/unfurl?url=${encodeURIComponent(urlToFetch.trim())}`)
+      const json = await res.json()
+      
+      let fallbackDomain = ""
+      try { fallbackDomain = new URL(urlToFetch).hostname.replace('www.', '') } catch(e) {}
+
+      if (res.ok && !json.error) {
+        setLinkTitle(json.title || "")
+        setLinkDescription(json.description || "")
+        setLinkDomain(json.domain || fallbackDomain)
+        setLinkImage(json.image || "")
+      } else {
+        console.log("Retailer blocked preview, skipping autofurl.")
+        setFetchError(true)
+        setLinkDomain(fallbackDomain)
+      }
+    } catch (e) {
+      console.error("Failed to fetch link preview:", e)
+      setFetchError(true)
+      try { setLinkDomain(new URL(urlToFetch).hostname.replace('www.', '')) } catch(err) {}
+    } finally {
+      setIsFetchingPreview(false)
+    }
+  }
+
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const handleAddCategory = async () => {
@@ -163,8 +222,6 @@ export default function VisionBoardPage() {
     }
 
     const updatedCategories = [...(categories || []), trimmed]
-    
-    // 🔥 FIRE AND FORGET
     setCategories(updatedCategories)
 
     setNewCategoryName("")
@@ -346,6 +403,8 @@ export default function VisionBoardPage() {
 
   const handleOpenModal = (itemToEdit?: VisionBoardItem) => {
     setIsSubmitting(false)
+    setFetchError(false) 
+    
     if (itemToEdit) {
       setEditingItem(itemToEdit)
       setItemDate(itemToEdit.date || getTodayInputDate())
@@ -353,6 +412,11 @@ export default function VisionBoardPage() {
       setItemNotes(itemToEdit.notes || "")
       setItemUrl(itemToEdit.url || "")
       setItemPhotos(Array.isArray(itemToEdit.photos) ? itemToEdit.photos : [])
+      
+      setLinkTitle(itemToEdit.linkTitle || "")
+      setLinkDescription(itemToEdit.linkDescription || "")
+      setLinkDomain(itemToEdit.linkDomain || "")
+      setLinkImage(itemToEdit.linkImage || "")
     } else {
       if (isReadOnly) return
       const defaultDate = getTodayInputDate()
@@ -362,6 +426,10 @@ export default function VisionBoardPage() {
       setItemNotes("")
       setItemUrl("")
       setItemPhotos([])
+      setLinkTitle("")
+      setLinkDescription("")
+      setLinkDomain("")
+      setLinkImage("")
     }
     setIsModalOpen(true)
   }
@@ -405,6 +473,10 @@ export default function VisionBoardPage() {
                 notes: itemNotes,
                 url: itemUrl.trim(),
                 photos: itemPhotos || [],
+                linkTitle,
+                linkDescription,
+                linkDomain,
+                linkImage,
               }
             : l
         )
@@ -417,12 +489,15 @@ export default function VisionBoardPage() {
             notes: itemNotes,
             url: itemUrl.trim(),
             photos: itemPhotos || [],
+            linkTitle,
+            linkDescription,
+            linkDomain,
+            linkImage,
           },
           ...(boardItems || []),
         ]
       }
 
-      // 🔥 FIRE AND FORGET: No 'await' here. Closes instantly and syncs in background.
       setBoardItems(updatedItems)
       setIsModalOpen(false)
     } finally {
@@ -430,12 +505,11 @@ export default function VisionBoardPage() {
     }
   }
 
-  const handleDeleteItem = async (id: number) => {
-    if (isReadOnly) return
-    const updatedItems = (boardItems || []).filter((l) => l.id !== id)
-    
-    // 🔥 FIRE AND FORGET
+  const handleDeleteItem = async () => {
+    if (isReadOnly || !editingItem) return
+    const updatedItems = (boardItems || []).filter((l) => l.id !== editingItem.id)
     setBoardItems(updatedItems)
+    setIsModalOpen(false) 
   }
 
   if (!isMounted) return null;
@@ -445,7 +519,7 @@ export default function VisionBoardPage() {
       
       <PaywallOverlay show={showPaywall} />
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px]">
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -464,7 +538,7 @@ export default function VisionBoardPage() {
               size="sm"
               disabled={isExporting}
               onClick={handleExportAll}
-              className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               📦 Download All
             </Button>
@@ -473,7 +547,7 @@ export default function VisionBoardPage() {
           {!isReadOnly && (
             <Button
               size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
               onClick={() => handleOpenModal()}
             >
               + Add Photos / Idea
@@ -538,7 +612,7 @@ export default function VisionBoardPage() {
                       }}
                     />
                     <div className="flex gap-2">
-                      <Button type="button" size="sm" onClick={handleAddCategory} className="flex-1 h-7 text-[10px] bg-blue-600 hover:bg-blue-700 text-white">
+                      <Button type="button" size="sm" onClick={handleAddCategory} className="flex-1 h-7 text-[10px] bg-blue-600 hover:bg-blue-500 text-white">
                         Save
                       </Button>
                       <Button type="button" size="sm" variant="ghost" onClick={() => {
@@ -594,16 +668,36 @@ export default function VisionBoardPage() {
                             </p>
                           )}
 
+                          {/* 🔥 RICH LINK PREVIEW CARD FOR MAIN VIEW */}
                           {item.url && (
-                            <div className="pt-1">
-                              <a
-                                href={item.url.startsWith("http") ? item.url : `https://${item.url}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex text-indigo-600 hover:text-indigo-800 font-bold items-center gap-1.5 text-xs bg-indigo-50/50 py-1.5 px-3 rounded-md border border-indigo-100 transition-colors"
-                              >
-                                🔗 Open Reference Link ↗
-                              </a>
+                            <div className="pt-2">
+                              {item.linkTitle || item.linkImage ? (
+                                <a 
+                                  href={item.url.startsWith("http") ? item.url : `https://${item.url}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="block border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow max-w-sm bg-slate-50 group cursor-pointer decoration-transparent"
+                                >
+                                  {item.linkImage && (
+                                    <div className="h-40 w-full overflow-hidden bg-white border-b border-slate-200 flex items-center justify-center p-2">
+                                      <img src={item.linkImage} alt={item.linkTitle || "Link preview"} className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-500" />
+                                    </div>
+                                  )}
+                                  <div className="p-3">
+                                    <h4 className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">{item.linkTitle || item.url}</h4>
+                                    <p className="text-[11px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">{item.linkDomain}</p>
+                                  </div>
+                                </a>
+                              ) : (
+                                <a
+                                  href={item.url.startsWith("http") ? item.url : `https://${item.url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex text-indigo-600 hover:text-indigo-800 font-bold items-center gap-1.5 text-xs bg-indigo-50/50 py-1.5 px-3 rounded-md border border-indigo-100 transition-colors"
+                                >
+                                  🔗 Open Reference Link ↗
+                                </a>
+                              )}
                             </div>
                           )}
 
@@ -634,7 +728,7 @@ export default function VisionBoardPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-6 px-3 text-[10px] uppercase font-bold text-indigo-700 border-indigo-200 hover:bg-indigo-50 shadow-xs"
+                            className="h-8 px-4 text-[11px] font-bold text-indigo-700 border-indigo-200 hover:bg-indigo-50 shadow-sm"
                             disabled={isExporting}
                             onClick={() => handleExportItemAndPhotos(item)}
                             title="Export PDF & Photos"
@@ -644,20 +738,10 @@ export default function VisionBoardPage() {
                           <Button
                             size="sm"
                             onClick={() => handleOpenModal(item)}
-                            className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
+                            className={`h-8 px-4 text-[11px] text-white font-bold rounded-md shadow-sm shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-500"}`}
                           >
-                            {isReadOnly ? "VIEW" : "EDIT"}
+                            {isReadOnly ? "View" : "Edit"}
                           </Button>
-                          {!isReadOnly && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
-                              onClick={() => handleDeleteItem(item.id)}
-                            >
-                              Delete
-                            </Button>
-                          )}
                         </div>
                       </div>
                     </Card>
@@ -670,8 +754,8 @@ export default function VisionBoardPage() {
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-6">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-4">
+        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-lg font-bold text-orange-400">
               {isReadOnly ? "View Board Entry" : editingItem ? "Edit Board Entry" : "Add Photos / Idea"}
             </DialogTitle>
@@ -682,7 +766,7 @@ export default function VisionBoardPage() {
             )}
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
                 <Label htmlFor="item-date" className="font-semibold text-slate-700 text-xs">Date Added</Label>
@@ -692,7 +776,7 @@ export default function VisionBoardPage() {
                   value={itemDate}
                   disabled={isReadOnly}
                   onChange={(e) => setItemDate(e.target.value)}
-                  className={`h-9 text-xs ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`h-9 text-sm shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 />
               </div>
 
@@ -703,13 +787,86 @@ export default function VisionBoardPage() {
                   value={itemCategory}
                   disabled={isReadOnly}
                   onChange={(e) => setItemCategory(e.target.value)}
-                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {(categories || []).filter(c => c !== "All Categories").map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="grid gap-1.5 border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL</Label>
+                {isFetchingPreview && <span className="text-[10px] text-blue-600 font-bold animate-pulse">Fetching link preview...</span>}
+              </div>
+              <Input
+                id="item-url"
+                placeholder="e.g. https://homedepot.com/..."
+                value={itemUrl}
+                disabled={isReadOnly}
+                // 🔥 NEW ONCHANGE FIX: Instantly clear error/preview state when a new URL is pasted
+                onChange={(e) => {
+                  setItemUrl(e.target.value)
+                  setFetchError(false)
+                  setLinkTitle("")
+                  setLinkImage("")
+                  setLinkDomain("")
+                  setLinkDescription("")
+                }}
+                className={`h-9 text-sm bg-white shadow-sm border-slate-200 w-full ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+              />
+
+              {/* 🔥 FIREWALL FALLBACK UI */}
+              {fetchError && !isReadOnly && (
+                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3 shadow-sm">
+                  <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                    ⚠️ <strong>{linkDomain || "This retailer"}</strong> blocked our automatic preview bot. To create your image card, please paste the details manually below:
+                  </p>
+                  <div className="grid gap-2">
+                    <Input 
+                      placeholder="Product Title (e.g. Ceiling Fan)" 
+                      value={linkTitle} 
+                      onChange={e => setLinkTitle(e.target.value)} 
+                      className="h-8 text-xs bg-white border-amber-200 shadow-sm" 
+                    />
+                    <Input 
+                      placeholder="Image Address (Right-click photo -> Copy Image Address)" 
+                      value={linkImage} 
+                      onChange={e => setLinkImage(e.target.value)} 
+                      className="h-8 text-xs bg-white border-amber-200 shadow-sm" 
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 🔥 RICH LINK PREVIEW IN MODAL */}
+              {(linkTitle || linkImage) && !fetchError && (
+                <div className="mt-2 relative border border-slate-200 rounded-lg overflow-hidden bg-slate-50 flex items-center gap-3 pr-2 h-16 shadow-sm">
+                  {linkImage ? (
+                    <div className="h-16 w-16 bg-white shrink-0 flex items-center justify-center p-1 border-r border-slate-200">
+                      <img src={linkImage} className="max-h-full max-w-full object-contain" alt="Link preview thumbnail" />
+                    </div>
+                  ) : (
+                    <div className="h-16 w-16 bg-slate-200 shrink-0 flex items-center justify-center text-xl">🔗</div>
+                  )}
+                  <div className="flex-1 overflow-hidden py-1">
+                    <p className="text-xs font-bold text-slate-900 truncate">{linkTitle}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate mt-0.5">{linkDomain}</p>
+                  </div>
+                  {!isReadOnly && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setLinkTitle(""); setLinkImage(""); setLinkDomain(""); setLinkDescription(""); setFetchError(false); }} 
+                      className="h-6 w-6 shrink-0 bg-slate-200 hover:bg-rose-100 hover:text-rose-600 text-slate-500 rounded flex items-center justify-center transition-colors shadow-sm"
+                      title="Clear Preview"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid gap-1.5">
@@ -721,34 +878,22 @@ export default function VisionBoardPage() {
                 value={itemNotes}
                 disabled={isReadOnly}
                 onChange={(e) => setItemNotes(e.target.value)}
-                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
             
-            <div className="grid gap-1.5">
-              <Label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL (Optional)</Label>
-              <Input
-                id="item-url"
-                placeholder="e.g. https://pinterest.com/... or Home Depot link"
-                value={itemUrl}
-                disabled={isReadOnly}
-                onChange={(e) => setItemUrl(e.target.value)}
-                className={`h-9 text-xs bg-white border-slate-200 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
-              />
-            </div>
-
-            <div className="grid gap-1.5 border-t pt-3">
+            <div className="grid gap-1.5 border-t border-slate-100 pt-3 mt-1">
               <Label className="font-semibold text-slate-700 text-xs">Attached Board Photos</Label>
               
               {!isReadOnly && (
                 <div className="flex gap-2 mt-1">
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors h-9">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
                     Camera
                     <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoUpload} className="hidden" />
                   </label>
 
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors h-9">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                     Upload File
                     <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
@@ -783,37 +928,48 @@ export default function VisionBoardPage() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
             {isReadOnly ? (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsModalOpen(false)} 
-                className="w-full shadow-sm font-semibold text-slate-700"
+                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
               >
                 Close View
               </Button>
             ) : (
               <>
-                <div className="flex gap-2 w-full sm:order-2">
+                <div className="flex gap-2 w-full">
                   <Button 
                     size="sm" 
-                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
                     onClick={handleSaveItem}
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? "Saving..." : editingItem ? "Update Entry" : "Save to Board"}
+                    {isSubmitting ? "Saving..." : editingItem ? "Save Changes" : "Save to Board"}
                   </Button>
                   
                   <Button 
                     variant="outline" 
                     size="sm" 
                     onClick={() => setIsModalOpen(false)} 
-                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                    className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
                   >
                     Cancel
                   </Button>
                 </div>
+
+                {editingItem && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={handleDeleteItem} 
+                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold h-9"
+                  >
+                    Delete
+                  </Button>
+                )}
               </>
             )}
           </div>

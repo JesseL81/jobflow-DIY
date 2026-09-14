@@ -171,6 +171,7 @@ export default function ContactsPage() {
     if (activeContactId === id) {
       setActiveContactId("")
     }
+    setIsModalOpen(false)
   }
 
   const handleSaveContact = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -228,17 +229,18 @@ export default function ContactsPage() {
         <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
           {!isReadOnly && (
             <Button 
+              size="sm"
               onClick={handleOpenAddModal}
-              className="inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm transition-colors focus:outline-none"
+              className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Add New Contact
             </Button>
           )}
           
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
-              <form onSubmit={handleSaveContact}>
-                <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+            <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
+              <form onSubmit={handleSaveContact} className="flex flex-col w-full">
+                <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
                   <DialogTitle className="text-lg font-bold text-orange-400">
                     {isReadOnly ? "View Contact" : editingId ? "Edit Contact" : "Add New Contact / Vendor"}
                   </DialogTitle>
@@ -251,29 +253,29 @@ export default function ContactsPage() {
                   )}
                 </DialogHeader>
 
-                <div className="grid gap-4 py-2 text-xs">
+                <div className="grid gap-4 px-6 py-4 bg-white flex-1 overflow-y-auto">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="name" className="font-semibold text-slate-700">Contact Person Name {isReadOnly ? "" : "*"}</Label>
+                      <Label htmlFor="name" className="text-xs font-semibold text-slate-700">Contact Person Name {isReadOnly ? "" : "*"}</Label>
                       <Input
                         id="name"
                         placeholder="e.g. Dave Miller"
                         value={newName}
                         disabled={isReadOnly}
                         onChange={(e) => setNewName(e.target.value)}
-                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                         required
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="company" className="font-semibold text-slate-700">Business / Company Name {isReadOnly ? "" : "*"}</Label>
+                      <Label htmlFor="company" className="text-xs font-semibold text-slate-700">Business / Company Name {isReadOnly ? "" : "*"}</Label>
                       <Input
                         id="company"
                         placeholder="e.g. Apex Electrical"
                         value={newCompany}
                         disabled={isReadOnly}
                         onChange={(e) => setNewCompany(e.target.value)}
-                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                         required
                       />
                     </div>
@@ -281,13 +283,13 @@ export default function ContactsPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="trade" className="font-semibold text-slate-700">Trade / Specialty</Label>
+                      <Label htmlFor="trade" className="text-xs font-semibold text-slate-700">Trade / Specialty</Label>
                       <select
                         id="trade"
                         value={newTrade}
                         disabled={isReadOnly}
                         onChange={(e) => setNewTrade(e.target.value)}
-                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
                       >
                         <option value="General Subcontractor">General Subcontractor</option>
                         <option value="Electrician">Electrician</option>
@@ -304,13 +306,13 @@ export default function ContactsPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="status" className="font-semibold text-slate-700">Status</Label>
+                      <Label htmlFor="status" className="text-xs font-semibold text-slate-700">Status</Label>
                       <select
                         id="status"
                         value={newStatus}
                         disabled={isReadOnly}
                         onChange={(e) => setNewStatus(e.target.value as "Active" | "Preferred" | "On Hold")}
-                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
                       >
                         <option value="Active">Active</option>
                         <option value="Preferred">Preferred</option>
@@ -321,18 +323,18 @@ export default function ContactsPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="phone" className="font-semibold text-slate-700">Phone Number</Label>
+                      <Label htmlFor="phone" className="text-xs font-semibold text-slate-700">Phone Number</Label>
                       <Input
                         id="phone"
                         placeholder="(555) 000-0000"
                         value={newPhone}
                         disabled={isReadOnly}
                         onChange={(e) => setNewPhone(e.target.value)}
-                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="email" className="font-semibold text-slate-700">Email Address</Label>
+                      <Label htmlFor="email" className="text-xs font-semibold text-slate-700">Email Address</Label>
                       <Input
                         id="email"
                         type="email"
@@ -340,67 +342,81 @@ export default function ContactsPage() {
                         value={newEmail}
                         disabled={isReadOnly}
                         onChange={(e) => setNewEmail(e.target.value)}
-                        className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="address" className="font-semibold text-slate-700">Office / Shop Address</Label>
+                    <Label htmlFor="address" className="text-xs font-semibold text-slate-700">Office / Shop Address</Label>
                     <Input
                       id="address"
                       placeholder="123 Main St, Suite 100, City, ST"
                       value={newAddress}
                       disabled={isReadOnly}
                       onChange={(e) => setNewAddress(e.target.value)}
-                      className={`bg-white border-slate-200 text-xs h-9 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                      className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="notes" className="font-semibold text-slate-700">Notes & Trade Details</Label>
+                    <Label htmlFor="notes" className="text-xs font-semibold text-slate-700">Notes & Trade Details</Label>
                     <textarea
                       id="notes"
                       placeholder="Rates, lead times, licensing info, or scheduling requirements..."
                       value={newNotes}
                       disabled={isReadOnly}
                       onChange={(e) => setNewNotes(e.target.value)}
-                      className={`flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                      className={`flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900 placeholder:text-slate-400"}`}
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+                <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
                   {isReadOnly ? (
                     <Button 
                       type="button"
                       variant="outline" 
                       size="sm"
                       onClick={() => setIsModalOpen(false)} 
-                      className="w-full shadow-sm font-semibold text-slate-700"
+                      className="w-full h-9 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
                     >
                       Close View
                     </Button>
                   ) : (
                     <>
-                      <Button 
-                        type="submit"
-                        size="sm"
-                        disabled={isSubmitting}
-                        className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-                      >
-                        {isSubmitting ? "Saving..." : editingId ? "Update Contact" : "Save Contact"}
-                      </Button>
-                      
-                      <Button 
-                        type="button"
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setIsModalOpen(false)} 
-                        className="flex-1 shadow-sm font-semibold text-slate-700"
-                      >
-                        Cancel
-                      </Button>
+                      <div className="flex gap-2 w-full">
+                        <Button 
+                          type="submit"
+                          size="sm"
+                          disabled={isSubmitting}
+                          className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
+                        >
+                          {isSubmitting ? "Saving..." : editingId ? "Update Contact" : "Save Contact"}
+                        </Button>
+                        
+                        <Button 
+                          type="button"
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsModalOpen(false)} 
+                          className="flex-1 h-9 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+
+                      {editingId && (
+                        <Button 
+                          type="button"
+                          variant="destructive" 
+                          size="sm" 
+                          onClick={() => handleDeleteContact(editingId)}
+                          className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold h-9"
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -504,18 +520,18 @@ export default function ContactsPage() {
                   <Button 
                     size="sm" 
                     onClick={() => handleOpenEditModal(activeContact)}
-                    className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
+                    className={`h-8 px-4 text-[11px] text-white font-bold rounded-md shadow-sm shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-500"}`}
                   >
-                    {isReadOnly ? "VIEW" : "EDIT"}
+                    {isReadOnly ? "View" : "Edit"}
                   </Button>
                   {!isReadOnly && (
                     <Button 
-                      variant="ghost" 
+                      variant="destructive"
                       size="sm" 
                       onClick={() => handleDeleteContact(activeContact.id)}
-                      className="h-6 px-3 text-[10px] uppercase font-bold text-rose-600 hover:bg-rose-50"
+                      className="h-8 px-4 text-[11px] text-white font-bold rounded-md shadow-sm shrink-0 bg-rose-600 hover:bg-rose-500"
                     >
-                      DELETE
+                      Delete
                     </Button>
                   )}
                 </div>

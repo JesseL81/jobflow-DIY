@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
 export interface PunchItem {
@@ -446,7 +446,7 @@ export default function PunchListPage() {
                             <Button 
                               size="sm" 
                               onClick={() => handleOpenEdit(item)} 
-                              className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
+                              className={`h-8 px-4 text-white font-bold text-[11px] rounded-md shadow-sm shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-500"}`}
                             >
                               {isReadOnly ? "View" : "Edit"}
                             </Button>
@@ -653,23 +653,23 @@ export default function PunchListPage() {
               />
             </div>
   
-            <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 pb-2 border-t border-slate-100">
+            <div className="flex flex-col gap-2 pt-4 mt-2 pb-2 border-t border-slate-100 shrink-0">
             
             {isReadOnly ? (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsModalOpen(false)} 
-                className="w-full shadow-sm font-semibold text-slate-700"
+                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Close View
               </Button>
             ) : (
               <>
-                <div className="flex gap-2 w-full sm:order-2">
+                <div className="flex gap-2 w-full">
                   <Button 
                     size="sm"
-                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm" 
                     onClick={handleSaveItem} 
                   >
                     {editingItem ? "Save Changes" : "Add Task"}
@@ -679,7 +679,7 @@ export default function PunchListPage() {
                     variant="outline" 
                     size="sm"
                     onClick={() => setIsModalOpen(false)} 
-                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                    className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
                   >
                     Cancel
                   </Button>
@@ -690,7 +690,7 @@ export default function PunchListPage() {
                     variant="destructive" 
                     size="sm" 
                     onClick={handleDeleteItem} 
-                    className="w-full sm:w-auto sm:order-1 shadow-sm"
+                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold"
                   >
                     Delete
                   </Button>

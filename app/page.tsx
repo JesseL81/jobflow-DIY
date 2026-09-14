@@ -1,854 +1,384 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { supabase } from "@/lib/supabase"
-import { useOfflineSync } from "@/hooks/useOfflineSync"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
-interface Expense {
-  id: number
-  title?: string
-  category?: string
-  materials: number
-  labor: number
+function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M20 38L50 20L80 38L50 56L20 38Z" fill="#FF8C00"/>
+      <path d="M20 38V68L50 85V56L20 38Z" fill="#C2410C"/>
+      <path d="M80 38V68L50 85V56L80 38Z" fill="#FF6B00"/>
+      <path
+        d="M44 50.4L33 43.8C28.5 41.1 26 44 26 49.5V58.5C26 64 28.5 66.9 33 69.6L44 76.2"
+        stroke="#FFFFFF"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <g stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <line x1="56" y1="52.6" x2="56" y2="75" />
+        <path d="M56 52.6L68 45.4C72.5 42.7 75 44.5 75 48.5C75 52.5 72.5 55.5 68 58.2L56 65.4" />
+        <path d="M56 65.4L69 57.6C73.5 54.9 76 56.7 76 60.7C76 64.7 73.5 67.7 69 70.4L56 78.2" />
+      </g>
+    </svg>
+  )
 }
 
-const INITIAL_EXPENSES = [
-  { id: 1, title: "Foundation Concrete", category: "Foundation", materials: 2770, labor: 750 },
-  { id: 2, title: "👋 Welcome to Expenses! Log your costs here.", category: "General", materials: 0, labor: 0 },
-  { id: 3, title: "Click 'Edit' to update or delete this example.", category: "General", materials: 0, labor: 0 }
-]
-
-const INITIAL_PUNCH_LIST: PunchItem[] = [
-  { id: 1, text: "👋 Welcome to CleanBuild! Check this box to complete a task.", category: "General To-Do", completed: false, assignedEmails: [] },
-  { id: 2, text: "Click 'Edit' to assign an email. (We'll email them a reminder!)", category: "General To-Do", completed: false, assignedEmails: [] },
-  { id: 3, text: "Delete this task using the 'Edit' menu.", category: "General To-Do", completed: false, assignedEmails: [] },
-]
-
-const CATEGORIES = [
-  "All Categories",
-  "General To-Do",
-  "Framing & Drywall",
-  "Plumbing & HVAC",
-  "Electrical",
-  "Finishes & Paint",
-  "Exterior & Landscaping",
-]
-
-interface CustomNonWorkday {
-  date: string
-  title?: string
-  isFromLog?: boolean
+function CheckIcon() {
+  return (
+    <svg className="w-5 h-5 text-emerald-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"></path>
+    </svg>
+  )
 }
 
-interface CalendarTask {
-  id: number
-  title: string
-  startDate: string
-  endDate: string
-}
-
-interface PunchItem {
-  id: number
-  text: string
-  category: string
-  notes?: string
-  completed: boolean
-  dueDate?: string 
-  assignedEmails?: string[]
-  linkedTaskId?: number
-  linkedTaskOffset?: number
-}
-
-const formatDisplayDate = (dateStr: string) => {
-  if (!dateStr) return ""
-  const cleanDate = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr
-  const [year, month, day] = cleanDate.split("-")
-  if (!year || !month || !day) return dateStr
-  return `${parseInt(month, 10)}/${parseInt(day, 10)}/${year.slice(-2)}`
-}
-
-const getLocalTodayStr = () => {
-  const d = new Date()
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
-export default function DashboardPage() {
-  const [expenses, , expensesLoaded] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
-  const [totalBudget, , budgetLoaded] = useOfflineSync<number>("cleanbuild_total_budget", 23402)
-  const [customNonWorkdays, , nonWorkdaysLoaded] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", []) 
-  const [punchList, setPunchList, punchLoaded] = useOfflineSync<PunchItem[]>("cleanbuild_punch_list", INITIAL_PUNCH_LIST)
-  const [calendarTasks, , calendarLoaded] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
-  const [projectDates, , datesLoaded] = useOfflineSync<{startDate: string, endDate: string}>("cleanbuild_project_dates", { startDate: "2026-06-29", endDate: "2026-07-30" })
-  
-  const isAppLoaded = expensesLoaded && budgetLoaded && nonWorkdaysLoaded && punchLoaded && calendarLoaded && datesLoaded
-
-  const [newPunchText, setNewPunchText] = useState("")
-  const [editingPunch, setEditingPunch] = useState<PunchItem | null>(null)
-  
-  const [isLinked, setIsLinked] = useState<boolean>(false)
-  const [emailInput, setEmailInput] = useState("")
-  
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
-  const [isGuest, setIsGuest] = useState(false)
-  const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
-  const [accountTier, setAccountTier] = useState<string>("free")
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+export default function MarketingLandingPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
-    const fetchUserAndPermissions = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user?.email) {
-          setCurrentUserEmail(user.email)
-          
-          const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
-          if (profile) setAccountTier(profile.tier)
-          
-          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
-
-          if (activeWorkspaceId === user.id) {
-            setIsGuest(false)
-          } else {
-            setIsGuest(true)
-            const { data: guestInvite } = await supabase
-              .from("project_members")
-              .select("permissions")
-              .eq("invite_email", user.email)
-              .ilike("status", "active")
-              .maybeSingle()
-
-            if (guestInvite?.permissions) {
-              setPermissions(guestInvite.permissions)
-            }
-          }
-        }
-      } finally {
-        setIsCheckingAuth(false)
-      }
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setIsLoggedIn(!!session)
     }
-    fetchUserAndPermissions()
+    checkAuth()
   }, [])
 
-  const hideExpenses = isGuest && permissions?.expenses === "hidden"
-  const hidePunchList = isGuest && permissions?.punch_list === "hidden"
-  const hideSchedule = isGuest && permissions?.schedule === "hidden"
-  
-  // 🔥 Trigger for the Glass Wall Overlay
-  const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
-
-  const handleOpenAddModal = () => {
-    if (!newPunchText.trim()) return
-    setIsLinked(false)
-    setEditingPunch({
-      id: Date.now(),
-      text: newPunchText.trim(),
-      category: "General To-Do",
-      completed: false,
-      assignedEmails: currentUserEmail ? [currentUserEmail.toLowerCase()] : [],
-      linkedTaskId: undefined,
-      linkedTaskOffset: 0
-    })
-    setEmailInput("")
-  }
-
-  const handleTogglePunch = async (id: number) => {
-    const updated = punchList.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
-    await setPunchList(updated)
-  }
-
-  const handleDeletePunch = async (id: number) => {
-    const updated = punchList.filter((item) => item.id !== id)
-    await setPunchList(updated)
-  }
-
-  const handleOpenEditModal = (item: PunchItem) => {
-    let emails = item.assignedEmails || []
-    if ((item as any).assignedEmail && emails.length === 0) {
-      emails = [(item as any).assignedEmail]
-    }
-    setIsLinked(!!item.linkedTaskId)
-    setEditingPunch({ 
-      ...item, 
-      assignedEmails: emails,
-      linkedTaskOffset: item.linkedTaskOffset || 0
-    })
-    setEmailInput("")
-  }
-
-  const handleAddEmail = () => {
-    if (!emailInput.trim() || !editingPunch) return
-    const trimmed = emailInput.trim().toLowerCase()
-    const currentEmails = editingPunch.assignedEmails || []
-    
-    if (!currentEmails.includes(trimmed)) {
-      setEditingPunch({
-        ...editingPunch,
-        assignedEmails: [...currentEmails, trimmed]
-      })
-    }
-    setEmailInput("")
-  }
-
-  const handleRemoveEmail = (emailToRemove: string) => {
-    if (!editingPunch) return
-    setEditingPunch({
-      ...editingPunch,
-      assignedEmails: (editingPunch.assignedEmails || []).filter(e => e !== emailToRemove)
-    })
-  }
-
-  const handleSavePunchEdit = async () => {
-    if (!editingPunch) return
-    
-    const finalPunch = {
-      ...editingPunch,
-      linkedTaskId: isLinked && editingPunch.linkedTaskId ? editingPunch.linkedTaskId : undefined,
-      linkedTaskOffset: isLinked ? (editingPunch.linkedTaskOffset || 0) : undefined,
-      dueDate: isLinked ? "" : editingPunch.dueDate
-    }
-    
-    const exists = punchList.some(item => item.id === finalPunch.id)
-    let updated;
-    
-    if (exists) {
-      updated = punchList.map(item => item.id === finalPunch.id ? finalPunch : item)
-    } else {
-      updated = [...punchList, finalPunch]
-    }
-    
-    await setPunchList(updated)
-    setEditingPunch(null)
-    setNewPunchText("")
-  }
-
-  const getAlertStatus = (dueDate?: string, completed?: boolean) => {
-    if (!dueDate || completed) return null
-    const today = getLocalTodayStr()
-    if (dueDate === today) return "today"
-    if (dueDate < today) return "overdue"
-    return "upcoming"
-  }
-
-  const sortedPunchList = useMemo(() => {
-    return [...punchList].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1
-
-      const getDisplayDate = (item: PunchItem) => {
-        if (item.linkedTaskId) {
-          const linkedTask = calendarTasks.find(t => t.id === item.linkedTaskId)
-          if (linkedTask) {
-            const baseDate = new Date(linkedTask.endDate + "T00:00:00")
-            if (item.linkedTaskOffset) baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
-            return baseDate.toISOString().split("T")[0]
-          }
-        }
-        return item.dueDate || ""
-      }
-
-      const dateA = getDisplayDate(a)
-      const dateB = getDisplayDate(b)
-
-      if (dateA && dateB) return new Date(dateA).getTime() - new Date(dateB).getTime()
-      if (dateA && !dateB) return -1
-      if (!dateA && dateB) return 1
-      return a.id - b.id
-    })
-  }, [punchList, calendarTasks])
-
-  const totalPunchItems = punchList.length
-  const completedPunchItems = punchList.filter((item) => item.completed).length
-  const percentPunchCompleted = totalPunchItems > 0 ? Math.round((completedPunchItems / totalPunchItems) * 100) : 0
-
-  const totalMaterials = expenses.reduce((sum, item) => sum + (item.materials || 0), 0)
-  const totalLabor = expenses.reduce((sum, item) => sum + (item.labor || 0), 0)
-  const totalSpent = totalMaterials + totalLabor
-  const remainingBudget = totalBudget - totalSpent
-  const percentBudgetUsed = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0
-
-  const projStart = new Date((projectDates?.startDate || "2026-06-29") + "T00:00:00")
-  const projEnd = new Date((projectDates?.endDate || "2026-07-30") + "T00:00:00")
-  
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  
-  const totalTimeMs = Math.max(0, projEnd.getTime() - projStart.getTime())
-  const elapsedTimeMs = today.getTime() - projStart.getTime()
-  
-  const totalDays = Math.max(1, Math.round(totalTimeMs / (1000 * 60 * 60 * 24)) + 1)
-  const currentDay = Math.round(elapsedTimeMs / (1000 * 60 * 60 * 24)) + 1
-  
-  const percentTimeUsed = Math.max(0, Math.round((currentDay / totalDays) * 100))
-  const barVisualWidth = Math.min(100, percentTimeUsed)
-
-  const isNewTask = editingPunch && !punchList.some(p => p.id === editingPunch.id)
-
   return (
-    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
+    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-orange-200">
       
-      {/* 🔥 THE GLASS WALL OVERLAY (Light Gray Wash) */}
-      {showPaywall && (
-        <div className="absolute inset-0 z-50 bg-slate-300/70 flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden text-center relative z-50 mt-[-10vh]">
-            <div className="bg-slate-900 p-8 flex flex-col items-center">
-              <span className="text-5xl mb-4">🏗️</span>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Ready to manage your own build?</h1>
-              <p className="text-orange-400 text-sm font-medium mt-2">
-                You are currently using a free guest account.
-              </p>
-            </div>
-            
-            <div className="p-8 space-y-6">
-              <p className="text-slate-600 text-sm leading-relaxed">
-                To unlock your personal workspace and start managing your own builds, upgrade to <strong className="text-slate-900">CleanBuild Pro</strong>.
-              </p>
-              
-              <ul className="text-left space-y-3 text-sm font-medium text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <li className="flex items-center gap-2">✅ <span className="flex-1">Unlimited Projects & Schedules</span></li>
-                <li className="flex items-center gap-2">✅ <span className="flex-1">Live Budget & Expense Tracking</span></li>
-                <li className="flex items-center gap-2">✅ <span className="flex-1">Invite Unlimited Guests & Vendors</span></li>
-                <li className="flex items-center gap-2">✅ <span className="flex-1">Automated Email Task Reminders</span></li>
-              </ul>
-
-              <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-12 text-base shadow-sm">
-                Upgrade to Pro (Coming Soon)
-              </Button>
-              
-              <p className="text-xs text-slate-400 mt-4">
-                Toggle back to the <strong className="text-slate-500">Shared Build</strong> in your sidebar to continue collaborating for free.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- STANDARD DASHBOARD UI RENDERED BEHIND THE GLASS WALL --- */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
-        <div>
+      {/* NAVIGATION BAR */}
+      <header className="sticky top-0 z-50 bg-slate-900 border-b border-slate-800 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📊 Dashboard</h1>
-          </div>
-          <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            Real-time site overview, active budget tracking, and job site management.
-          </p>
-        </div>
-      </div>
-
-      <Card className="overflow-hidden border shadow-sm bg-white flex-1">
-        <div className="p-6 space-y-6">
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="bg-white border shadow-2xs">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs">Total Budget</CardDescription>
-                <CardTitle className={`text-xl font-bold ${hideExpenses ? "text-slate-400" : "text-slate-900"}`}>
-                  {hideExpenses ? "🔒 $ - - -" : `$${totalBudget.toLocaleString()}`}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-
-            <Card className="bg-white border shadow-2xs">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs">Total Spent</CardDescription>
-                <CardTitle className={`text-xl font-bold ${hideExpenses ? "text-slate-400" : "text-blue-600"}`}>
-                  {hideExpenses ? "🔒 $ - - -" : `$${totalSpent.toLocaleString()}`}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-
-            <Card className="bg-white border shadow-2xs">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs">Remaining Funds</CardDescription>
-                <CardTitle className={`text-xl font-bold ${hideExpenses ? "text-slate-400" : remainingBudget < 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                  {hideExpenses ? "🔒 $ - - -" : `$${remainingBudget.toLocaleString()}`}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-
-            <Card className="bg-white border shadow-2xs">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs">Active Delays</CardDescription>
-                <CardTitle className={`text-xl font-bold ${hideSchedule ? "text-slate-400" : "text-rose-600"}`}>
-                  {hideSchedule ? "🔒 - - -" : `${customNonWorkdays.length} ${customNonWorkdays.length === 1 ? "Day" : "Days"}`}
-                </CardTitle>
-              </CardHeader>
-            </Card>
+            <LogoCBBlock className="h-10 w-10 drop-shadow-md" />
+            <span className="text-2xl font-extrabold tracking-tight text-white">
+              Clean<span className="text-orange-500">Build</span>
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-white border shadow-2xs">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-sm font-semibold">Budget Utilization</CardTitle>
-                  <span className={`text-xs font-bold ${hideExpenses ? "text-slate-400" : "text-slate-600"}`}>
-                    {hideExpenses ? "🔒 View Restricted" : `${percentBudgetUsed}% Used ($${totalSpent.toLocaleString()} / $${totalBudget.toLocaleString()})`}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
-                  <div 
-                    className={`h-full transition-all duration-500 ${hideExpenses ? "bg-slate-300" : "bg-emerald-500"}`} 
-                    style={{ width: isAppLoaded && !hideExpenses ? `${percentBudgetUsed}%` : "0%" }} 
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border shadow-2xs">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-sm font-semibold">Project Timeline Progress</CardTitle>
-                  <span className={`text-xs font-bold ${hideSchedule ? "text-slate-400" : percentTimeUsed > 100 ? "text-rose-600" : "text-slate-600"}`}>
-                    {hideSchedule ? "🔒 View Restricted" : `Day ${Math.max(0, currentDay)} of ${totalDays} Calendar Days (${percentTimeUsed}%)`}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
-                  <div 
-                    className={`h-full transition-all duration-500 ${hideSchedule ? "bg-slate-300" : percentTimeUsed > 100 ? "bg-rose-500" : "bg-blue-600"}`}
-                    style={{ width: isAppLoaded && !hideSchedule ? `${barVisualWidth}%` : "0%" }} 
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            <Card className="bg-white border shadow-2xs md:col-span-2">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-sm font-bold text-slate-900">✅ Site Punch List / To-Do's</CardTitle>
-                  
-                  <div className="flex items-center gap-3">
-                    <span className={`border text-xs font-semibold px-2.5 py-0.5 rounded ${hidePunchList ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
-                      {hidePunchList ? "🔒 View Restricted" : `${completedPunchItems} of ${totalPunchItems} Completed (${percentPunchCompleted}%)`}
-                    </span>
-                    {!hidePunchList && (
-                      <Link href="/punch-list" className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
-                        View All →
-                      </Link>
-                    )}
-                  </div>
-                </div>
-                <CardDescription className="text-xs">Track quick daily tasks, alerts, and send email reminders.</CardDescription>
-
-                {totalPunchItems > 0 && !hidePunchList && (
-                  <div className="pt-2">
-                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
-                      <div 
-                        className="h-full bg-blue-600 transition-all duration-500" 
-                        style={{ width: isAppLoaded ? `${percentPunchCompleted}%` : "0%" }} 
-                      />
-                    </div>
-                  </div>
-                )}
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                {hidePunchList ? (
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg py-12 flex flex-col items-center justify-center text-center px-4">
-                    <span className="text-3xl mb-3">🔒</span>
-                    <h3 className="text-sm font-bold text-slate-900">Access Restricted</h3>
-                    <p className="text-xs text-slate-500 mt-1">The project owner has hidden the Punch List module.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Add quick task (e.g. Call inspector)..."
-                        value={newPunchText}
-                        onChange={(e) => setNewPunchText(e.target.value)}
-                        className="text-xs h-9 shadow-sm"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newPunchText.trim()) {
-                            handleOpenAddModal()
-                          }
-                        }}
-                      />
-                      <Button 
-                        size="sm" 
-                        disabled={!newPunchText.trim()}
-                        className={`text-xs h-9 px-4 shadow-sm transition-colors ${
-                          newPunchText.trim() 
-                            ? "bg-blue-600 hover:bg-blue-400 text-white font-semibold" 
-                            : "bg-slate-200 text-slate-400 cursor-not-allowed hover:bg-slate-200"
-                        }`} 
-                        onClick={handleOpenAddModal}
-                      >
-                        Add Task
-                      </Button>
-                    </div>
-
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto pt-2">
-                      {sortedPunchList.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic py-3 text-center border border-dashed rounded">
-                          No punch list items yet.
-                        </p>
-                      ) : (
-                        sortedPunchList.map((item) => {
-                          const legacyEmail = (item as any).assignedEmail
-                          const emailsToDisplay = item.assignedEmails && item.assignedEmails.length > 0 
-                            ? item.assignedEmails 
-                            : (legacyEmail ? [legacyEmail] : [])
-
-                          const linkedTask = item.linkedTaskId ? calendarTasks.find(t => t.id === item.linkedTaskId) : null
-                          let displayDueDate = item.dueDate
-                          
-                          if (linkedTask) {
-                            const baseDate = new Date(linkedTask.endDate + "T00:00:00")
-                            if (item.linkedTaskOffset) {
-                              baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
-                            }
-                            displayDueDate = baseDate.toISOString().split("T")[0]
-                          }
-
-                          const alertStatus = getAlertStatus(displayDueDate, item.completed)
-
-                          let rowStyle = "bg-white border-slate-200 hover:border-slate-300"
-                          if (item.completed) {
-                            rowStyle = "bg-slate-50 border-slate-200 opacity-60"
-                          } else if (displayDueDate) {
-                            const todayMs = new Date(getLocalTodayStr() + "T00:00:00").getTime()
-                            const dueMs = new Date(displayDueDate + "T00:00:00").getTime()
-                            const diffDays = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24))
-
-                            if (diffDays < 0) {
-                              rowStyle = "bg-rose-50 border-rose-200 hover:border-rose-300"
-                            } else if (diffDays <= 3) {
-                              rowStyle = "bg-amber-50 border-amber-200 hover:border-amber-300"
-                            } else {
-                              rowStyle = "bg-emerald-50 border-emerald-200 hover:border-emerald-300"
-                            }
-                          }
-
-                          return (
-                            <div key={item.id} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-3 transition-colors ${rowStyle}`}>
-                              <div className="flex items-start sm:items-center gap-3 flex-1">
-                                <input
-                                  type="checkbox"
-                                  checked={item.completed}
-                                  onChange={() => handleTogglePunch(item.id)}
-                                  className="h-4 w-4 accent-blue-600 rounded mt-0.5 sm:mt-0 cursor-pointer shrink-0"
-                                />
-                                <div className="flex flex-col">
-                                  <span className={`text-sm font-semibold ${item.completed ? "line-through text-slate-400" : "text-slate-800"}`}>
-                                    {item.text}
-                                  </span>
-                                  
-                                  {(!item.completed && (displayDueDate || emailsToDisplay.length > 0 || item.category !== "General To-Do")) && (
-                                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                                      {item.category !== "General To-Do" && (
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                          {item.category}
-                                        </span>
-                                      )}
-                                      
-                                      {displayDueDate && (
-                                        <Badge variant="outline" className={`text-[10px] bg-white/60 ${
-                                          item.linkedTaskId 
-                                            ? "text-indigo-700 border-indigo-200" 
-                                            : "text-slate-600 border-slate-200"
-                                        }`}>
-                                          {item.linkedTaskId ? `🔗 Linked: ${linkedTask?.title || "Task"} (Due: ` : "📅 Due: "}
-                                          {formatDisplayDate(displayDueDate)}
-                                          {item.linkedTaskOffset ? ` [${item.linkedTaskOffset > 0 ? '+' : ''}${item.linkedTaskOffset}d]` : ""}
-                                          {item.linkedTaskId ? ")" : ""}
-                                        </Badge>
-                                      )}
-
-                                      {emailsToDisplay.map(email => (
-                                        <span key={email} className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
-                                          ✉️ {email}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => handleOpenEditModal(item)} 
-                                  className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase shrink-0"
-                                >
-                                  EDIT
-                                </Button>
-                                <button onClick={() => handleDeletePunch(item.id)} className="text-slate-400 hover:text-rose-600 h-7 w-7 flex items-center justify-center rounded hover:bg-rose-50 transition-colors">
-                                  ✕
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border shadow-2xs md:col-span-1">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-sm font-bold text-slate-900">🚫 Logged Delays</CardTitle>
-                  {!hideSchedule && (
-                    <Link href="/schedule" className="text-xs text-blue-600 hover:underline">
-                      View Schedule →
-                    </Link>
-                  )}
-                </div>
-                <CardDescription className="text-xs">Days flagged as off from the calendar.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {hideSchedule ? (
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg py-12 flex flex-col items-center justify-center text-center px-4 mt-1">
-                    <span className="text-3xl mb-3">🔒</span>
-                    <h3 className="text-sm font-bold text-slate-900">Access Restricted</h3>
-                    <p className="text-xs text-slate-500 mt-1">Schedule visibility is disabled.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
-                    {[...customNonWorkdays]
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .map((day, idx) => (
-                        <div key={idx} className="bg-rose-50 border border-rose-100 rounded-lg p-3">
-                          <div className="text-sm font-bold text-rose-900">
-                            {new Date(day.date + "T00:00:00").toLocaleDateString("en-US", {
-                              month: "numeric",
-                              day: "numeric",
-                              year: "2-digit"
-                            })}
-                          </div>
-                          <div className="text-xs text-rose-700 mt-0.5">
-                            {day.title || "Non-workday"}
-                          </div>
-                        </div>
-                      ))}
-                      
-                    {customNonWorkdays.length === 0 && (
-                      <p className="text-xs text-slate-400 italic text-center py-6 border-2 border-dashed border-slate-100 rounded-lg mt-2">
-                        No delays logged.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-        </div>
-      </Card>
-
-      <Dialog open={!!editingPunch} onOpenChange={(open) => !open && setEditingPunch(null)}>
-        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
-            <DialogTitle className="text-lg font-bold text-orange-400">
-              {isNewTask ? "Add Task Details" : "Edit Task & Notifications"}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-300 mt-1">
-              Set due dates for alerts or assign emails to trigger automated notifications.
-            </DialogDescription>
-          </DialogHeader>
-
-          {editingPunch && (
-            <div className="grid gap-4 py-2 px-1">
-              <div>
-                <Label htmlFor="edit-task" className="text-xs font-bold text-slate-700">Task Name *</Label>
-                <Input
-                  id="edit-task"
-                  value={editingPunch.text}
-                  onChange={(e) => setEditingPunch({ ...editingPunch, text: e.target.value })}
-                  className="mt-1 text-sm shadow-sm h-10"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="task-cat" className="text-xs font-bold text-slate-700">Category</Label>
-                <select
-                  id="task-cat"
-                  value={editingPunch.category || "General To-Do"}
-                  onChange={(e) => setEditingPunch({ ...editingPunch, category: e.target.value })}
-                  className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-                >
-                  {CATEGORIES.filter((c) => c !== "All Categories").map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-4">
-                <div className="bg-white">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-xs font-semibold text-slate-700">
-                      Due Date (For Alerts)
-                    </Label>
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={isLinked}
-                        onChange={(e) => setIsLinked(e.target.checked)}
-                        className="h-4 w-4 accent-blue-600 rounded"
-                      />
-                      <span className="text-xs font-bold text-blue-600">Link to Schedule</span>
-                    </label>
-                  </div>
-                  
-                  <div className="w-full">
-                    {isLinked ? (
-                      <select
-                        value={editingPunch.linkedTaskId || ""}
-                        onChange={(e) => setEditingPunch({ ...editingPunch, linkedTaskId: e.target.value === "" ? undefined : Number(e.target.value) })}
-                        className={`flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none ${!editingPunch.linkedTaskId ? "text-slate-500" : "text-slate-900"}`}
-                      >
-                        <option value="" disabled>Select calendar task...</option>
-                        {calendarTasks.length === 0 && (
-                          <option disabled>No calendar tasks found</option>
-                        )}
-                        {calendarTasks.map(t => (
-                          <option key={t.id} value={t.id} className="text-slate-900">
-                            {t.title} ({formatDisplayDate(t.endDate)})
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="relative w-full">
-                        <Input 
-                          id="task-date" 
-                          type="date"
-                          value={editingPunch.dueDate || ""}
-                          onChange={(e) => setEditingPunch({ ...editingPunch, dueDate: e.target.value })} 
-                          className="flex w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none pr-8 relative z-10 bg-transparent"
-                        />
-                        {!editingPunch.dueDate && (
-                          <div className="absolute inset-y-1 left-1 right-10 bg-white flex items-center pl-2 pointer-events-none z-0">
-                            <span className="text-slate-500 text-sm">Due Date...</span>
-                          </div>
-                        )}
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-base z-20">
-                          📅
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {isLinked && editingPunch.linkedTaskId && (
-                    <div className="flex items-center justify-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200 mt-3">
-                      <Label className="text-[10px] font-bold text-slate-500 uppercase">Offset (Days)</Label>
-                      <Input 
-                        type="number" 
-                        value={editingPunch.linkedTaskOffset || 0}
-                        onChange={(e) => setEditingPunch({ ...editingPunch, linkedTaskOffset: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })}
-                        className="h-7 w-16 text-xs text-center px-1 shadow-sm bg-white"
-                      />
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        (- for lead before, + for lag after)
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="pt-3 border-t border-slate-100">
-                  <Label className="text-xs font-semibold text-slate-700 block mb-1.5">Email</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      type="email"
-                      placeholder="name@example.com"
-                      value={emailInput} 
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          handleAddEmail()
-                        }
-                      }} 
-                      className="shadow-sm h-10 text-sm"
-                    />
-                    <Button type="button" onClick={handleAddEmail} className="bg-blue-600 hover:bg-blue-400 text-white font-semibold px-4 h-10 shadow-sm">
-                      Add
-                    </Button>
-                  </div>
-                  
-                  {(editingPunch.assignedEmails || []).length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {editingPunch.assignedEmails?.map((email, idx) => (
-                        <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium">
-                          {email}
-                          <button 
-                            type="button" 
-                            onClick={() => handleRemoveEmail(email)} 
-                            className="hover:text-rose-600 transition-colors"
-                          >
-                            ✕
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-2">
-                <Label htmlFor="task-notes" className="text-xs font-bold text-slate-700">Additional Notes (Optional)</Label>
-                <textarea 
-                  id="task-notes" 
-                  rows={3}
-                  placeholder="Details, measurements, or materials needed..." 
-                  value={editingPunch.notes || ""} 
-                  onChange={(e) => setEditingPunch({ ...editingPunch, notes: e.target.value })} 
-                  className="w-full mt-1 p-2.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
-            <div className="flex gap-2 w-full sm:order-2">
-              <Button 
-                size="sm"
-                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
-                onClick={handleSavePunchEdit}
-              >
-                {isNewTask ? "Create Task" : "Save Changes"}
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setEditingPunch(null)}
-                className="flex-1 shadow-sm font-semibold text-slate-700"
-              >
-                Cancel
-              </Button>
-            </div>
-
-            {editingPunch && !isNewTask && (
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                onClick={() => handleDeletePunch(editingPunch.id)}
-                className="w-full sm:w-auto sm:order-1 shadow-sm"
-              >
-                Delete
-              </Button>
+          <div className="flex items-center gap-4">
+            {isLoggedIn ? (
+              <Link href="/dashboard">
+                <Button className="bg-blue-600 hover:bg-blue-500 text-white font-bold h-11 px-6 shadow-sm rounded-full">
+                  Go to Dashboard →
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm font-bold text-slate-300 hover:text-white hidden sm:block transition-colors">
+                  Log In
+                </Link>
+                <Link href="/login">
+                  <Button className="bg-blue-600 hover:bg-blue-500 text-white font-bold h-11 px-6 shadow-sm rounded-full">
+                    Start 14-Day Free Trial
+                  </Button>
+                </Link>
+              </>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
-    </main>
+        </div>
+      </header>
+
+      {/* HERO SECTION */}
+      <section className="relative pt-24 pb-32 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-40"></div>
+        <div className="max-w-5xl mx-auto px-6 text-center relative z-10">
+          <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200 mb-6 px-4 py-1.5 text-xs font-bold uppercase tracking-widest rounded-full">
+            The Modern Builder's OS
+          </Badge>
+          <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] mb-8">
+            Manage your custom build <br className="hidden md:block"/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-blue-600">
+              without the chaos.
+            </span>
+          </h1>
+          <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed font-medium">
+            Schedules, budgets, selections, and daily punch lists—all perfectly synced in one beautiful dashboard. Built for custom home builders and ambitious DIYers.
+          </p>
+          
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link href={isLoggedIn ? "/dashboard" : "/login"}>
+              <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white font-bold h-14 px-8 text-lg rounded-full shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5">
+                {isLoggedIn ? "Open My Dashboard" : "Start 14-Day Free Trial"}
+              </Button>
+            </Link>
+            <Button variant="outline" className="w-full sm:w-auto bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-700 font-bold h-14 px-8 text-lg rounded-full shadow-sm">
+              View Live Demo
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURE GRID */}
+      <section className="py-24 bg-slate-50 border-t border-slate-200">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">Everything you need to break ground.</h2>
+            <p className="text-slate-500 font-medium text-lg">Stop hunting through email threads and spreadsheets.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-2xl mb-6">📅</div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Smart Scheduling</h3>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                Drag-and-drop calendar built for construction. Easily adjust for rain delays and weekends.
+              </p>
+            </div>
+
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center text-2xl mb-6">💰</div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Live Budgets</h3>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                Track materials and labor separately. Upload receipts instantly right from the job site.
+              </p>
+            </div>
+
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center text-2xl mb-6">🛍️</div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Room Selections</h3>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                Organize fixtures and finishes by room. Sync approved purchases directly to your expense ledger.
+              </p>
+            </div>
+
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="h-12 w-12 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center text-2xl mb-6">🤝</div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Guest Access</h3>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                Invite your spouse, general contractor, or vendors with strict read-only or edit permissions.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS (STEP-BY-STEP) */}
+      <section className="py-24 bg-white border-t border-slate-200">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">How CleanBuild Works</h2>
+            <p className="text-slate-500 font-medium text-lg">From empty lot to move-in day, organized in four simple steps.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
+            {/* Desktop Connector Line */}
+            <div className="hidden md:block absolute top-6 left-[10%] right-[10%] h-0.5 bg-slate-100 -z-10"></div>
+            
+            {[
+              { num: 1, title: "Create Your Project", desc: "Set your budget targets, timeline, and upload your initial inspiration to the Vision Board." },
+              { num: 2, title: "Invite the Team", desc: "Send secure links to your spouse, GC, or trades. You control exactly what they can see and edit." },
+              { num: 3, title: "Log & Track", desc: "Use the site to manage punch lists, upload receipts, and check off daily job site tasks." },
+              { num: 4, title: "Build with Confidence", desc: "Watch the dashboard calculate your remaining allowances and timeline in real-time." },
+            ].map((step) => (
+              <div key={step.num} className="relative flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-slate-900 text-white font-extrabold flex items-center justify-center text-lg mb-6 shadow-md ring-4 ring-white">
+                  {step.num}
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-3">{step.title}</h3>
+                <p className="text-slate-600 text-sm leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ABOUT THE BUILDER / WHY WE BUILT IT */}
+      <section className="py-24 bg-slate-900 text-white overflow-hidden relative">
+        {/* Decorative Background Element */}
+        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-[800px] h-[800px] bg-blue-600 rounded-full blur-[120px] opacity-20 pointer-events-none"></div>
+        
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative z-10">
+          <div>
+            <Badge className="bg-slate-800 text-orange-400 border-none mb-6 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-md">
+              Our Story
+            </Badge>
+            <h2 className="text-3xl md:text-4xl font-extrabold mb-6 leading-tight">
+              Built by builders, <br/>for builders.
+            </h2>
+            <p className="text-slate-300 text-lg leading-relaxed mb-6">
+              We got tired of juggling five different apps, chaotic text threads, and broken spreadsheets just to keep a custom home build on track. Existing construction software was either insanely expensive, built for massive enterprise firms, or required a 3-hour demo just to sign up.
+            </p>
+            <p className="text-slate-300 text-lg leading-relaxed mb-8">
+              So we built CleanBuild. It's the exact tool we wanted for our own projects—fast, clean, offline-capable, and ridiculously easy to use from a phone in the middle of a muddy job site. 
+            </p>
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center text-xl">
+                👷‍♂️
+              </div>
+              <div>
+                <p className="font-bold text-white">The CleanBuild Team</p>
+                <p className="text-sm text-slate-400">Fort Collins, Colorado</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="relative">
+            <div className="aspect-square md:aspect-[4/3] rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl overflow-hidden flex items-center justify-center p-8">
+              {/* Abstract Placeholder for a nice image or dashboard graphic later */}
+              <div className="w-full h-full border-2 border-dashed border-slate-600 rounded-xl flex flex-col items-center justify-center text-slate-500">
+                <svg className="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+                <span className="font-medium text-sm">Dashboard Interface Preview</span>
+              </div>
+            </div>
+            {/* Floating stats card */}
+            <div className="absolute -bottom-6 -left-6 bg-white text-slate-900 p-6 rounded-2xl shadow-xl border border-slate-200">
+              <p className="text-3xl font-extrabold text-blue-600 mb-1">100%</p>
+              <p className="text-sm font-bold text-slate-600">Built for the Job Site</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING SECTION */}
+      <section className="py-24 bg-slate-50 border-t border-slate-200" id="pricing">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">Simple, honest pricing.</h2>
+            <p className="text-slate-500 font-medium text-lg max-w-2xl mx-auto">
+              No bloated enterprise contracts. Pay for what you build, when you build it. Every plan includes a 14-day free trial.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            
+            {/* Standard Tier */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-8 lg:p-10 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Single Build</h3>
+              <p className="text-slate-500 mb-6 text-sm">Perfect for DIYers and owner-builders.</p>
+              <div className="mb-6">
+                <span className="text-5xl font-extrabold text-slate-900">$49</span>
+                <span className="text-slate-500 font-medium ml-2">per project</span>
+              </div>
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-8 bg-blue-50 inline-block px-3 py-1 rounded-md">
+                One-Time Flat Fee
+              </p>
+              
+              <ul className="space-y-4 mb-8 text-slate-700 text-sm font-medium">
+                <li className="flex items-center"><CheckIcon /> 14-Day Free Trial</li>
+                <li className="flex items-center"><CheckIcon /> Full access to all core modules</li>
+                <li className="flex items-center"><CheckIcon /> Unlimited guest invites</li>
+                <li className="flex items-center"><CheckIcon /> Offline data sync</li>
+                <li className="flex items-center"><CheckIcon /> Mobile & desktop access</li>
+              </ul>
+              
+              <Link href="/login">
+                <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold h-12 rounded-xl">
+                  Start 14-Day Free Trial
+                </Button>
+              </Link>
+            </div>
+
+            {/* Pro Tier */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 lg:p-10 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-48 h-48 bg-blue-500 rounded-full blur-3xl opacity-20 pointer-events-none"></div>
+              
+              <Badge className="absolute top-6 right-6 bg-orange-500 text-white border-none text-xs font-bold uppercase tracking-wider px-3 py-1">
+                For Pros
+              </Badge>
+              
+              <h3 className="text-2xl font-bold text-white mb-2">Pro Builder</h3>
+              <p className="text-slate-400 mb-6 text-sm">Built for General Contractors & Firm Owners.</p>
+              <div className="mb-2">
+                <span className="text-5xl font-extrabold text-white">$250</span>
+                <span className="text-slate-400 font-medium ml-2">/ month</span>
+              </div>
+              <p className="text-slate-400 text-sm font-medium mb-8">
+                or <strong className="text-white">$149</strong> per project (pay-as-you-go)
+              </p>
+              
+              <ul className="space-y-4 mb-8 text-slate-300 text-sm font-medium relative z-10">
+                <li className="flex items-center"><CheckIcon /> Everything in Single Build</li>
+                <li className="flex items-center"><CheckIcon /> Unlimited concurrent active projects</li>
+                <li className="flex items-center"><CheckIcon /> Client portal & premium reporting</li>
+                <li className="flex items-center"><CheckIcon /> Multi-team workspace switching</li>
+                <li className="flex items-center"><CheckIcon /> Custom company branding</li>
+              </ul>
+              
+              <Link href="/login">
+                <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-12 rounded-xl relative z-10 shadow-md">
+                  Start 14-Day Free Trial
+                </Button>
+              </Link>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ SECTION */}
+      <section className="py-24 bg-white border-t border-slate-200">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">Frequently Asked Questions</h2>
+          </div>
+
+          <div className="space-y-4">
+            <details className="group bg-slate-50 rounded-2xl border border-slate-200 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex items-center justify-between cursor-pointer p-6 font-bold text-lg text-slate-900">
+                Do I have to enter a credit card to start the trial?
+                <span className="transition duration-300 group-open:-rotate-180 text-blue-600 text-2xl">▾</span>
+              </summary>
+              <div className="px-6 pb-6 text-slate-600 leading-relaxed">
+                Absolutely not. You can create an account and start using all the features immediately with just an email address. We only ask for payment if you decide to continue using the software after your 14-day trial ends.
+              </div>
+            </details>
+
+            <details className="group bg-slate-50 rounded-2xl border border-slate-200 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex items-center justify-between cursor-pointer p-6 font-bold text-lg text-slate-900">
+                Can I invite my spouse or my subcontractors?
+                <span className="transition duration-300 group-open:-rotate-180 text-blue-600 text-2xl">▾</span>
+              </summary>
+              <div className="px-6 pb-6 text-slate-600 leading-relaxed">
+                Yes. CleanBuild includes unlimited guest invites on all plans. You can invite your spouse with full edit access to help with Selections, and invite your subs with read-only access to the Schedule so they know exactly when to show up.
+              </div>
+            </details>
+
+            <details className="group bg-slate-50 rounded-2xl border border-slate-200 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex items-center justify-between cursor-pointer p-6 font-bold text-lg text-slate-900">
+                Does CleanBuild work offline on the job site?
+                <span className="transition duration-300 group-open:-rotate-180 text-blue-600 text-2xl">▾</span>
+              </summary>
+              <div className="px-6 pb-6 text-slate-600 leading-relaxed">
+                Yes! We built a custom offline-sync engine. If you lose cell service on a remote job site, you can still check off punch list items, add expenses, and view your schedule. The app automatically pushes your changes to the cloud the moment you reconnect.
+              </div>
+            </details>
+
+            <details className="group bg-slate-50 rounded-2xl border border-slate-200 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex items-center justify-between cursor-pointer p-6 font-bold text-lg text-slate-900">
+                Is this for DIYers or General Contractors?
+                <span className="transition duration-300 group-open:-rotate-180 text-blue-600 text-2xl">▾</span>
+              </summary>
+              <div className="px-6 pb-6 text-slate-600 leading-relaxed">
+                Both. Our "Single Build" plan is specifically designed and priced for owner-builders and ambitious DIYers who just want to manage their own home build. Our "Pro Builder" plan unlocks multi-project switching and advanced reporting for GCs running multiple crews.
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+      
+      {/* SIMPLE FOOTER */}
+      <footer className="bg-slate-50 border-t border-slate-200 py-12">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+             <LogoCBBlock className="h-6 w-6 opacity-50" />
+             <span className="text-slate-400 font-bold text-sm tracking-tight">CleanBuild © {new Date().getFullYear()}</span>
+          </div>
+          <div className="flex gap-6 text-sm font-medium text-slate-500">
+            <a href="#" className="hover:text-slate-900 transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-slate-900 transition-colors">Terms of Service</a>
+            <a href="#" className="hover:text-slate-900 transition-colors">Contact Support</a>
+          </div>
+        </div>
+      </footer>
+
+    </div>
   )
 }

@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
@@ -287,7 +287,7 @@ export default function ExpenseTracker() {
             variant="outline"
             size="sm"
             onClick={handleExportCSV}
-            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
           >
             📊 Export CSV
           </Button>
@@ -295,7 +295,7 @@ export default function ExpenseTracker() {
             <Button
               size="sm"
               onClick={() => handleOpenModal()}
-              className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              className="bg-blue-600 hover:bg-blue-400 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Log Expense
             </Button>
@@ -320,9 +320,9 @@ export default function ExpenseTracker() {
                         setTempBudget(totalBudget.toString())
                         setIsBudgetDialogOpen(true)
                       }}
-                      className="h-6 px-3 bg-blue-600 hover:bg-blue-400 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm"
+                      className="h-6 px-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] rounded-md shadow-sm"
                     >
-                      EDIT
+                      Edit
                     </Button>
                   )}
                 </div>
@@ -472,9 +472,9 @@ export default function ExpenseTracker() {
                               <Button
                                 size="sm"
                                 onClick={() => handleOpenModal(expense)}
-                                className={`h-6 px-3 text-white font-bold text-[10px] tracking-wide rounded-md shadow-sm uppercase ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-400"}`}
+                                className={`h-8 px-4 text-[11px] text-white font-bold rounded-md shadow-sm shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-500"}`}
                               >
-                                {isReadOnly ? "VIEW" : "EDIT"}
+                                {isReadOnly ? "View" : "Edit"}
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -492,41 +492,41 @@ export default function ExpenseTracker() {
 
       {/* Main Expense Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
+        <DialogContent className="sm:max-w-[480px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-orange-400 font-bold">
               {isReadOnly ? "View Expense Entry" : editingExpense ? "Edit Expense Entry" : "Log New Expense"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 px-6 py-4 flex-1 bg-white">
             <div className="grid gap-2">
-              <Label htmlFor="expense-date">Date</Label>
+              <Label htmlFor="expense-date" className="text-xs font-semibold text-slate-700">Date</Label>
               <Input
                 id="expense-date"
                 type="date"
                 value={date}
                 disabled={isReadOnly}
                 onChange={(e) => setDate(e.target.value)}
-                className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                className={`flex w-full h-9 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 ${isReadOnly ? "opacity-80" : ""}`}
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="expense-desc">Description</Label>
+              <Label htmlFor="expense-desc" className="text-xs font-semibold text-slate-700">Description</Label>
               <Input
                 id="expense-desc"
                 placeholder="e.g. Concrete, Lumber, Electrical Sub"
                 value={description}
                 disabled={isReadOnly}
                 onChange={(e) => setDescription(e.target.value)}
-                className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                className={`h-9 text-sm shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label htmlFor="expense-mat">Materials Cost ($)</Label>
+                <Label htmlFor="expense-mat" className="text-xs font-semibold text-slate-700">Materials Cost ($)</Label>
                 <Input
                   id="expense-mat"
                   type="number"
@@ -536,12 +536,12 @@ export default function ExpenseTracker() {
                   value={materials}
                   disabled={isReadOnly}
                   onChange={(e) => setMaterials(e.target.value)}
-                  className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                  className={`h-9 text-sm shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="expense-lab">Labor Cost ($)</Label>
+                <Label htmlFor="expense-lab" className="text-xs font-semibold text-slate-700">Labor Cost ($)</Label>
                 <Input
                   id="expense-lab"
                   type="number"
@@ -551,23 +551,23 @@ export default function ExpenseTracker() {
                   value={labor}
                   disabled={isReadOnly}
                   onChange={(e) => setLabor(e.target.value)}
-                  className={isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}
+                  className={`h-9 text-sm shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 />
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Attach Receipt Image</Label>
+            <div className="grid gap-2 border-t border-slate-100 pt-3">
+              <Label className="text-xs font-semibold text-slate-700">Attach Receipt Image</Label>
               
               {!isReadOnly && (
                 <div className="flex gap-2">
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
                     Camera
                     <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
                   </label>
 
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-400 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                     Upload File
                     <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
@@ -582,7 +582,7 @@ export default function ExpenseTracker() {
                     <button
                       type="button"
                       onClick={() => setReceiptPhoto("")}
-                      className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-600"
+                      className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] hover:bg-rose-600 transition-all"
                     >
                       ✕
                     </button>
@@ -594,22 +594,22 @@ export default function ExpenseTracker() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white items-center">
             {isReadOnly ? (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsDialogOpen(false)} 
-                className="w-full shadow-sm font-semibold text-slate-700"
+                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Close View
               </Button>
             ) : (
               <>
-                <div className="flex gap-2 w-full sm:order-2">
+                <div className="flex gap-2 w-full">
                   <Button 
                     size="sm"
-                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm" 
                     onClick={handleSaveExpense}
                     disabled={isSubmitting}
                   >
@@ -620,7 +620,7 @@ export default function ExpenseTracker() {
                     variant="outline" 
                     size="sm"
                     onClick={() => setIsDialogOpen(false)} 
-                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                    className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
                   >
                     Cancel
                   </Button>
@@ -631,7 +631,7 @@ export default function ExpenseTracker() {
                     variant="destructive" 
                     size="sm" 
                     onClick={() => handleDeleteExpense(editingExpense.id)} 
-                    className="w-full sm:w-auto sm:order-1 shadow-sm"
+                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold"
                   >
                     Delete
                   </Button>
@@ -644,26 +644,27 @@ export default function ExpenseTracker() {
 
       {/* Budget Dialog */}
       <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
-        <DialogContent className="sm:max-w-[360px] border-2 border-slate-900 rounded-xl">
-          <DialogHeader>
-            <DialogTitle>Update Total Budget</DialogTitle>
+        <DialogContent className="sm:max-w-[360px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+            <DialogTitle className="text-orange-400 font-bold">Update Total Budget</DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="project-budget">Project Total Budget ($)</Label>
+          <div className="grid gap-2 px-6 py-4 bg-white">
+            <Label htmlFor="project-budget" className="text-xs font-semibold text-slate-700">Project Total Budget ($)</Label>
             <Input
               id="project-budget"
               type="number"
               min="0"
               value={tempBudget}
+              className="h-9 text-sm shadow-sm"
               onChange={(e) => setTempBudget(e.target.value)}
             />
           </div>
 
-          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white">
             <Button 
               size="sm"
-              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm" 
               onClick={handleSaveBudget}
             >
               Save Budget
@@ -673,7 +674,7 @@ export default function ExpenseTracker() {
               variant="outline" 
               size="sm"
               onClick={() => setIsBudgetDialogOpen(false)} 
-              className="flex-1 shadow-sm font-semibold text-slate-700"
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
             >
               Cancel
             </Button>
@@ -729,7 +730,7 @@ export default function ExpenseTracker() {
              {!isReadOnly && (
                <Button 
                  size="sm"
-                 className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-bold h-9"
+                 className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-bold"
                  onClick={() => {
                    setBreakdownType(null)
                    handleOpenModal()
@@ -738,7 +739,7 @@ export default function ExpenseTracker() {
                  + Log Expense
                </Button>
              )}
-             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className={`${isReadOnly ? 'w-full' : 'flex-1'} h-9 font-semibold text-slate-700`}>
+             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className={`${isReadOnly ? 'w-full' : 'flex-1'} font-semibold text-slate-700 hover:bg-slate-100`}>
                Close List
              </Button>
           </div>

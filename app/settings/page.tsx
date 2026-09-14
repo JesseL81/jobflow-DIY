@@ -22,39 +22,36 @@ const urlBase64ToUint8Array = (base64String: string) => {
 
 type PermissionLevel = "edit" | "read-only" | "hidden"
 
+const DEFAULT_PERMISSIONS: Record<string, PermissionLevel> = {
+  schedule: "edit",
+  punch_list: "edit",
+  vision_board: "edit",
+  documents: "edit",
+  expenses: "hidden", 
+  selections: "edit",
+  contacts: "edit",
+}
+
 export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState<string>("")
   const [isPushEnabled, setIsPushEnabled] = useState(false)
   
-  // 🔥 Loading State to prevent UI flicker
   const [isLoadingData, setIsLoadingData] = useState(true)
   
-  // Password State
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" })
 
-  // --- Collaboration State ---
   const [inviteEmail, setInviteEmail] = useState("")
   const [isInviting, setIsInviting] = useState(false)
   const [activePartner, setActivePartner] = useState<{ email: string, status: string } | null>(null)
   
-  // Share Link State
   const [inviteLink, setInviteLink] = useState("")
   const [copied, setCopied] = useState(false)
 
-  // Guest State
   const [isGuest, setIsGuest] = useState(false)
-  
-  const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({
-    schedule: "edit",
-    punch_list: "edit",
-    vision_board: "edit",
-    expenses: "hidden", 
-    selections: "edit",
-    contacts: "edit",
-  })
+  const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>(DEFAULT_PERMISSIONS)
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -63,11 +60,9 @@ export default function SettingsPage() {
         if (user?.email) {
           setUserEmail(user.email)
           
-          // 🔥 NEW: Check which workspace is currently active
           const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
           if (activeWorkspaceId === user.id) {
-            // 1. THEY OWN THIS WORKSPACE
             setIsGuest(false)
             
             const { data: project } = await supabase
@@ -87,7 +82,8 @@ export default function SettingsPage() {
                 setActivePartner({ email: partner.invite_email, status: partner.status || "Pending" })
                 
                 if (partner.permissions) {
-                  setPermissions(partner.permissions)
+                  // Merge with defaults so legacy guests automatically get the new Documents permission key
+                  setPermissions({ ...DEFAULT_PERMISSIONS, ...partner.permissions })
                 }
 
                 if (partner.status?.includes("Pending")) {
@@ -97,7 +93,6 @@ export default function SettingsPage() {
               }
             }
           } else {
-            // 2. THEY ARE A GUEST IN THIS WORKSPACE
             setIsGuest(true)
             
             const { data: guestInvite } = await supabase
@@ -108,7 +103,7 @@ export default function SettingsPage() {
 
             if (guestInvite) {
               if (guestInvite.permissions) {
-                setPermissions(guestInvite.permissions)
+                setPermissions({ ...DEFAULT_PERMISSIONS, ...guestInvite.permissions })
               }
               
               if (guestInvite.status?.includes("Pending")) {
@@ -224,7 +219,6 @@ export default function SettingsPage() {
       await clear()
       const { data: userData } = await supabase.auth.getUser()
       if (userData?.user?.id) {
-        // Because we are now in their personal workspace, we just clear their own tutorial data
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || userData.user.id
         await supabase.from("cloud_sync").delete().eq("user_id", activeWorkspaceId)
       }
@@ -238,11 +232,11 @@ export default function SettingsPage() {
       const keysToClear = [
         "cleanbuild_expenses", "cleanbuild_punch_list", "cleanbuild_calendar_tasks",
         "cleanbuild_custom_nonworkdays", "cleanbuild_vision_board", "cleanbuild_vision_board_categories",
+        "cleanbuild_documents_items", "cleanbuild_documents_folders",
         "cleanbuild_selections_items", "cleanbuild_contacts", "cleanbuild_non_workdays_map",
         "cleanbuild_explicit_working_days", "cleanbuild_project_dates"
       ]
 
-      // This will automatically wipe the active workspace thanks to the new syncManager!
       for (const key of keysToClear) {
         await set(key, [])
         await syncManager.pushToCloud(key, [])
@@ -561,7 +555,6 @@ export default function SettingsPage() {
                   <h3 className="text-red-900 font-bold text-sm">Delete Account</h3>
                   <p className="text-red-700 text-xs mt-1">Permanently destroy this account and all associated data.</p>
                 </div>
-                {/* Note: Delete Account is NEVER disabled by isGuest because users should always be able to delete themselves! */}
                 <Button onClick={handleDeleteAccount} className="shrink-0 shadow-sm font-bold bg-red-700 hover:bg-red-600 text-white w-full sm:w-auto">
                   🧨 Delete Account
                 </Button>

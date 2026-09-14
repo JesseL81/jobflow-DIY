@@ -32,7 +32,11 @@ function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGE
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  
+  // 🔥 Define our public/standalone pages
   const isLoginPage = pathname === "/login"
+  const isMarketingPage = pathname === "/"
+  const isStandalonePage = isLoginPage || isMarketingPage
   
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -47,7 +51,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       
-      if (!session && pathname !== "/login") {
+      // 🔥 Allow users on the Marketing page or Login page without redirecting
+      if (!session && !isStandalonePage) {
         router.push("/login")
       } else {
         setIsCheckingAuth(false)
@@ -57,7 +62,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     checkUser()
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session && pathname !== "/login") {
+      if (!session && !isStandalonePage) {
         router.push("/login")
       }
     })
@@ -65,7 +70,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => {
       authListener.subscription.unsubscribe()
     }
-  }, [pathname, router])
+  }, [pathname, router, isStandalonePage])
 
   // 2. MOBILE MENU ROUTE LISTENER (Closes menu automatically when a link is clicked)
   useEffect(() => {
@@ -99,7 +104,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   // 5. PULL-TO-REFRESH TOUCH HANDLERS
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Allow a small 5px margin in case the PWA status bar offsets the scroll slightly
     if (window.scrollY <= 5) {
       touchStartY.current = e.touches[0].clientY
     }
@@ -110,9 +114,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const currentY = e.touches[0].clientY
     const distance = currentY - touchStartY.current
 
-    // If pulling downwards while at the top of the page
     if (distance > 0 && window.scrollY <= 5) {
-      // Create a resistance effect (max out at 80px visual drop)
       setPullProgress(Math.min(distance * 0.4, 80))
     }
   }
@@ -120,13 +122,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const handleTouchEnd = () => {
     if (pullProgress > 60) {
       setIsRefreshing(true)
-      
-      // Fire instant sync commands behind the scenes just in case cache is stubborn
       window.dispatchEvent(new Event("logs-updated"))
       window.dispatchEvent(new Event("expenses-updated"))
       window.dispatchEvent(new Event("project-name-updated"))
 
-      // Force a hard browser reload
       setTimeout(() => {
         window.location.reload()
       }, 300)
@@ -137,7 +136,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }
 
   // Prevent a brief flash of the dashboard while we check their login status
-  if (isCheckingAuth && !isLoginPage) {
+  if (isCheckingAuth && !isStandalonePage) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 text-sm font-medium">
         Loading CleanBuild...
@@ -145,10 +144,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     )
   }
 
-  // If the user is on the login page, render ONLY the page content (No Sidebar/Header)
-  if (isLoginPage) {
+  // 🔥 If the user is on the login page OR the marketing page, render ONLY the page content (No Sidebar/Header)
+  if (isStandalonePage) {
     return (
-      <div className="flex-1 min-h-screen bg-slate-900 flex flex-col">
+      <div className="flex-1 min-h-screen flex flex-col bg-slate-900">
         {children}
       </div>
     )
@@ -202,14 +201,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {/* MOBILE SLIDE-OUT MENU OVERLAY */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          {/* Dark blurred backdrop (Clicking this closes the menu) */}
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          {/* Sidebar Menu Panel */}
           <aside className="relative w-72 max-w-[80%] bg-slate-900 h-full flex flex-col p-4 shadow-2xl overflow-y-auto transform transition-transform">
-            {/* Close Button */}
             <button
               onClick={() => setIsMobileMenuOpen(false)}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full z-50 shadow-md transition-colors"
@@ -218,8 +214,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>
               </svg>
             </button>
-            
-            {/* Render the standard Sidebar inside the mobile panel */}
             <SidebarNav />
           </aside>
         </div>

@@ -11,6 +11,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
+// Brought in from the Contacts page to type our linked vendors
+interface Contact {
+  id: string
+  name: string
+  company: string
+  trade: string
+  phone: string
+  email: string
+  address: string
+  notes: string
+  status: string
+}
+
 interface CalendarTask {
   id: number
   title: string
@@ -18,6 +31,7 @@ interface CalendarTask {
   textColor?: string
   startDate: string
   endDate: string
+  assignedContactId?: string // 🔥 New field to link the contact
 }
 
 interface CustomNonWorkday {
@@ -82,6 +96,7 @@ export default function SchedulePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState("")
   const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0])
+  const [assignedContactId, setAssignedContactId] = useState<string>("")
   
   const [editingTask, setEditingTask] = useState<CalendarTask | null>(null)
 
@@ -91,7 +106,10 @@ export default function SchedulePage() {
   const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
   const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
 
+  // Hooks to fetch offline data
   const [tasks, setTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", INITIAL_TASKS)
+  const [contacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", []) // 🔥 Pulling in contacts!
+  
   const [customNonWorkdays, setCustomNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", [])
   const [explicitWorkingDays, setExplicitWorkingDays] = useOfflineSync<string[]>("cleanbuild_explicit_working_days", [])
   const [saturdaysOff, setSaturdaysOff] = useOfflineSync<boolean>("cleanbuild_saturdays_off", true)
@@ -104,7 +122,6 @@ export default function SchedulePage() {
   const [tempStartDate, setTempStartDate] = useState("")
   const [tempEndDate, setTempEndDate] = useState("")
 
-  // 🔥 Fetch Permissions & Tier on Load
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
       try {
@@ -119,11 +136,9 @@ export default function SchedulePage() {
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
         if (activeWorkspaceId === user.id) {
-          // 1. They are the Owner of this workspace
           setIsGuest(false)
           setIsReadOnly(false)
         } else {
-          // 2. They are a Guest in this workspace
           setIsGuest(true)
           const { data: guestInvite } = await supabase
             .from("project_members")
@@ -135,7 +150,7 @@ export default function SchedulePage() {
           if (guestInvite?.permissions?.schedule === "read-only") {
             setIsReadOnly(true)
           } else {
-            setIsReadOnly(false) // explicitly unlock if they have edit access
+            setIsReadOnly(false)
           }
         }
       } catch (error) {
@@ -147,7 +162,6 @@ export default function SchedulePage() {
     fetchUserAndPermissions()
   }, [])
 
-  // 🔥 Trigger for the Glass Wall Overlay
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const handleOpenDatesModal = () => {
@@ -171,6 +185,15 @@ export default function SchedulePage() {
     window.addEventListener("logs-updated", handleSync)
     return () => window.removeEventListener("logs-updated", handleSync)
   }, [setNonWorkdaysMap])
+
+  // 🔥 Auto-Cycling Color Logic
+  const getNextColor = () => {
+    if (!tasks || tasks.length === 0) return COLOR_PALETTE[0]
+    const latestTask = [...tasks].sort((a, b) => b.id - a.id)[0]
+    const currentIndex = COLOR_PALETTE.findIndex((c) => c.bg === latestTask.color)
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % COLOR_PALETTE.length : 0
+    return COLOR_PALETTE[nextIndex]
+  }
 
   const logNonWorkdays = useMemo(() => {
     return Object.entries(nonWorkdaysMap).map(([date, reason]) => ({
@@ -263,6 +286,9 @@ export default function SchedulePage() {
     setTaskEndDate(defaultDateStr)
     setEditingTask(null)
     setNewTaskTitle("")
+    setAssignedContactId("")
+    setSelectedColor(getNextColor()) // 🔥 Auto-cycles to the next color!
+    
     const info = getNonWorkdayInfo(defaultDateStr)
     setIsNonWorkdayToggle(info.isNonWorkday)
     setNonWorkdayTitle(info.isNonWorkday && info.title !== "Saturday" && info.title !== "Sunday" ? info.title : "")
@@ -416,6 +442,9 @@ export default function SchedulePage() {
     setTaskEndDate(dateStr)
     setEditingTask(null)
     setNewTaskTitle("")
+    setAssignedContactId("")
+    setSelectedColor(getNextColor()) // 🔥 Auto-cycles to next color
+
     const info = getNonWorkdayInfo(dateStr)
     setIsNonWorkdayToggle(info.isNonWorkday)
     setNonWorkdayTitle(info.isNonWorkday && info.title !== "Saturday" && info.title !== "Sunday" ? info.title : "")
@@ -430,7 +459,9 @@ export default function SchedulePage() {
     setTaskStartDate(task.startDate)
     setTaskEndDate(task.endDate)
     setNewTaskTitle(task.title)
+    setAssignedContactId(task.assignedContactId || "")
     setSelectedColor(COLOR_PALETTE.find((c) => c.bg === task.color) || COLOR_PALETTE[0])
+    
     const info = getNonWorkdayInfo(task.startDate)
     setIsNonWorkdayToggle(info.isNonWorkday)
     setNonWorkdayTitle(info.isNonWorkday && info.title !== "Saturday" && info.title !== "Sunday" ? info.title : "")
@@ -508,6 +539,7 @@ export default function SchedulePage() {
               textColor: selectedColor.text,
               startDate: finalStart,
               endDate: finalEnd,
+              assignedContactId: assignedContactId || undefined,
             }
           : t
       )
@@ -522,6 +554,7 @@ export default function SchedulePage() {
         textColor: selectedColor.text,
         startDate: finalStart,
         endDate: finalEnd,
+        assignedContactId: assignedContactId || undefined,
       })
     }
 
@@ -529,6 +562,7 @@ export default function SchedulePage() {
     setEditingTask(null)
     setNewTaskTitle("")
     setNonWorkdayTitle("")
+    setAssignedContactId("")
     setIsDialogOpen(false)
   }
 
@@ -605,7 +639,7 @@ export default function SchedulePage() {
               variant="outline"
               size="sm"
               onClick={handleTodayClick}
-              className="flex-1 text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              className="flex-1 text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               Today
             </Button>
@@ -613,7 +647,7 @@ export default function SchedulePage() {
               <Button
                 size="sm"
                 onClick={handleOpenAddEventModal}
-                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white h-9 text-xs font-semibold px-4 shadow-sm"
               >
                 + Add Event
               </Button>
@@ -625,7 +659,7 @@ export default function SchedulePage() {
               variant="outline"
               size="sm"
               onClick={handleOpenDatesModal}
-              className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               📅 Project Dates
             </Button>
@@ -818,8 +852,8 @@ export default function SchedulePage() {
 
       {/* MODAL: DATE SETTINGS & STATUS */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col p-6 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 shrink-0 mb-2">
+        <DialogContent className="sm:max-w-[480px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-lg font-bold text-orange-400">
               {editingTask 
                 ? (isReadOnly ? `Task Details: ${editingTask.title}` : `Edit Task: ${editingTask.title}`) 
@@ -827,10 +861,9 @@ export default function SchedulePage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto space-y-5 py-3 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-5 px-6 py-4 bg-white">
             
             <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 space-y-4">
-              
               <div className="space-y-2">
                 <Label className="font-bold text-slate-500 block text-[10px] uppercase tracking-wider">
                   Global Weekend Rules
@@ -900,7 +933,7 @@ export default function SchedulePage() {
                           value={selectedDate}
                           disabled={isReadOnly}
                           onChange={(e) => setSelectedDate(e.target.value)}
-                          className={`mt-1 text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
+                          className={`mt-1 text-sm bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                         />
                       </div>
                       <div>
@@ -911,7 +944,7 @@ export default function SchedulePage() {
                           value={modalEndDate}
                           disabled={isReadOnly}
                           onChange={(e) => setModalEndDate(e.target.value)}
-                          className={`mt-1 text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
+                          className={`mt-1 text-sm bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                         />
                       </div>
                     </div>
@@ -926,7 +959,7 @@ export default function SchedulePage() {
                         value={nonWorkdayTitle}
                         disabled={isReadOnly}
                         onChange={(e) => setNonWorkdayTitle(e.target.value)}
-                        className={`mt-1 text-xs bg-white shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
+                        className={`mt-1 text-sm bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                       />
                     </div>
                   </div>
@@ -947,12 +980,12 @@ export default function SchedulePage() {
                   value={newTaskTitle}
                   disabled={isReadOnly}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className={`shadow-sm ${isReadOnly ? 'opacity-70 text-slate-900 font-medium' : ''}`}
+                  className={`h-9 text-sm shadow-sm ${isReadOnly ? 'opacity-70 text-slate-900 font-medium' : ''}`}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1">
+                <div className="grid gap-1.5">
                   <Label htmlFor="task-start-input" className="text-xs font-semibold text-slate-700">Task Start Date</Label>
                   <Input
                     id="task-start-input"
@@ -960,10 +993,10 @@ export default function SchedulePage() {
                     value={taskStartDate}
                     disabled={isReadOnly}
                     onChange={(e) => setTaskStartDate(e.target.value)}
-                    className={`text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
+                    className={`text-sm bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                   />
                 </div>
-                <div className="grid gap-1">
+                <div className="grid gap-1.5">
                   <Label htmlFor="task-end-input" className="text-xs font-semibold text-slate-700">Task End Date</Label>
                   <Input
                     id="task-end-input"
@@ -971,12 +1004,62 @@ export default function SchedulePage() {
                     value={taskEndDate}
                     disabled={isReadOnly}
                     onChange={(e) => setTaskEndDate(e.target.value)}
-                    className={`text-xs bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
+                    className={`text-sm bg-white h-9 shadow-sm ${isReadOnly ? 'opacity-70' : ''}`}
                   />
                 </div>
               </div>
 
-              <div className="grid gap-2">
+              {/* 🔥 NEW VENDOR ASSIGNMENT DROPDOWN */}
+              <div className="grid gap-2 border-t border-slate-100 pt-3 mt-1">
+                <Label htmlFor="vendor-select" className="text-xs font-semibold text-slate-700">Assign Vendor / Subcontractor</Label>
+                <select
+                  id="vendor-select"
+                  value={assignedContactId}
+                  disabled={isReadOnly}
+                  onChange={(e) => setAssignedContactId(e.target.value)}
+                  className={`w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
+                >
+                  <option value="">-- No Vendor Assigned --</option>
+                  {contacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company ? `${c.company} (${c.name})` : c.name} - {c.trade}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Show Quick Contact Card if a vendor is selected */}
+                {assignedContactId && contacts.find(c => c.id === assignedContactId) && (
+                  <div className="bg-blue-50/50 border border-blue-100 rounded-md p-3 mt-1 flex flex-col gap-1 shadow-sm">
+                    {(() => {
+                      const c = contacts.find(c => c.id === assignedContactId)!
+                      return (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider bg-white px-2 py-0.5 rounded border border-blue-100">Assigned Vendor</span>
+                            <span className="text-xs font-bold text-slate-900">{c.name}</span>
+                          </div>
+                          <div className="text-xs text-slate-600 font-medium ml-[104px] -mt-1">{c.company}</div>
+                          
+                          <div className="flex gap-4 mt-2">
+                            {c.phone && (
+                              <a href={`tel:${c.phone}`} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                                📞 Call {c.phone}
+                              </a>
+                            )}
+                            {c.email && (
+                              <a href={`mailto:${c.email}`} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                                ✉️ Email Vendor
+                              </a>
+                            )}
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-2 pt-2">
                 <Label className="text-xs font-semibold text-slate-700">Timeline Color</Label>
                 <div className={`grid grid-cols-8 gap-2 p-2.5 bg-slate-50 rounded-lg border shadow-sm ${isReadOnly ? 'opacity-80' : ''}`}>
                   {COLOR_PALETTE.map((color, index) => (
@@ -1003,22 +1086,22 @@ export default function SchedulePage() {
 
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
             {isReadOnly ? (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsDialogOpen(false)} 
-                className="w-full shadow-sm font-semibold text-slate-700"
+                className="w-full shadow-sm font-semibold text-slate-700 h-9"
               >
                 Close View
               </Button>
             ) : (
               <>
-                <div className="flex gap-2 w-full sm:order-2">
+                <div className="flex gap-2 w-full">
                   <Button 
                     size="sm"
-                    className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
                     onClick={handleSaveModal} 
                   >
                     {editingTask ? "Update Task" : "Save Changes"}
@@ -1028,7 +1111,7 @@ export default function SchedulePage() {
                     variant="outline" 
                     size="sm"
                     onClick={() => setIsDialogOpen(false)} 
-                    className="flex-1 shadow-sm font-semibold text-slate-700"
+                    className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
                   >
                     Cancel
                   </Button>
@@ -1039,7 +1122,7 @@ export default function SchedulePage() {
                     variant="destructive" 
                     size="sm" 
                     onClick={handleDeleteTask} 
-                    className="w-full sm:w-auto sm:order-1 shadow-sm"
+                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold h-9"
                   >
                     Delete
                   </Button>
@@ -1051,8 +1134,8 @@ export default function SchedulePage() {
       </Dialog>
       
       <Dialog open={isDatesModalOpen} onOpenChange={setIsDatesModalOpen}>
-        <DialogContent className="sm:max-w-[400px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-6">
-          <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-4">
+        <DialogContent className="sm:max-w-[400px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-lg font-bold text-orange-400">
               Project Dates
             </DialogTitle>
@@ -1061,7 +1144,7 @@ export default function SchedulePage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 px-6 py-4 bg-white flex-1">
             <div className="grid gap-1.5">
               <Label htmlFor="start-date" className="font-semibold text-slate-700 text-xs">Start Date</Label>
               <Input
@@ -1069,7 +1152,7 @@ export default function SchedulePage() {
                 type="date"
                 value={tempStartDate}
                 onChange={(e) => setTempStartDate(e.target.value)}
-                className="h-10 text-sm shadow-sm border-slate-200"
+                className="h-9 text-sm shadow-sm border-slate-200"
               />
             </div>
             <div className="grid gap-1.5">
@@ -1079,15 +1162,15 @@ export default function SchedulePage() {
                 type="date"
                 value={tempEndDate}
                 onChange={(e) => setTempEndDate(e.target.value)}
-                className="h-10 text-sm shadow-sm border-slate-200"
+                className="h-9 text-sm shadow-sm border-slate-200"
               />
             </div>
           </div>
 
-          <div className="flex gap-2 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 bg-white shrink-0">
             <Button 
               size="sm" 
-              className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-semibold shadow-sm" 
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
               onClick={handleSaveDates}
             >
               Save Dates
@@ -1096,7 +1179,7 @@ export default function SchedulePage() {
               variant="outline" 
               size="sm" 
               onClick={() => setIsDatesModalOpen(false)} 
-              className="flex-1 shadow-sm font-semibold text-slate-700"
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
             >
               Cancel
             </Button>
