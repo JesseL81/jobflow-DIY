@@ -55,7 +55,7 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signUp({ 
           email, 
           password,
-          options: { emailRedirectTo: `${window.location.origin}/` }
+          options: { emailRedirectTo: `${window.location.origin}/dashboard` } // 🔥 Updated redirect destination here too!
         })
         if (error) throw error
         setSuccessMessage("Account created! Please check your email to confirm your account before signing in.")
@@ -64,7 +64,7 @@ export default function LoginPage() {
       } else if (view === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        router.push("/")
+        router.push("/dashboard") // 🔥 This redirects straight to the dashboard now
       } else if (view === "reset") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/settings`,
