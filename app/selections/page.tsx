@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
 export interface SelectionItem {
@@ -116,6 +116,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
 ]
 
 export default function SelectionsPage() {
+  const [isMounted, setIsMounted] = useState(false)
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
   
   // Dynamic Rooms & Categories
@@ -148,6 +149,17 @@ export default function SelectionsPage() {
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
 
+  // Deleting States
+  const [isRoomDeleteModalOpen, setIsRoomDeleteModalOpen] = useState(false)
+  const [roomToDelete, setRoomToDelete] = useState<string | null>(null)
+  const [roomDeleteMode, setRoomDeleteMode] = useState<"move" | "delete">("move")
+  const [roomMoveTarget, setRoomMoveTarget] = useState<string>("Kitchen")
+
+  const [isCategoryDeleteModalOpen, setIsCategoryDeleteModalOpen] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null)
+  const [categoryDeleteMode, setCategoryDeleteMode] = useState<"move" | "delete">("move")
+  const [categoryMoveTarget, setCategoryMoveTarget] = useState<string>("Plumbing Fixtures")
+
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
   const [tempBudgetVal, setTempBudgetVal] = useState("")
 
@@ -163,6 +175,24 @@ export default function SelectionsPage() {
   const [formNotes, setFormNotes] = useState("")
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Idea / Saved")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Self-Healing Sync: Ensures "All Rooms" and "All Categories" are always present at index 0
+  useEffect(() => {
+    if (isMounted) {
+      if (rooms && rooms[0] !== "All Rooms") {
+        const fixed = ["All Rooms", ...rooms.filter(r => r !== "All Rooms")]
+        setRooms(fixed)
+      }
+      if (categories && categories[0] !== "All Categories") {
+        const fixed = ["All Categories", ...categories.filter(c => c !== "All Categories")]
+        setCategories(fixed)
+      }
+    }
+  }, [isMounted, rooms, categories, setRooms, setCategories])
 
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
@@ -265,6 +295,87 @@ export default function SelectionsPage() {
     setSelectedCategory(trimmed)
   }
 
+  // --- Delete Handlers ---
+  const handleOpenDeleteRoom = (room: string) => {
+    setRoomToDelete(room)
+    const availableFallbacks = rooms.filter(r => r !== "All Rooms" && r !== room)
+    setRoomMoveTarget(availableFallbacks.includes("Kitchen") ? "Kitchen" : availableFallbacks[0] || "")
+    setRoomDeleteMode("move")
+    setIsRoomDeleteModalOpen(true)
+  }
+
+  const handleConfirmRoomDelete = async () => {
+    if (isReadOnly || !roomToDelete) return
+
+    let updatedItems = [...items]
+    const itemsInRoom = updatedItems.filter(item => (item.room || "Other") === roomToDelete)
+
+    if (itemsInRoom.length > 0) {
+      if (roomDeleteMode === "delete") {
+        const idsToDelete = new Set(itemsInRoom.map(i => i.id))
+        updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
+        
+        // Clean up expenses 
+        try {
+           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+           const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
+           await set("cleanbuild_expenses", filteredExpenses)
+           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
+           window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {}
+      } else if (roomDeleteMode === "move" && roomMoveTarget) {
+        updatedItems = updatedItems.map(item => 
+          (item.room || "Other") === roomToDelete ? { ...item, room: roomMoveTarget } : item
+        )
+      }
+    }
+    await setItems(updatedItems)
+    await setRooms(rooms.filter(r => r !== roomToDelete))
+    if (selectedRoom === roomToDelete) setSelectedRoom("All Rooms")
+    setIsRoomDeleteModalOpen(false)
+    setRoomToDelete(null)
+  }
+
+  const handleOpenDeleteCategory = (cat: string) => {
+    setCategoryToDelete(cat)
+    const availableFallbacks = categories.filter(c => c !== "All Categories" && c !== cat)
+    setCategoryMoveTarget(availableFallbacks.includes("Plumbing Fixtures") ? "Plumbing Fixtures" : availableFallbacks[0] || "")
+    setCategoryDeleteMode("move")
+    setIsCategoryDeleteModalOpen(true)
+  }
+
+  const handleConfirmCategoryDelete = async () => {
+    if (isReadOnly || !categoryToDelete) return
+
+    let updatedItems = [...items]
+    const itemsInCat = updatedItems.filter(item => item.category === categoryToDelete)
+
+    if (itemsInCat.length > 0) {
+      if (categoryDeleteMode === "delete") {
+        const idsToDelete = new Set(itemsInCat.map(i => i.id))
+        updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
+
+        // Clean up expenses
+        try {
+           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+           const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
+           await set("cleanbuild_expenses", filteredExpenses)
+           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
+           window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {}
+      } else if (categoryDeleteMode === "move" && categoryMoveTarget) {
+        updatedItems = updatedItems.map(item => 
+          item.category === categoryToDelete ? { ...item, category: categoryMoveTarget } : item
+        )
+      }
+    }
+    await setItems(updatedItems)
+    await setCategories(categories.filter(c => c !== categoryToDelete))
+    if (selectedCategory === categoryToDelete) setSelectedCategory("All Categories")
+    setIsCategoryDeleteModalOpen(false)
+    setCategoryToDelete(null)
+  }
+
   const handleSaveBudget = async () => {
     if (isReadOnly) return
     const num = parseFloat(tempBudgetVal) || 0
@@ -273,13 +384,14 @@ export default function SelectionsPage() {
     setIsBudgetModalOpen(false)
   }
 
-  const handleOpenAdd = () => {
+  // 🔥 Smart Add: Accepts pre-fills for the exact room/category
+  const handleOpenAdd = (prefillRoom?: string | null, prefillCategory?: string | null) => {
     if (isReadOnly) return
     setIsSubmitting(false)
     setEditingItem(null)
     setFormTitle("")
-    setFormCategory(selectedCategory !== "All Categories" ? selectedCategory : "Plumbing Fixtures")
-    setFormRoom(selectedRoom !== "All Rooms" ? selectedRoom : "Kitchen")
+    setFormCategory(prefillCategory || (selectedCategory !== "All Categories" ? selectedCategory : "Plumbing Fixtures"))
+    setFormRoom(prefillRoom || (selectedRoom !== "All Rooms" ? selectedRoom : "Kitchen"))
     setFormUrl("")
     setFormPrice("")
     setFormModel("")
@@ -411,6 +523,8 @@ export default function SelectionsPage() {
   const currentCategoryAllowance = categoryBudgets[selectedCategory] || 0
   const allowanceDiff = currentCategoryAllowance - activeCategoryCost
 
+  if (!isMounted) return null
+
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
@@ -439,7 +553,7 @@ export default function SelectionsPage() {
           {!isReadOnly && (
             <Button
               size="sm"
-              onClick={handleOpenAdd}
+              onClick={() => handleOpenAdd(null, null)}
               className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Add Item
@@ -457,33 +571,80 @@ export default function SelectionsPage() {
               
               {/* --- ROOMS FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
+                <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2">
                   Filter by Room
                 </span>
+                
                 {rooms.map((rm) => {
                   const rmItems = rm === "All Rooms" ? items : items.filter((i) => (i.room || "Other") === rm)
                   const rmCount = rmItems.length
                   const rmCheckedCost = rmItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedRoom === rm
+                  const isProtectedFolder = rm === "All Rooms"
 
                   return (
-                    <button
-                      key={rm}
-                      onClick={() => setSelectedRoom(rm)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                    <div 
+                      key={rm} 
+                      className={`w-full flex items-center justify-between rounded-lg transition-all group ${
+                        isActive ? "bg-slate-900 text-white shadow-sm" : "hover:bg-slate-100"
                       }`}
                     >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"}`}>
-                          {rmCount}
+                      <button
+                        onClick={() => setSelectedRoom(rm)}
+                        className={`flex-1 flex items-center justify-between px-3 py-2 text-xs font-semibold text-left truncate ${
+                          isActive ? "text-white" : "text-slate-600"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                            isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"
+                          }`}>
+                            {rmCount}
+                          </span>
+                          <span className="truncate">{rm}</span>
+                        </div>
+                        <span className={`text-[10px] shrink-0 ml-2 ${isActive ? "text-emerald-400" : rmCheckedCost > 0 ? "text-emerald-600 font-bold" : "text-slate-400 font-medium"}`}>
+                          ${rmCheckedCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                         </span>
-                        <span className="truncate text-left">{rm}</span>
-                      </div>
-                      <span className={`text-[10px] shrink-0 ml-2 ${isActive ? "text-emerald-400" : rmCheckedCost > 0 ? "text-emerald-600 font-bold" : "text-slate-400 font-medium"}`}>
-                        ${rmCheckedCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                      </span>
-                    </button>
+                      </button>
+                      
+                      {/* 🔥 FOLDER ACTIONS GROUP */}
+                      {!isReadOnly && !isProtectedFolder && (
+                        <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
+                          {/* Quick Add Plus (FIRST, ALWAYS VISIBLE, ORANGE) */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAdd(rm, null); 
+                            }}
+                            className={`h-6 w-6 rounded flex items-center justify-center font-bold text-lg leading-none transition-colors ${
+                              isActive 
+                                ? "text-orange-400 hover:bg-slate-700 hover:text-orange-300" 
+                                : "text-orange-500 hover:bg-orange-100 hover:text-orange-600"
+                            }`}
+                            title={`Add to ${rm}`}
+                          >
+                            +
+                          </button>
+
+                          {/* Trash Can (SECOND, ONLY ON HOVER, RED) */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenDeleteRoom(rm)
+                            }}
+                            className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                              isActive 
+                                ? "text-slate-400 hover:bg-rose-500 hover:text-white" 
+                                : "text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-rose-100 hover:text-rose-600"
+                            }`}
+                            title={`Delete ${rm}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
 
@@ -522,33 +683,80 @@ export default function SelectionsPage() {
 
               {/* --- CATEGORIES FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
+                <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2 mt-2">
                   Filter by Category
                 </span>
+                
                 {categories.map((cat) => {
                   const catItems = cat === "All Categories" ? items : items.filter((i) => i.category === cat)
                   const catCount = catItems.length
                   const catCheckedCost = catItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedCategory === cat
+                  const isProtectedFolder = cat === "All Categories"
 
                   return (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                    <div 
+                      key={cat} 
+                      className={`w-full flex items-center justify-between rounded-lg transition-all group ${
+                        isActive ? "bg-slate-900 text-white shadow-sm" : "hover:bg-slate-100"
                       }`}
                     >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"}`}>
-                          {catCount}
+                      <button
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`flex-1 flex items-center justify-between px-3 py-2 text-xs font-semibold text-left truncate ${
+                          isActive ? "text-white" : "text-slate-600"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                            isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"
+                          }`}>
+                            {catCount}
+                          </span>
+                          <span className="truncate">{cat}</span>
+                        </div>
+                        <span className={`text-[10px] shrink-0 ml-2 ${isActive ? "text-emerald-400" : catCheckedCost > 0 ? "text-emerald-600 font-bold" : "text-slate-400 font-medium"}`}>
+                          ${catCheckedCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                         </span>
-                        <span className="truncate text-left">{cat}</span>
-                      </div>
-                      <span className={`text-[10px] shrink-0 ml-2 ${isActive ? "text-emerald-400" : catCheckedCost > 0 ? "text-emerald-600 font-bold" : "text-slate-400 font-medium"}`}>
-                        ${catCheckedCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                      </span>
-                    </button>
+                      </button>
+                      
+                      {/* 🔥 FOLDER ACTIONS GROUP */}
+                      {!isReadOnly && !isProtectedFolder && (
+                        <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
+                          {/* Quick Add Plus (FIRST, ALWAYS VISIBLE, ORANGE) */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAdd(null, cat); 
+                            }}
+                            className={`h-6 w-6 rounded flex items-center justify-center font-bold text-lg leading-none transition-colors ${
+                              isActive 
+                                ? "text-orange-400 hover:bg-slate-700 hover:text-orange-300" 
+                                : "text-orange-500 hover:bg-orange-100 hover:text-orange-600"
+                            }`}
+                            title={`Add to ${cat}`}
+                          >
+                            +
+                          </button>
+
+                          {/* Trash Can (SECOND, ONLY ON HOVER, RED) */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenDeleteCategory(cat)
+                            }}
+                            className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                              isActive 
+                                ? "text-slate-400 hover:bg-rose-500 hover:text-white" 
+                                : "text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-rose-100 hover:text-rose-600"
+                            }`}
+                            title={`Delete ${cat}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
 
@@ -741,7 +949,7 @@ export default function SelectionsPage() {
                     {!isReadOnly && (
                       <Button 
                         size="sm" 
-                        onClick={handleOpenAdd} 
+                        onClick={() => handleOpenAdd(null, null)} 
                         className="mt-3 bg-blue-600 hover:bg-blue-400 text-white font-semibold text-xs h-9 px-4 shadow-sm"
                       >
                         + Add First Item
@@ -757,6 +965,194 @@ export default function SelectionsPage() {
 
         </div>
       </Card>
+
+      {/* 🔥 NEW MODAL: DELETE ROOM FLOW */}
+      <Dialog open={isRoomDeleteModalOpen} onOpenChange={setIsRoomDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+            <DialogTitle className="text-lg font-bold text-rose-500">
+              Delete Room
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-300 mt-1">
+              You are about to delete <strong className="text-white">"{roomToDelete}"</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-5 bg-white space-y-4">
+            {(() => {
+              const itemsInFolder = items.filter(i => (i.room || "Other") === roomToDelete).length;
+              
+              if (itemsInFolder === 0) {
+                return (
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    This room is completely empty. Are you sure you want to delete it?
+                  </p>
+                )
+              }
+
+              return (
+                <>
+                  <p className="text-sm text-slate-600 font-medium mb-3">
+                    There are <strong>{itemsInFolder} item(s)</strong> assigned to this room. What would you like to do with them?
+                  </p>
+                  
+                  <div className="grid gap-3">
+                    <label className={`flex flex-col p-3 rounded-lg border-2 cursor-pointer transition-colors ${roomDeleteMode === 'move' ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 bg-white hover:border-blue-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="radio" 
+                          name="room_delete_mode" 
+                          checked={roomDeleteMode === 'move'} 
+                          onChange={() => setRoomDeleteMode('move')}
+                          className="h-4 w-4 accent-blue-600"
+                        />
+                        <span className="text-sm font-bold text-slate-900">Keep items and assign them to:</span>
+                      </div>
+                      
+                      {roomDeleteMode === 'move' && (
+                        <div className="pl-6 pt-2">
+                          <select
+                            value={roomMoveTarget}
+                            onChange={(e) => setRoomMoveTarget(e.target.value)}
+                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
+                          >
+                            {rooms.filter(r => r !== "All Rooms" && r !== roomToDelete).map(r => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </label>
+
+                    <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${roomDeleteMode === 'delete' ? 'border-rose-500 bg-rose-50/50' : 'border-slate-200 bg-white hover:border-rose-200'}`}>
+                      <input 
+                        type="radio" 
+                        name="room_delete_mode" 
+                        checked={roomDeleteMode === 'delete'} 
+                        onChange={() => setRoomDeleteMode('delete')}
+                        className="h-4 w-4 accent-rose-600"
+                      />
+                      <span className="text-sm font-bold text-slate-900">Permanently delete all {itemsInFolder} item(s)</span>
+                    </label>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+
+          <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 bg-white shrink-0">
+            <Button 
+              size="sm" 
+              onClick={handleConfirmRoomDelete}
+              className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-sm h-9" 
+            >
+              Confirm Delete
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsRoomDeleteModalOpen(false)} 
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 🔥 NEW MODAL: DELETE CATEGORY FLOW */}
+      <Dialog open={isCategoryDeleteModalOpen} onOpenChange={setIsCategoryDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+            <DialogTitle className="text-lg font-bold text-rose-500">
+              Delete Category
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-300 mt-1">
+              You are about to delete <strong className="text-white">"{categoryToDelete}"</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-5 bg-white space-y-4">
+            {(() => {
+              const itemsInFolder = items.filter(i => i.category === categoryToDelete).length;
+              
+              if (itemsInFolder === 0) {
+                return (
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    This category is completely empty. Are you sure you want to delete it?
+                  </p>
+                )
+              }
+
+              return (
+                <>
+                  <p className="text-sm text-slate-600 font-medium mb-3">
+                    There are <strong>{itemsInFolder} item(s)</strong> assigned to this category. What would you like to do with them?
+                  </p>
+                  
+                  <div className="grid gap-3">
+                    <label className={`flex flex-col p-3 rounded-lg border-2 cursor-pointer transition-colors ${categoryDeleteMode === 'move' ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 bg-white hover:border-blue-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="radio" 
+                          name="cat_delete_mode" 
+                          checked={categoryDeleteMode === 'move'} 
+                          onChange={() => setCategoryDeleteMode('move')}
+                          className="h-4 w-4 accent-blue-600"
+                        />
+                        <span className="text-sm font-bold text-slate-900">Keep items and reassign them to:</span>
+                      </div>
+                      
+                      {categoryDeleteMode === 'move' && (
+                        <div className="pl-6 pt-2">
+                          <select
+                            value={categoryMoveTarget}
+                            onChange={(e) => setCategoryMoveTarget(e.target.value)}
+                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
+                          >
+                            {categories.filter(c => c !== "All Categories" && c !== categoryToDelete).map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </label>
+
+                    <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${categoryDeleteMode === 'delete' ? 'border-rose-500 bg-rose-50/50' : 'border-slate-200 bg-white hover:border-rose-200'}`}>
+                      <input 
+                        type="radio" 
+                        name="cat_delete_mode" 
+                        checked={categoryDeleteMode === 'delete'} 
+                        onChange={() => setCategoryDeleteMode('delete')}
+                        className="h-4 w-4 accent-rose-600"
+                      />
+                      <span className="text-sm font-bold text-slate-900">Permanently delete all {itemsInFolder} item(s)</span>
+                    </label>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+
+          <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 bg-white shrink-0">
+            <Button 
+              size="sm" 
+              onClick={handleConfirmCategoryDelete}
+              className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-sm h-9" 
+            >
+              Confirm Delete
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsCategoryDeleteModalOpen(false)} 
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Budget Dialog */}
       <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
 import JSZip from "jszip"
@@ -20,7 +20,7 @@ export interface DocumentItem {
   folder: string
   size: number
   dateAdded: string
-  fileData?: string // Stores the base64 data so we can actually open/download it!
+  fileData?: string 
 }
 
 const DEFAULT_FOLDERS = [
@@ -53,7 +53,6 @@ const INITIAL_DOCS: DocumentItem[] = [
   },
 ]
 
-// Helper to format bytes into readable sizes
 function formatBytes(bytes: number, decimals = 1) {
   if (!+bytes) return "0 Bytes"
   const k = 1024
@@ -64,6 +63,7 @@ function formatBytes(bytes: number, decimals = 1) {
 }
 
 export default function DocumentsPage() {
+  const [isMounted, setIsMounted] = useState(false)
   const [documents, setDocuments] = useOfflineSync<DocumentItem[]>("cleanbuild_documents_items", INITIAL_DOCS)
   const [folders, setFolders] = useOfflineSync<string[]>("cleanbuild_documents_folders", DEFAULT_FOLDERS)
   
@@ -82,6 +82,15 @@ export default function DocumentsPage() {
   const [isAddingFolder, setIsAddingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
 
+  // Deleting Folder State
+  const [isFolderDeleteModalOpen, setIsFolderDeleteModalOpen] = useState(false)
+  const [folderToDelete, setFolderToDelete] = useState<string | null>(null)
+  const [folderDeleteMode, setFolderDeleteMode] = useState<"move" | "delete">("move")
+  const [folderMoveTarget, setFolderMoveTarget] = useState<string>("Plans & Permits")
+
+  // Upload Targeting State
+  const [uploadTargetFolder, setUploadTargetFolder] = useState<string>("All Files")
+
   // Export State
   const [isExporting, setIsExporting] = useState(false)
 
@@ -93,6 +102,36 @@ export default function DocumentsPage() {
   const [editingDoc, setEditingDoc] = useState<DocumentItem | null>(null)
   const [formName, setFormName] = useState("")
   const [formFolder, setFormFolder] = useState("")
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Self-Healing Logic for "All Files"
+  useEffect(() => {
+    if (isMounted && folders) {
+      let needsUpdate = false
+      let newFolders = [...folders]
+
+      if (!newFolders.includes("All Files")) {
+        newFolders.unshift("All Files")
+        needsUpdate = true
+      }
+
+      if (newFolders.indexOf("All Files") !== 0) {
+        newFolders = newFolders.filter(c => c !== "All Files")
+        newFolders.unshift("All Files")
+        needsUpdate = true
+      }
+
+      if (needsUpdate) {
+        setFolders(newFolders)
+        if (selectedFolder === "All Files") {
+          setSelectedFolder("All Files")
+        }
+      }
+    }
+  }, [isMounted, folders, selectedFolder, setFolders])
 
   useEffect(() => {
     const loadProjectName = () => {
@@ -150,23 +189,73 @@ export default function DocumentsPage() {
     })
   }, [documents, selectedFolder, searchQuery])
 
+  // --- Folder Actions ---
   const handleAddFolder = async () => {
     if (isReadOnly || !newFolderName.trim()) return
     const trimmed = newFolderName.trim()
-    if (!folders.includes(trimmed)) {
-      await setFolders([...folders, trimmed])
-    }
-    setNewFolderName("")
+    
     setIsAddingFolder(false)
+    setNewFolderName("")
     setSelectedFolder(trimmed)
+    
+    if (!folders.includes(trimmed)) {
+      setFolders([...folders, trimmed])
+    }
   }
 
-  // --- Handle Native File Selection with Base64 Conversion ---
+  const handleOpenDeleteFolder = (folder: string) => {
+    setFolderToDelete(folder)
+    const availableFallbacks = folders.filter(f => f !== "All Files" && f !== folder)
+    setFolderMoveTarget(availableFallbacks.includes("Plans & Permits") ? "Plans & Permits" : availableFallbacks[0] || "")
+    setFolderDeleteMode("move")
+    setIsFolderDeleteModalOpen(true)
+  }
+
+  // 🔥 BUG FIX: Instantly close the modal before doing any database processing
+  const handleConfirmFolderDelete = async () => {
+    if (isReadOnly || !folderToDelete) return
+
+    const targetFolder = folderToDelete
+    
+    // 1. Close the modal instantly so it doesn't flash empty during the update
+    setIsFolderDeleteModalOpen(false)
+
+    let updatedDocs = [...documents]
+    const itemsInFolder = updatedDocs.filter(d => (d.folder || "Other") === targetFolder)
+
+    if (itemsInFolder.length > 0) {
+      if (folderDeleteMode === "delete") {
+        const idsToDelete = new Set(itemsInFolder.map(i => i.id))
+        updatedDocs = updatedDocs.filter(doc => !idsToDelete.has(doc.id))
+      } else if (folderDeleteMode === "move" && folderMoveTarget) {
+        updatedDocs = updatedDocs.map(doc => 
+          (doc.folder || "Other") === targetFolder ? { ...doc, folder: folderMoveTarget } : doc
+        )
+      }
+    }
+    
+    // 2. Process data in the background
+    setDocuments(updatedDocs)
+    setFolders(folders.filter(f => f !== targetFolder))
+    
+    if (selectedFolder === targetFolder) {
+      setSelectedFolder("All Files")
+    }
+    
+    // 3. Clear target safely after the modal fade animation finishes
+    setTimeout(() => {
+      setFolderToDelete(null)
+    }, 300)
+  }
+
+  // --- Handle Native File Selection ---
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isReadOnly || !e.target.files?.length) return
     
     const files = Array.from(e.target.files)
     const newDocs: DocumentItem[] = []
+
+    const targetFolder = uploadTargetFolder !== "All Files" ? uploadTargetFolder : "Plans & Permits"
 
     for (const file of files) {
       try {
@@ -180,7 +269,7 @@ export default function DocumentsPage() {
         newDocs.push({
           id: Date.now().toString() + Math.random().toString(36).substring(7),
           name: file.name,
-          folder: selectedFolder !== "All Files" ? selectedFolder : "Plans & Permits",
+          folder: targetFolder,
           size: file.size,
           dateAdded: new Date().toISOString().split("T")[0],
           fileData,
@@ -190,13 +279,12 @@ export default function DocumentsPage() {
       }
     }
 
-    await setDocuments([...newDocs, ...documents])
+    setDocuments([...newDocs, ...documents])
     
-    // Reset input so the same file can be selected again if needed
     if (fileInputRef.current) fileInputRef.current.value = ""
+    setUploadTargetFolder(selectedFolder)
   }
 
-  // --- Handle Opening File in Browser ---
   const handleOpenFile = (doc: DocumentItem) => {
     if (!doc.fileData) {
       alert("This is a placeholder example file. Please upload a real file to view it.")
@@ -223,7 +311,6 @@ export default function DocumentsPage() {
     }
   }
 
-  // --- Handle ZIP Export ---
   const handleExportAll = async () => {
     if (!documents || documents.length === 0) return
     setIsExporting(true)
@@ -236,11 +323,9 @@ export default function DocumentsPage() {
       if (!projectFolder) throw new Error("Could not create zip folder")
       
       documents.forEach((doc) => {
-        // Skip dummy files or files that failed to process
         if (doc.fileData) {
           const base64Data = doc.fileData.split(',')[1]
           if (base64Data) {
-            // Drop it directly into the subfolder it belongs in
             projectFolder.folder(doc.folder || "Other")?.file(doc.name, base64Data, { base64: true })
           }
         }
@@ -265,8 +350,11 @@ export default function DocumentsPage() {
     setIsModalOpen(true)
   }
 
+  // 🔥 BUG FIX: Instantly close modal
   const handleSaveDoc = async () => {
     if (isReadOnly || !formName.trim() || !editingDoc) return
+
+    setIsModalOpen(false)
 
     const updatedDoc: DocumentItem = {
       ...editingDoc,
@@ -275,16 +363,18 @@ export default function DocumentsPage() {
     }
     
     const updatedList = documents.map((d) => (d.id === editingDoc.id ? updatedDoc : d))
-    await setDocuments(updatedList)
-    setIsModalOpen(false)
+    setDocuments(updatedList)
   }
 
+  // 🔥 BUG FIX: Instantly close modal
   const handleDeleteDoc = async () => {
     if (isReadOnly || !editingDoc) return
-    const updatedList = documents.filter((d) => d.id !== editingDoc.id)
-    await setDocuments(updatedList)
     setIsModalOpen(false)
+    const updatedList = documents.filter((d) => d.id !== editingDoc.id)
+    setDocuments(updatedList)
   }
+
+  if (!isMounted) return null
 
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
@@ -315,7 +405,6 @@ export default function DocumentsPage() {
 
           {!isReadOnly && (
             <>
-              {/* Native Hidden File Input */}
               <input 
                 type="file" 
                 multiple 
@@ -325,7 +414,10 @@ export default function DocumentsPage() {
               />
               <Button
                 size="sm"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  setUploadTargetFolder(selectedFolder)
+                  fileInputRef.current?.click()
+                }}
                 className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-5 shadow-sm rounded-lg"
               >
                 + Upload File
@@ -343,33 +435,86 @@ export default function DocumentsPage() {
             {/* --- FOLDERS SIDEBAR --- */}
             <div className="md:col-span-1 space-y-4">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-xs space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 block mb-2">
-                  File Explorer
+                
+                <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2">
+                  Filter by Folder
                 </span>
+                
                 {folders.map((fld) => {
                   const fldDocs = fld === "All Files" ? documents : documents.filter((d) => (d.folder || "Other") === fld)
                   const fldCount = fldDocs.length
                   const isActive = selectedFolder === fld
+                  const isProtectedFolder = fld === "All Files" || fld === "Plans & Permits"
 
                   return (
-                    <button
-                      key={fld}
-                      onClick={() => setSelectedFolder(fld)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        isActive ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-200"
+                    <div 
+                      key={fld} 
+                      className={`w-full flex items-center justify-between rounded-lg transition-all group ${
+                        isActive ? "bg-slate-900 text-white shadow-sm" : "hover:bg-slate-200"
                       }`}
                     >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="truncate text-left">{fld === "All Files" ? "🗂️" : "📁"} {fld}</span>
-                      </div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${isActive ? "bg-blue-700 text-blue-100" : "bg-slate-200 text-slate-500"}`}>
-                        {fldCount}
-                      </span>
-                    </button>
+                      <button
+                        onClick={() => setSelectedFolder(fld)}
+                        className={`flex-1 flex items-center justify-between px-3 py-2 text-xs font-semibold text-left truncate ${
+                          isActive ? "text-white" : "text-slate-600"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <span className="truncate text-left">{fld}</span>
+                        </div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                          isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"
+                        }`}>
+                          {fldCount}
+                        </span>
+                      </button>
+
+                      {/* 🔥 FOLDER ACTIONS GROUP */}
+                      {!isReadOnly && fld !== "All Files" && (
+                        <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
+                          {/* Quick Add Plus (FIRST, ALWAYS VISIBLE, ORANGE) */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUploadTargetFolder(fld);
+                              fileInputRef.current?.click();
+                            }}
+                            className={`h-6 w-6 rounded flex items-center justify-center font-bold text-lg leading-none transition-colors ${
+                              isActive 
+                                ? "text-orange-400 hover:bg-slate-700 hover:text-orange-300" 
+                                : "text-orange-500 hover:bg-orange-100 hover:text-orange-600"
+                            }`}
+                            title={`Upload to ${fld}`}
+                          >
+                            +
+                          </button>
+
+                          {/* Trash Can (SECOND, ONLY ON HOVER, RED) OR INVISIBLE PLACEHOLDER */}
+                          {isProtectedFolder ? (
+                            <div className="h-6 w-6 shrink-0" />
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleOpenDeleteFolder(fld)
+                              }}
+                              className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                                isActive 
+                                  ? "text-slate-400 hover:bg-rose-500 hover:text-white" 
+                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-rose-100 hover:text-rose-600"
+                              }`}
+                              title={`Delete ${fld}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
 
-                {/* Add Custom Folder */}
+                {/* Add Custom Folder UI */}
                 {isAddingFolder ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -480,7 +625,10 @@ export default function DocumentsPage() {
                       {!isReadOnly && (
                         <Button 
                           size="sm" 
-                          onClick={() => fileInputRef.current?.click()}
+                          onClick={() => {
+                            setUploadTargetFolder(selectedFolder)
+                            fileInputRef.current?.click()
+                          }}
                           className="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs h-9 px-4 shadow-sm"
                         >
                           + Upload File
@@ -495,6 +643,100 @@ export default function DocumentsPage() {
           </div>
         </div>
       </Card>
+
+      {/* 🔥 NEW MODAL: DELETE FOLDER FLOW */}
+      <Dialog open={isFolderDeleteModalOpen} onOpenChange={setIsFolderDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+            <DialogTitle className="text-lg font-bold text-rose-500">
+              Delete Folder
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-300 mt-1">
+              You are about to delete <strong className="text-white">"{folderToDelete}"</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-5 bg-white space-y-4">
+            {(() => {
+              const itemsInFolder = documents.filter(d => (d.folder || "Other") === folderToDelete).length;
+              
+              if (itemsInFolder === 0) {
+                return (
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    This folder is completely empty. Are you sure you want to delete it?
+                  </p>
+                )
+              }
+
+              return (
+                <>
+                  <p className="text-sm text-slate-600 font-medium mb-3">
+                    There are <strong>{itemsInFolder} document(s)</strong> stored in this folder. What would you like to do with them?
+                  </p>
+                  
+                  <div className="grid gap-3">
+                    <label className={`flex flex-col p-3 rounded-lg border-2 cursor-pointer transition-colors ${folderDeleteMode === 'move' ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 bg-white hover:border-blue-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="radio" 
+                          name="folder_delete_mode" 
+                          checked={folderDeleteMode === 'move'} 
+                          onChange={() => setFolderDeleteMode('move')}
+                          className="h-4 w-4 accent-blue-600"
+                        />
+                        <span className="text-sm font-bold text-slate-900">Keep files and move them to:</span>
+                      </div>
+                      
+                      {folderDeleteMode === 'move' && (
+                        <div className="pl-6 pt-2">
+                          <select
+                            value={folderMoveTarget}
+                            onChange={(e) => setFolderMoveTarget(e.target.value)}
+                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
+                          >
+                            {folders.filter(f => f !== "All Files" && f !== folderToDelete).map(f => (
+                              <option key={f} value={f}>{f}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </label>
+
+                    <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${folderDeleteMode === 'delete' ? 'border-rose-500 bg-rose-50/50' : 'border-slate-200 bg-white hover:border-rose-200'}`}>
+                      <input 
+                        type="radio" 
+                        name="folder_delete_mode" 
+                        checked={folderDeleteMode === 'delete'} 
+                        onChange={() => setFolderDeleteMode('delete')}
+                        className="h-4 w-4 accent-rose-600"
+                      />
+                      <span className="text-sm font-bold text-slate-900">Permanently delete all {itemsInFolder} file(s)</span>
+                    </label>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+
+          <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 bg-white shrink-0">
+            <Button 
+              size="sm" 
+              onClick={handleConfirmFolderDelete}
+              className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-sm h-9" 
+            >
+              Confirm Delete
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsFolderDeleteModalOpen(false)} 
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit/Move File Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
