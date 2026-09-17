@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from "react"
 
 interface PageTourProps {
-  steps: any[] // Accepts the exact same step format you already put in your pages
-  tourKey: string // e.g., "dashboard_tour" or "selections_tour"
+  steps: any[] 
+  tourKey: string 
 }
 
 export function PageTour({ steps, tourKey }: PageTourProps) {
@@ -23,7 +23,6 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
     }
   }, [tourKey])
 
-  // 1. Safe Client-Side Mount & LocalStorage Check
   useEffect(() => {
     if (typeof window !== "undefined") {
       setWindowDimensions({ width: window.innerWidth, height: window.innerHeight })
@@ -35,7 +34,6 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
     }
   }, [tourKey, startTour])
 
-  // 2. Listen for the Replay Button
   useEffect(() => {
     if (typeof window === "undefined") return
     const handleRestart = () => startTour()
@@ -43,7 +41,6 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
     return () => window.removeEventListener(`restart-tour-${tourKey}`, handleRestart)
   }, [tourKey, startTour])
 
-  // 3. Escape Key Failsafe
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && currentStep !== -1) {
@@ -54,20 +51,15 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [currentStep, endTour])
 
-  // 4. Track Target Element Position & Smooth Scroll
   const updatePosition = useCallback(() => {
     if (currentStep >= 0 && currentStep < steps.length && typeof window !== "undefined") {
       setWindowDimensions({ width: window.innerWidth, height: window.innerHeight })
       const el = document.querySelector(steps[currentStep].target)
       
       if (el) {
-        // Smooth scroll to the element
         el.scrollIntoView({ behavior: "smooth", block: "center" })
-        
-        // Grab initial coordinates
         setTargetRect(el.getBoundingClientRect())
 
-        // Track the animation frames to keep the spotlight perfectly attached during scroll
         let frameId: number
         const trackScroll = () => {
           setTargetRect(el.getBoundingClientRect())
@@ -75,10 +67,8 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
         }
         frameId = requestAnimationFrame(trackScroll)
         
-        // Stop tracking after the scroll animation finishes (~500ms)
         setTimeout(() => cancelAnimationFrame(frameId), 500)
       } else {
-         // Gracefully skip to next step if the target isn't on the screen yet
          if (currentStep + 1 < steps.length) {
             setCurrentStep(prev => prev + 1)
          } else {
@@ -101,18 +91,18 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
   const step = steps[currentStep]
   const isLast = currentStep === steps.length - 1
 
-  // Spotlight Padding & Math
   const p = 12
   const top = targetRect.top - p
   const left = targetRect.left - p
   const width = targetRect.width + p * 2
   const height = targetRect.height + p * 2
 
-  // Tooltip Settings
+  // 🔥 Mobile Check
+  const isMobile = windowDimensions.width < 768
+
   const tooltipWidth = 320
   const estimatedTooltipHeight = 180 
 
-  // Available Screen Space calculations
   const spaceAbove = top
   const spaceBelow = windowDimensions.height - (top + height)
   const spaceRight = windowDimensions.width - (left + width)
@@ -121,42 +111,38 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
   let tooltipTop = 0
   let tooltipLeft = 0
 
-  // 🔥 SMART PLACEMENT LOGIC
-  if (height > windowDimensions.height * 0.45 && spaceRight > tooltipWidth + 32) {
-    // 1. Target is tall (like a sidebar) and there is space on the right: Pin Right
-    tooltipLeft = left + width + 16
-    tooltipTop = top + 32 
-  } else if (height > windowDimensions.height * 0.45 && spaceLeft > tooltipWidth + 32) {
-    // 2. Target is tall and there is space on the left: Pin Left
-    tooltipLeft = left - tooltipWidth - 16
-    tooltipTop = top + 32
-  } else if (spaceBelow >= estimatedTooltipHeight + 16 || spaceBelow > spaceAbove) {
-    // 3. Default behavior: Pin Below (Centered Horizontally)
-    tooltipTop = top + height + 16
-    tooltipLeft = left + (width / 2) - (tooltipWidth / 2)
-  } else {
-    // 4. Not enough room below: Pin Above (Centered Horizontally)
-    tooltipTop = top - estimatedTooltipHeight - 16
-    tooltipLeft = left + (width / 2) - (tooltipWidth / 2)
-  }
+  // 🔥 Only calculate complex spatial placement on Desktop
+  if (!isMobile) {
+    if (height > windowDimensions.height * 0.45 && spaceRight > tooltipWidth + 32) {
+      tooltipLeft = left + width + 16
+      tooltipTop = top + 32 
+    } else if (height > windowDimensions.height * 0.45 && spaceLeft > tooltipWidth + 32) {
+      tooltipLeft = left - tooltipWidth - 16
+      tooltipTop = top + 32
+    } else if (spaceBelow >= estimatedTooltipHeight + 16 || spaceBelow > spaceAbove) {
+      tooltipTop = top + height + 16
+      tooltipLeft = left + (width / 2) - (tooltipWidth / 2)
+    } else {
+      tooltipTop = top - estimatedTooltipHeight - 16
+      tooltipLeft = left + (width / 2) - (tooltipWidth / 2)
+    }
 
-  // 🔥 THE FAILSAFE: Hard clamp so it never leaves the browser window
-  if (tooltipTop < 16) {
-    tooltipTop = 16
-  } else if (tooltipTop > windowDimensions.height - estimatedTooltipHeight - 16) {
-    tooltipTop = windowDimensions.height - estimatedTooltipHeight - 16
-  }
+    if (tooltipTop < 16) {
+      tooltipTop = 16
+    } else if (tooltipTop > windowDimensions.height - estimatedTooltipHeight - 16) {
+      tooltipTop = windowDimensions.height - estimatedTooltipHeight - 16
+    }
 
-  if (tooltipLeft < 16) {
-    tooltipLeft = 16
-  } else if (tooltipLeft + tooltipWidth > windowDimensions.width - 16) {
-    tooltipLeft = windowDimensions.width - tooltipWidth - 16
+    if (tooltipLeft < 16) {
+      tooltipLeft = 16
+    } else if (tooltipLeft + tooltipWidth > windowDimensions.width - 16) {
+      tooltipLeft = windowDimensions.width - tooltipWidth - 16
+    }
   }
 
   return (
     <div className="fixed inset-0 z-[99999] pointer-events-none">
       
-      {/* THE SPOTLIGHT */}
       <div
         className="absolute rounded-xl transition-all duration-300 ease-out pointer-events-auto shadow-[0_0_0_9999px_rgba(15,23,42,0.85)]"
         style={{
@@ -167,15 +153,25 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
         }}
       />
 
-      {/* THE TOOLTIP */}
       <div
         className="absolute bg-white rounded-xl shadow-2xl p-5 border border-slate-200 pointer-events-auto transition-all duration-300 ease-out flex flex-col justify-between"
-        style={{
-          top: `${tooltipTop}px`,
-          left: `${tooltipLeft}px`,
-          width: `${tooltipWidth}px`,
-          minHeight: '160px'
-        }}
+        style={
+          isMobile 
+            ? { // 🔥 Mobile Override: Safely docked to the bottom center
+                bottom: '24px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 'calc(100vw - 32px)',
+                maxWidth: '360px',
+                zIndex: 999999,
+              }
+            : { // Desktop Placement
+                top: `${tooltipTop}px`,
+                left: `${tooltipLeft}px`,
+                width: `${tooltipWidth}px`,
+                minHeight: '160px'
+              }
+        }
       >
         <div>
           <div className="flex items-center gap-2 mb-2">

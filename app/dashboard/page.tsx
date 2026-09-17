@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
-// 🔥 Import the new Tour component
 import { PageTour } from "@/components/page-tour"
 
 interface Expense {
@@ -85,7 +84,6 @@ const getLocalTodayStr = () => {
   return `${year}-${month}-${day}`
 }
 
-// 🔥 Define the Tour Steps for the Dashboard
 const DASHBOARD_TOUR_STEPS = [
   {
     target: ".tour-dashboard-header",
@@ -125,6 +123,10 @@ export default function DashboardPage() {
   
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
+  
+  // 🔥 Header state for Project Dropdown and Options Menu
+  const [activeProject, setActiveProject] = useState("default")
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
   
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
@@ -322,7 +324,6 @@ export default function DashboardPage() {
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
-      {/* 🔥 The Product Tour Component */}
       <PageTour steps={DASHBOARD_TOUR_STEPS} tourKey="dashboard_tour" />
 
       {/* THE GLASS WALL OVERLAY */}
@@ -361,9 +362,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* --- STANDARD DASHBOARD UI --- */}
-      {/* Target: tour-dashboard-header */}
-      <div className="tour-dashboard-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-dashboard-header with Minimalist Dropdown */}
+      <div className="tour-dashboard-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📊 Dashboard</h1>
@@ -373,16 +373,50 @@ export default function DashboardPage() {
           </p>
         </div>
         
-        {/* 🔥 Custom Replay Tutorial Button */}
-        <div>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => window.dispatchEvent(new Event('restart-tour-dashboard_tour'))}
-            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
-          >
-            💡 Replay Tutorial
-          </Button>
+        {/* 🔥 Action Area: Project Dropdown + Options Menu */}
+        <div className="flex items-center justify-start md:justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
+          
+          <div className="relative flex-1 md:flex-none">
+            <select
+              value={activeProject}
+              onChange={(e) => setActiveProject(e.target.value)}
+              className="w-full md:w-56 h-9 rounded-md border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-white shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer hover:bg-slate-700 transition-colors truncate"
+            >
+              <option value="default">My Project (Active)</option>
+              <option value="proj_2">123 Main St Flip</option>
+              <option value="proj_3">Basement Remodel</option>
+            </select>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none">▼</span>
+          </div>
+
+          <div className="relative shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
+
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-dashboard_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

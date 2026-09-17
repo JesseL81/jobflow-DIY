@@ -599,11 +599,11 @@ export default function SchedulePage() {
       <PageTour steps={SCHEDULE_TOUR_STEPS} tourKey="schedule_tour" />
 
       {/* Target: tour-schedule-header */}
-      <div className="tour-schedule-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-4 mb-6 md:min-h-[140px] shrink-0">
+      <div className="tour-schedule-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-6 md:gap-4 mb-6 md:min-h-[140px] shrink-0">
         
         {/* Left Column */}
-        <div className="flex flex-col justify-center">
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+        <div className="flex flex-col justify-center items-center md:items-start text-center md:text-left">
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center justify-center md:justify-start gap-3">
             📅 Schedule {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
           </h1>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed">
@@ -650,7 +650,7 @@ export default function SchedulePage() {
         </div>
 
         {/* Right Column: Minimalist Action Layout */}
-        <div className="flex items-center justify-end w-full md:w-auto md:justify-self-end gap-2 shrink-0">
+        <div className="flex items-center justify-center md:justify-end w-full md:w-auto md:justify-self-end gap-2 shrink-0">
           
           <Button
             variant="outline"
