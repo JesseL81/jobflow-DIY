@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
+// 🔥 Import the Tour component
+import { PageTour } from "@/components/page-tour"
+
 // Brought in from the Contacts page to type our linked vendors
 interface Contact {
   id: string
@@ -31,7 +34,7 @@ interface CalendarTask {
   textColor?: string
   startDate: string
   endDate: string
-  assignedContactId?: string // 🔥 New field to link the contact
+  assignedContactId?: string 
 }
 
 interface CustomNonWorkday {
@@ -40,7 +43,6 @@ interface CustomNonWorkday {
   isFromLog?: boolean
 }
 
-// Helper to format local YYYY-MM-DD string accurately without timezone shifting
 const getLocalTodayStr = () => {
   const d = new Date()
   const year = d.getFullYear()
@@ -74,13 +76,34 @@ const INITIAL_TASKS: CalendarTask[] = [
   { id: 2, title: "Click me to edit colors & dates", color: "bg-amber-400", textColor: "text-slate-900", startDate: "2026-08-30", endDate: "2026-08-30" },
 ]
 
+// 🔥 Define the Tour Steps for the Schedule Page
+const SCHEDULE_TOUR_STEPS = [
+  {
+    target: ".tour-schedule-header",
+    content: "Welcome to your Project Schedule! This is where you map out your entire build timeline.",
+    disableBeacon: true,
+  },
+  {
+    target: ".tour-project-dates",
+    content: "Click here to set your overarching start and end dates. This controls the progress bar on your Dashboard.",
+  },
+  {
+    target: ".tour-calendar-grid",
+    content: "Click on any day to add a new task, lock out a non-workday (like rain delays), or change your weekend rules.",
+  },
+  {
+    target: ".tour-calendar-grid",
+    content: "Once tasks are added, you can click and drag them anywhere on the calendar to instantly reschedule them!",
+  },
+]
+
 export default function SchedulePage() {
   const [currentDate, setCurrentDate] = useState<Date>(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
 
-  // 🔥 Auth, Permissions & Billing State
+  // Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
@@ -106,9 +129,8 @@ export default function SchedulePage() {
   const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
   const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
 
-  // Hooks to fetch offline data
   const [tasks, setTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", INITIAL_TASKS)
-  const [contacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", []) // 🔥 Pulling in contacts!
+  const [contacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", []) 
   
   const [customNonWorkdays, setCustomNonWorkdays] = useOfflineSync<CustomNonWorkday[]>("cleanbuild_custom_nonworkdays", [])
   const [explicitWorkingDays, setExplicitWorkingDays] = useOfflineSync<string[]>("cleanbuild_explicit_working_days", [])
@@ -186,7 +208,6 @@ export default function SchedulePage() {
     return () => window.removeEventListener("logs-updated", handleSync)
   }, [setNonWorkdaysMap])
 
-  // 🔥 Auto-Cycling Color Logic
   const getNextColor = () => {
     if (!tasks || tasks.length === 0) return COLOR_PALETTE[0]
     const latestTask = [...tasks].sort((a, b) => b.id - a.id)[0]
@@ -287,7 +308,7 @@ export default function SchedulePage() {
     setEditingTask(null)
     setNewTaskTitle("")
     setAssignedContactId("")
-    setSelectedColor(getNextColor()) // 🔥 Auto-cycles to the next color!
+    setSelectedColor(getNextColor())
     
     const info = getNonWorkdayInfo(defaultDateStr)
     setIsNonWorkdayToggle(info.isNonWorkday)
@@ -443,7 +464,7 @@ export default function SchedulePage() {
     setEditingTask(null)
     setNewTaskTitle("")
     setAssignedContactId("")
-    setSelectedColor(getNextColor()) // 🔥 Auto-cycles to next color
+    setSelectedColor(getNextColor())
 
     const info = getNonWorkdayInfo(dateStr)
     setIsNonWorkdayToggle(info.isNonWorkday)
@@ -580,8 +601,11 @@ export default function SchedulePage() {
       
       <PaywallOverlay show={showPaywall} />
 
-      {/* LOCKED HEIGHT HEADER BUBBLE */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* 🔥 The Product Tour Component */}
+      <PageTour steps={SCHEDULE_TOUR_STEPS} tourKey="schedule_tour" />
+
+      {/* Target: tour-schedule-header */}
+      <div className="tour-schedule-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-4 mb-6 md:h-[140px] shrink-0">
         
         {/* Left Column */}
         <div className="flex flex-col justify-center">
@@ -635,6 +659,17 @@ export default function SchedulePage() {
         <div className="flex flex-col justify-center w-full md:w-auto md:justify-self-end gap-2 shrink-0">
           
           <div className="flex gap-2 w-full">
+            {/* 🔥 Replay Tutorial Button */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.dispatchEvent(new Event('restart-tour-schedule_tour'))}
+              className="flex-1 text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-2 shadow-sm"
+              title="Replay Tutorial"
+            >
+              💡 Replay
+            </Button>
+            
             <Button
               variant="outline"
               size="sm"
@@ -643,6 +678,7 @@ export default function SchedulePage() {
             >
               Today
             </Button>
+            
             {!isReadOnly && (
               <Button
                 size="sm"
@@ -659,7 +695,7 @@ export default function SchedulePage() {
               variant="outline"
               size="sm"
               onClick={handleOpenDatesModal}
-              className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
+              className="tour-project-dates w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               📅 Project Dates
             </Button>
@@ -669,7 +705,8 @@ export default function SchedulePage() {
 
       </div>
 
-      <Card className="overflow-hidden border shadow-sm bg-white flex-1 flex flex-col">
+      {/* Target: tour-calendar-grid */}
+      <Card className="tour-calendar-grid overflow-hidden border shadow-sm bg-white flex-1 flex flex-col">
         
         <div className="grid grid-cols-7 border-b text-center text-[11px] font-bold text-orange-600 uppercase tracking-wider bg-slate-50 py-2.5 shrink-0 shadow-sm z-10">
           {daysOfWeek.map((day) => (
@@ -1009,7 +1046,6 @@ export default function SchedulePage() {
                 </div>
               </div>
 
-              {/* 🔥 NEW VENDOR ASSIGNMENT DROPDOWN */}
               <div className="grid gap-2 border-t border-slate-100 pt-3 mt-1">
                 <Label htmlFor="vendor-select" className="text-xs font-semibold text-slate-700">Assign Vendor / Subcontractor</Label>
                 <select
@@ -1027,7 +1063,6 @@ export default function SchedulePage() {
                   ))}
                 </select>
 
-                {/* Show Quick Contact Card if a vendor is selected */}
                 {assignedContactId && contacts.find(c => c.id === assignedContactId) && (
                   <div className="bg-blue-50/50 border border-blue-100 rounded-md p-3 mt-1 flex flex-col gap-1 shadow-sm">
                     {(() => {

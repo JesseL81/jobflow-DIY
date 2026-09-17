@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
+// 🔥 Import the new Tour component
+import { PageTour } from "@/components/page-tour"
+
 interface Expense {
   id: number
   title?: string
@@ -81,6 +84,31 @@ const getLocalTodayStr = () => {
   const day = String(d.getDate()).padStart(2, "0")
   return `${year}-${month}-${day}`
 }
+
+// 🔥 Define the Tour Steps for the Dashboard
+const DASHBOARD_TOUR_STEPS = [
+  {
+    target: ".tour-dashboard-header",
+    content: "Welcome to CleanBuild! This is your project command center. Let's take a quick 15-second tour.",
+    disableBeacon: true,
+  },
+  {
+    target: ".tour-budget-cards",
+    content: "At a glance, see exactly where your money is going. Watch your remaining funds calculate automatically as you log expenses.",
+  },
+  {
+    target: ".tour-progress-bars",
+    content: "These progress bars give you a real-time visual of your budget burn rate and your project timeline.",
+  },
+  {
+    target: ".tour-punch-list",
+    content: "Manage your daily tasks, material orders, and send automated email reminders directly from the Dashboard.",
+  },
+  {
+    target: ".tour-add-task",
+    content: "Type a quick to-do here and hit Enter to add it instantly to your list! You're ready to start building.",
+  },
+]
 
 export default function DashboardPage() {
   const [expenses, , expensesLoaded] = useOfflineSync<Expense[]>("cleanbuild_expenses", INITIAL_EXPENSES)
@@ -294,7 +322,10 @@ export default function DashboardPage() {
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
-      {/* 🔥 THE GLASS WALL OVERLAY (Light Gray Wash) */}
+      {/* 🔥 The Product Tour Component */}
+      <PageTour steps={DASHBOARD_TOUR_STEPS} tourKey="dashboard_tour" />
+
+      {/* THE GLASS WALL OVERLAY */}
       {showPaywall && (
         <div className="absolute inset-0 z-50 bg-slate-300/70 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden text-center relative z-50 mt-[-10vh]">
@@ -330,8 +361,9 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* --- STANDARD DASHBOARD UI RENDERED BEHIND THE GLASS WALL --- */}
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* --- STANDARD DASHBOARD UI --- */}
+      {/* Target: tour-dashboard-header */}
+      <div className="tour-dashboard-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">📊 Dashboard</h1>
@@ -340,12 +372,25 @@ export default function DashboardPage() {
             Real-time site overview, active budget tracking, and job site management.
           </p>
         </div>
+        
+        {/* 🔥 Custom Replay Tutorial Button */}
+        <div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.dispatchEvent(new Event('restart-tour-dashboard_tour'))}
+            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
+          >
+            💡 Replay Tutorial
+          </Button>
+        </div>
       </div>
 
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         <div className="p-6 space-y-6">
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Target: tour-budget-cards */}
+          <div className="tour-budget-cards grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs">Total Budget</CardDescription>
@@ -383,7 +428,8 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Target: tour-progress-bars */}
+          <div className="tour-progress-bars grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -425,7 +471,8 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            <Card className="bg-white border shadow-2xs md:col-span-2">
+            {/* Target: tour-punch-list */}
+            <Card className="tour-punch-list bg-white border shadow-2xs md:col-span-2">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-sm font-bold text-slate-900">✅ Site Punch List / To-Do's</CardTitle>
@@ -464,7 +511,8 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex gap-2">
+                    {/* Target: tour-add-task */}
+                    <div className="tour-add-task flex gap-2">
                       <Input
                         placeholder="Add quick task (e.g. Call inspector)..."
                         value={newPunchText}

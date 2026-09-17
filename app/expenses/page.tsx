@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 
+// 🔥 Import the Tour component
+import { PageTour } from "@/components/page-tour"
+
 interface Expense {
   id: number
   date: string
@@ -26,6 +29,27 @@ const INITIAL_EXPENSES: Expense[] = [
   { id: 3, date: "2026-07-15", description: "Concrete Footing Pour Help", materials: 200, labor: 350 },
   { id: 4, date: "2026-07-18", description: "Composite Decking & Fasteners", materials: 1850, labor: 0 },
   { id: 5, date: "2026-07-20", description: "Railing Installation Subcontractor", materials: 120, labor: 400 },
+]
+
+// 🔥 Define the Tour Steps for the Expenses Page
+const EXPENSES_TOUR_STEPS = [
+  {
+    target: ".tour-expenses-header",
+    content: "Welcome to Project Expenses! This is where you track every dollar spent against your overall budget.",
+    disableBeacon: true,
+  },
+  {
+    target: ".tour-budget-cards",
+    content: "These cards give you a live breakdown of your materials, labor, and remaining funds. Click 'Edit' to set your starting budget, or click a card to see a filtered list.",
+  },
+  {
+    target: ".tour-expense-ledger",
+    content: "This is your detailed ledger. All logged expenses, attached receipts, and line totals appear here.",
+  },
+  {
+    target: ".tour-log-expense",
+    content: "Click here to log a new receipt, split costs between materials and labor, and attach photos directly from your phone.",
+  },
 ]
 
 const formatDisplayDate = (dateStr: string) => {
@@ -56,7 +80,7 @@ export default function ExpenseTracker() {
   const [tempBudget, setTempBudget] = useState<string>("23402")
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 
-  // 🔥 Auth, Permissions & Billing State
+  // Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
@@ -78,7 +102,6 @@ export default function ExpenseTracker() {
     return () => window.removeEventListener("project-name-updated", loadProjectName)
   }, [])
 
-  // 🔥 Fetch Permissions & Tier on Load
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
       try {
@@ -117,7 +140,6 @@ export default function ExpenseTracker() {
     fetchUserAndPermissions()
   }, [])
 
-  // 🔥 Trigger for the Glass Wall Overlay
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const totalMaterials = expenses.reduce((sum, item) => sum + (item.materials || 0), 0)
@@ -267,10 +289,13 @@ export default function ExpenseTracker() {
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
-      {/* 🔥 THE GLASS WALL OVERLAY */}
       <PaywallOverlay show={showPaywall} />
+      
+      {/* 🔥 The Product Tour Component */}
+      <PageTour steps={EXPENSES_TOUR_STEPS} tourKey="expenses_tour" />
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-expenses-header */}
+      <div className="tour-expenses-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -282,7 +307,17 @@ export default function ExpenseTracker() {
           </p>
         </div>
 
-        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
+        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0 flex-wrap">
+          {/* 🔥 Replay Tutorial Button */}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.dispatchEvent(new Event('restart-tour-expenses_tour'))}
+            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
+          >
+            💡 Replay Tutorial
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -291,11 +326,12 @@ export default function ExpenseTracker() {
           >
             📊 Export CSV
           </Button>
+
           {!isReadOnly && (
             <Button
               size="sm"
               onClick={() => handleOpenModal()}
-              className="bg-blue-600 hover:bg-blue-400 text-white h-9 text-xs font-semibold px-4 shadow-sm"
+              className="tour-log-expense bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Log Expense
             </Button>
@@ -306,7 +342,8 @@ export default function ExpenseTracker() {
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         <div className="p-6 space-y-6">
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+          {/* Target: tour-budget-cards */}
+          <div className="tour-budget-cards grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
               <CardHeader className="pb-2 p-5">
                 <div className="flex justify-between items-center">
@@ -409,7 +446,8 @@ export default function ExpenseTracker() {
             </Card>
           </div>
 
-          <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
+          {/* Target: tour-expense-ledger */}
+          <Card className="tour-expense-ledger bg-white border border-slate-200 shadow-xs rounded-xl">
             <CardHeader className="p-6 pb-2">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <CardTitle className="text-lg font-bold text-slate-900">Detailed Expense Ledger</CardTitle>
@@ -434,14 +472,15 @@ export default function ExpenseTracker() {
                         <TableHead className="text-right font-bold text-slate-600 text-xs">Materials ($)</TableHead>
                         <TableHead className="text-right font-bold text-slate-600 text-xs">Labor ($)</TableHead>
                         <TableHead className="text-right font-bold text-slate-600 text-xs">Line Total</TableHead>
-                        <TableHead className="text-right font-bold text-slate-600 text-xs">Actions</TableHead>
+                        <TableHead className="text-right font-bold text-slate-600 text-xs w-[80px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {expenses.map((expense) => {
                         const lineTotal = (expense.materials || 0) + (expense.labor || 0)
                         return (
-                          <TableRow key={expense.id} className="hover:bg-slate-50/80 border-b border-slate-100">
+                          // 🔥 Added 'group' to TableRow to enable the hover-reveal action buttons
+                          <TableRow key={expense.id} className="group hover:bg-slate-50/80 border-b border-slate-100">
                             <TableCell className="w-16">
                               {expense.receiptPhoto ? (
                                 <img
@@ -468,14 +507,42 @@ export default function ExpenseTracker() {
                             <TableCell className="text-right font-bold text-slate-900 text-xs">
                               ${lineTotal.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-right whitespace-nowrap">
-                              <Button
-                                size="sm"
-                                onClick={() => handleOpenModal(expense)}
-                                className={`h-8 px-4 text-[11px] text-white font-bold rounded-md shadow-sm shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-500"}`}
-                              >
-                                {isReadOnly ? "View" : "Edit"}
-                              </Button>
+                            
+                            {/* 🔥 Sleek Hover-to-Reveal Actions */}
+                            <TableCell className="text-right whitespace-nowrap w-[80px]">
+                              <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                {isReadOnly ? (
+                                  <button
+                                    onClick={() => handleOpenModal(expense)}
+                                    className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+                                    title="View Expense"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handleOpenModal(expense)}
+                                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-blue-100 hover:text-blue-600 transition-colors"
+                                      title="Edit Expense"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        if (window.confirm("Are you sure you want to delete this expense?")) {
+                                          handleDeleteExpense(expense.id)
+                                        }
+                                      }}
+                                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-colors"
+                                      title="Delete Expense"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         )
@@ -625,17 +692,6 @@ export default function ExpenseTracker() {
                     Cancel
                   </Button>
                 </div>
-
-                {editingExpense && (
-                  <Button 
-                    variant="destructive" 
-                    size="sm" 
-                    onClick={() => handleDeleteExpense(editingExpense.id)} 
-                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold"
-                  >
-                    Delete
-                  </Button>
-                )}
               </>
             )}
           </div>
