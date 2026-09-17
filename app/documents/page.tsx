@@ -769,12 +769,13 @@ export default function DocumentsPage() {
                         <div className="overflow-hidden">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-slate-900 text-sm truncate">{doc.name}</h3>
+                            {/* 🔥 PERMANENTLY VISIBLE CLOUD ICON */}
                             {doc.isPendingUpload ? (
                               <span title="Pending Cloud Sync" className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold shrink-0 animate-pulse">
                                 ⏳ Syncing
                               </span>
                             ) : (
-                              <span title="Saved to Cloud" className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span title="Saved to Cloud" className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold shrink-0">
                                 ☁️ Cloud
                               </span>
                             )}
