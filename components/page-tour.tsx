@@ -97,12 +97,12 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
   const width = targetRect.width + p * 2
   const height = targetRect.height + p * 2
 
-  // 🔥 Mobile Check
   const isMobile = windowDimensions.width < 768
 
   const tooltipWidth = 320
   const estimatedTooltipHeight = 180 
 
+  // Spatial measurements
   const spaceAbove = top
   const spaceBelow = windowDimensions.height - (top + height)
   const spaceRight = windowDimensions.width - (left + width)
@@ -111,8 +111,8 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
   let tooltipTop = 0
   let tooltipLeft = 0
 
-  // 🔥 Only calculate complex spatial placement on Desktop
   if (!isMobile) {
+    // Desktop Placement Math
     if (height > windowDimensions.height * 0.45 && spaceRight > tooltipWidth + 32) {
       tooltipLeft = left + width + 16
       tooltipTop = top + 32 
@@ -140,6 +140,10 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
     }
   }
 
+  // 🔥 Smart Mobile Placement Math
+  // If there is more room above the highlighted element than below it, pin it to the top!
+  const mobilePlaceAtTop = spaceAbove > spaceBelow;
+
   return (
     <div className="fixed inset-0 z-[99999] pointer-events-none">
       
@@ -157,15 +161,16 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
         className="absolute bg-white rounded-xl shadow-2xl p-5 border border-slate-200 pointer-events-auto transition-all duration-300 ease-out flex flex-col justify-between"
         style={
           isMobile 
-            ? { // 🔥 Mobile Override: Safely docked to the bottom center
-                bottom: '24px',
+            ? { 
                 left: '50%',
                 transform: 'translateX(-50%)',
                 width: 'calc(100vw - 32px)',
                 maxWidth: '360px',
                 zIndex: 999999,
+                // Automatically flip between top and bottom depending on the element's position
+                ...(mobilePlaceAtTop ? { top: '48px', bottom: 'auto' } : { top: 'auto', bottom: '32px' })
               }
-            : { // Desktop Placement
+            : { 
                 top: `${tooltipTop}px`,
                 left: `${tooltipLeft}px`,
                 width: `${tooltipWidth}px`,
