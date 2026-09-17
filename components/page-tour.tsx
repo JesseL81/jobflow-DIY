@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 
-/// 🔥 The ultimate hammer: Bypassing the Next.js loader type check completely
-const Joyride = dynamic(() => import("react-joyride") as any, { ssr: false }) as any
+// 🔥 The actual fix: Webpack needs the pure import string to build the app, 
+// so we simply tell TypeScript to shut up and ignore this specific line.
+// @ts-ignore
+const Joyride: any = dynamic(() => import("react-joyride"), { ssr: false })
 
 interface PageTourProps {
   steps: any[] 
@@ -73,7 +75,7 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
         buttonBack: {
           color: '#64748b' // Slate-500
         }
-      } as any} // Bypass strict style typing
+      }}
     />
   )
 }
