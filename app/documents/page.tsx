@@ -438,7 +438,7 @@ export default function DocumentsPage() {
       if (!projectFolder) throw new Error("Could not create zip folder")
       
       for (const doc of documents) {
-        let fileBlob: Blob | null = await get<File | Blob>(`cleanbuild_file_${doc.id}`)
+        let fileBlob: Blob | null = (await get<File | Blob>(`cleanbuild_file_${doc.id}`)) || null
         
         // If not stored locally, download from Cloud to zip it
         if (!fileBlob && doc.filePath) {
