@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
+import { get, set, del } from "idb-keyval"
 import { supabase } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -20,7 +21,9 @@ export interface DocumentItem {
   folder: string
   size: number
   dateAdded: string
-  fileData?: string 
+  fileData?: string // Legacy base64 support
+  filePath?: string // Supabase cloud storage path
+  isPendingUpload?: boolean // Offline-first sync flag
 }
 
 const DEFAULT_FOLDERS = [
@@ -88,7 +91,8 @@ export default function DocumentsPage() {
   const [folderDeleteMode, setFolderDeleteMode] = useState<"move" | "delete">("move")
   const [folderMoveTarget, setFolderMoveTarget] = useState<string>("Plans & Permits")
 
-  // Upload Targeting State
+  // Drag & Drop / Upload State
+  const [isDragging, setIsDragging] = useState(false)
   const [uploadTargetFolder, setUploadTargetFolder] = useState<string>("All Files")
 
   // Export State
@@ -179,6 +183,58 @@ export default function DocumentsPage() {
     fetchUserAndPermissions()
   }, [])
 
+  // 🔥 OFFLINE-FIRST BACKGROUND SYNC ENGINE
+  // This watches for files marked as "Pending Sync" and uploads them the second you get internet.
+  useEffect(() => {
+    const syncPendingFiles = async () => {
+      if (!navigator.onLine || isReadOnly) return
+      
+      const pendingDocs = documents.filter(d => d.isPendingUpload)
+      if (pendingDocs.length === 0) return
+
+      let updated = false
+      const updatedDocs = [...documents]
+
+      for (const doc of pendingDocs) {
+        try {
+          const localFile = await get<File | Blob>(`cleanbuild_file_${doc.id}`)
+          if (localFile) {
+            const fileExt = doc.name.split('.').pop()
+            const cloudFileName = `${doc.id}.${fileExt}`
+            
+            // Upload to Supabase 'documents' bucket
+            const { data, error } = await supabase.storage
+              .from('documents')
+              .upload(cloudFileName, localFile, { upsert: true })
+
+            if (!error && data) {
+              const docIndex = updatedDocs.findIndex(d => d.id === doc.id)
+              if (docIndex !== -1) {
+                updatedDocs[docIndex] = { 
+                  ...updatedDocs[docIndex], 
+                  filePath: data.path, 
+                  isPendingUpload: false 
+                }
+                updated = true
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Background sync failed for document:", doc.name, e)
+        }
+      }
+
+      if (updated) {
+        setDocuments(updatedDocs)
+      }
+    }
+
+    // Attempt sync on mount, and anytime the browser fires an 'online' event
+    syncPendingFiles()
+    window.addEventListener('online', syncPendingFiles)
+    return () => window.removeEventListener('online', syncPendingFiles)
+  }, [documents, setDocuments, isReadOnly])
+
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const filteredDocs = useMemo(() => {
@@ -189,7 +245,6 @@ export default function DocumentsPage() {
     })
   }, [documents, selectedFolder, searchQuery])
 
-  // --- Folder Actions ---
   const handleAddFolder = async () => {
     if (isReadOnly || !newFolderName.trim()) return
     const trimmed = newFolderName.trim()
@@ -211,13 +266,10 @@ export default function DocumentsPage() {
     setIsFolderDeleteModalOpen(true)
   }
 
-  // 🔥 BUG FIX: Instantly close the modal before doing any database processing
   const handleConfirmFolderDelete = async () => {
     if (isReadOnly || !folderToDelete) return
 
     const targetFolder = folderToDelete
-    
-    // 1. Close the modal instantly so it doesn't flash empty during the update
     setIsFolderDeleteModalOpen(false)
 
     let updatedDocs = [...documents]
@@ -226,7 +278,19 @@ export default function DocumentsPage() {
     if (itemsInFolder.length > 0) {
       if (folderDeleteMode === "delete") {
         const idsToDelete = new Set(itemsInFolder.map(i => i.id))
+        
+        // Remove from cloud if synced
+        const docsToDeleteFromCloud = itemsInFolder.filter(d => d.filePath).map(d => d.filePath!)
+        if (docsToDeleteFromCloud.length > 0 && navigator.onLine) {
+          supabase.storage.from('documents').remove(docsToDeleteFromCloud)
+        }
+
         updatedDocs = updatedDocs.filter(doc => !idsToDelete.has(doc.id))
+        
+        // Remove from local storage
+        for (const id of idsToDelete) {
+          await del(`cleanbuild_file_${id}`)
+        }
       } else if (folderDeleteMode === "move" && folderMoveTarget) {
         updatedDocs = updatedDocs.map(doc => 
           (doc.folder || "Other") === targetFolder ? { ...doc, folder: folderMoveTarget } : doc
@@ -234,80 +298,131 @@ export default function DocumentsPage() {
       }
     }
     
-    // 2. Process data in the background
     setDocuments(updatedDocs)
     setFolders(folders.filter(f => f !== targetFolder))
     
-    if (selectedFolder === targetFolder) {
-      setSelectedFolder("All Files")
-    }
+    if (selectedFolder === targetFolder) setSelectedFolder("All Files")
     
-    // 3. Clear target safely after the modal fade animation finishes
     setTimeout(() => {
       setFolderToDelete(null)
     }, 300)
   }
 
-  // --- Handle Native File Selection ---
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isReadOnly || !e.target.files?.length) return
-    
-    const files = Array.from(e.target.files)
+  // 🔥 CORE FILE PROCESSING LOGIC (Handles both Input buttons and Drag & Drop)
+  const processFiles = async (files: File[]) => {
     const newDocs: DocumentItem[] = []
-
     const targetFolder = uploadTargetFolder !== "All Files" ? uploadTargetFolder : "Plans & Permits"
 
     for (const file of files) {
       try {
-        const fileData = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result as string)
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
+        const newId = Date.now().toString() + Math.random().toString(36).substring(7)
+        
+        // 1. ALWAYS save locally first to ensure instant, offline availability
+        await set(`cleanbuild_file_${newId}`, file)
+
+        let filePath = ""
+        let isPendingUpload = true
+
+        // 2. Try to upload to Supabase immediately if online
+        if (navigator.onLine) {
+           const fileExt = file.name.split('.').pop()
+           const cloudFileName = `${newId}.${fileExt}`
+           
+           const { data, error } = await supabase.storage
+             .from('documents')
+             .upload(cloudFileName, file)
+           
+           if (!error && data) {
+             filePath = data.path
+             isPendingUpload = false // Success! No background sync needed.
+           }
+        }
 
         newDocs.push({
-          id: Date.now().toString() + Math.random().toString(36).substring(7),
+          id: newId,
           name: file.name,
           folder: targetFolder,
           size: file.size,
           dateAdded: new Date().toISOString().split("T")[0],
-          fileData,
+          filePath,
+          isPendingUpload
         })
       } catch (err) {
-        console.error("Error converting file to base64", err)
+        console.error("Error processing file", err)
+        alert(`Failed to process ${file.name}.`)
       }
     }
 
     setDocuments([...newDocs, ...documents])
-    
     if (fileInputRef.current) fileInputRef.current.value = ""
     setUploadTargetFolder(selectedFolder)
   }
 
-  const handleOpenFile = (doc: DocumentItem) => {
-    if (!doc.fileData) {
-      alert("This is a placeholder example file. Please upload a real file to view it.")
-      return
-    }
+  // --- HTML Input Upload Handler ---
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isReadOnly || !e.target.files?.length) return
+    await processFiles(Array.from(e.target.files))
+  }
 
+  // --- Drag and Drop Handlers ---
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (isReadOnly) return
+    if (!isDragging) setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (isReadOnly || !e.dataTransfer.files?.length) return
+    
+    // Set target folder based on what is currently active in the UI
+    setUploadTargetFolder(selectedFolder)
+    await processFiles(Array.from(e.dataTransfer.files))
+  }
+
+  // --- SMART FILE OPENER ---
+  const handleOpenFile = async (doc: DocumentItem) => {
     try {
-      const parts = doc.fileData.split(',')
-      const mimeString = parts[0].split(':')[1].split(';')[0]
-      const byteString = atob(parts[1])
-      const ab = new ArrayBuffer(byteString.length)
-      const ia = new Uint8Array(ab)
-      
-      for (let i = 0; i < byteString.length; i++) {
-          ia[i] = byteString.charCodeAt(i)
+      // 1. Check local offline storage first (instant load)
+      const localFile = await get<File | Blob>(`cleanbuild_file_${doc.id}`)
+      if (localFile) {
+        const url = URL.createObjectURL(localFile)
+        window.open(url, '_blank')
+        return
       }
-      
-      const blob = new Blob([ab], { type: mimeString })
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+
+      // 2. If it's not on this device, fetch a secure URL from the Cloud
+      if (doc.filePath) {
+        const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.filePath, 60)
+        if (error || !data) throw error
+        window.open(data.signedUrl, '_blank')
+        return
+      }
+
+      // 3. Fallback for legacy dummy items
+      if (doc.fileData) {
+        const parts = doc.fileData.split(',')
+        const mimeString = parts[0].split(':')[1].split(';')[0]
+        const byteString = atob(parts[1])
+        const ab = new ArrayBuffer(byteString.length)
+        const ia = new Uint8Array(ab)
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i)
+        const blob = new Blob([ab], { type: mimeString })
+        const url = URL.createObjectURL(blob)
+        window.open(url, '_blank')
+        return
+      }
+
+      alert("File is not cached locally and no cloud sync was found.")
     } catch (err) {
       console.error("Failed to open file", err)
-      alert("Unable to open this file format.")
+      alert("Unable to open this file. Check your internet connection if the file is not downloaded.")
     }
   }
 
@@ -322,14 +437,24 @@ export default function DocumentsPage() {
       
       if (!projectFolder) throw new Error("Could not create zip folder")
       
-      documents.forEach((doc) => {
-        if (doc.fileData) {
-          const base64Data = doc.fileData.split(',')[1]
-          if (base64Data) {
-            projectFolder.folder(doc.folder || "Other")?.file(doc.name, base64Data, { base64: true })
-          }
+      for (const doc of documents) {
+        let fileBlob: Blob | null = await get<File | Blob>(`cleanbuild_file_${doc.id}`)
+        
+        // If not stored locally, download from Cloud to zip it
+        if (!fileBlob && doc.filePath) {
+          const { data, error } = await supabase.storage.from('documents').download(doc.filePath)
+          if (!error && data) fileBlob = data
         }
-      })
+
+        if (fileBlob) {
+          projectFolder.folder(doc.folder || "Other")?.file(doc.name, fileBlob)
+        } else if (doc.fileData) {
+           const base64Data = doc.fileData.split(',')[1]
+           if (base64Data) {
+              projectFolder.folder(doc.folder || "Other")?.file(doc.name, base64Data, { base64: true })
+           }
+        }
+      }
       
       const zipContent = await zip.generateAsync({ type: "blob" })
       const todayStr = new Date().toISOString().split("T")[0]
@@ -350,10 +475,8 @@ export default function DocumentsPage() {
     setIsModalOpen(true)
   }
 
-  // 🔥 BUG FIX: Instantly close modal
   const handleSaveDoc = async () => {
     if (isReadOnly || !formName.trim() || !editingDoc) return
-
     setIsModalOpen(false)
 
     const updatedDoc: DocumentItem = {
@@ -366,19 +489,46 @@ export default function DocumentsPage() {
     setDocuments(updatedList)
   }
 
-  // 🔥 BUG FIX: Instantly close modal
   const handleDeleteDoc = async () => {
     if (isReadOnly || !editingDoc) return
     setIsModalOpen(false)
+    
+    // 1. Remove from local state
     const updatedList = documents.filter((d) => d.id !== editingDoc.id)
     setDocuments(updatedList)
+
+    // 2. Remove from Local Storage
+    await del(`cleanbuild_file_${editingDoc.id}`)
+
+    // 3. Remove from Cloud Storage
+    if (editingDoc.filePath && navigator.onLine) {
+      await supabase.storage.from('documents').remove([editingDoc.filePath])
+    }
   }
 
   if (!isMounted) return null
 
   return (
-    <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
+    <main 
+      className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <PaywallOverlay show={showPaywall} />
+
+      {/* 🔥 DRAG AND DROP OVERLAY */}
+      {isDragging && !isReadOnly && (
+        <div className="absolute inset-0 z-50 bg-blue-600/10 border-4 border-blue-600 border-dashed m-6 rounded-xl flex items-center justify-center backdrop-blur-sm transition-all pointer-events-none">
+          <div className="bg-white px-8 py-6 rounded-2xl shadow-2xl text-center flex flex-col items-center">
+            <span className="text-5xl mb-3 block animate-bounce">📥</span>
+            <h2 className="text-2xl font-bold text-slate-900">Drop files to upload</h2>
+            <p className="text-sm text-slate-500 mt-2 font-medium">
+              Uploading to: <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded ml-1 font-bold">{selectedFolder !== "All Files" ? selectedFolder : "Plans & Permits"}</span>
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
         <div>
@@ -386,7 +536,7 @@ export default function DocumentsPage() {
             📁 Documents & Files {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
           </h1>
           <p className="text-sm font-medium text-orange-400 mt-1.5 leading-relaxed max-w-2xl">
-            {isReadOnly ? "View project files and plans." : "Drag, drop, and manage project files. Organized exactly like your computer."}
+            {isReadOnly ? "View project files and plans." : "Drag, drop, and manage project files. Syncs seamlessly offline and to the cloud."}
           </p>
         </div>
 
@@ -472,7 +622,7 @@ export default function DocumentsPage() {
                       {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && fld !== "All Files" && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
-                          {/* Quick Add Plus (FIRST, ALWAYS VISIBLE, ORANGE) */}
+                          {/* Quick Add Plus */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -489,7 +639,7 @@ export default function DocumentsPage() {
                             +
                           </button>
 
-                          {/* Trash Can (SECOND, ONLY ON HOVER, RED) OR INVISIBLE PLACEHOLDER */}
+                          {/* Trash Can or Spacer */}
                           {isProtectedFolder ? (
                             <div className="h-6 w-6 shrink-0" />
                           ) : (
@@ -514,7 +664,6 @@ export default function DocumentsPage() {
                   )
                 })}
 
-                {/* Add Custom Folder UI */}
                 {isAddingFolder ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -572,12 +721,24 @@ export default function DocumentsPage() {
                   {filteredDocs.map((doc) => (
                     <div 
                       key={doc.id} 
-                      className="flex flex-col sm:grid sm:grid-cols-12 gap-4 p-3 sm:items-center hover:bg-slate-50 transition-colors"
+                      className="flex flex-col sm:grid sm:grid-cols-12 gap-4 p-3 sm:items-center hover:bg-slate-50 transition-colors group"
                     >
                       <div className="sm:col-span-6 flex items-center gap-3 overflow-hidden pl-2">
                         <span className="text-xl shrink-0 opacity-80">📄</span>
                         <div className="overflow-hidden">
-                          <h3 className="font-semibold text-slate-900 text-sm truncate">{doc.name}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-slate-900 text-sm truncate">{doc.name}</h3>
+                            {/* 🔥 Cloud Sync Status Indicator */}
+                            {doc.isPendingUpload ? (
+                              <span title="Pending Cloud Sync" className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold shrink-0 animate-pulse">
+                                ⏳ Syncing
+                              </span>
+                            ) : (
+                              <span title="Saved to Cloud" className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                ☁️ Cloud
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500 sm:hidden mt-1 font-medium">
                             <span className="font-bold text-slate-700">{doc.folder}</span> • {formatBytes(doc.size)} • {doc.dateAdded}
                           </p>
@@ -621,7 +782,7 @@ export default function DocumentsPage() {
                     <div className="py-16 text-center bg-white">
                       <div className="text-4xl mb-4 opacity-50">🗂️</div>
                       <p className="text-slate-500 text-sm font-medium">No files found in this folder.</p>
-                      <p className="text-slate-400 text-xs mt-1">Upload a file to get started.</p>
+                      <p className="text-slate-400 text-xs mt-1">Drag and drop a file anywhere on screen to upload.</p>
                       {!isReadOnly && (
                         <Button 
                           size="sm" 
@@ -644,7 +805,7 @@ export default function DocumentsPage() {
         </div>
       </Card>
 
-      {/* 🔥 NEW MODAL: DELETE FOLDER FLOW */}
+      {/* Delete Folder Modal */}
       <Dialog open={isFolderDeleteModalOpen} onOpenChange={setIsFolderDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
