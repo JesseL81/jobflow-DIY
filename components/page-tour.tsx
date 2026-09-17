@@ -1,12 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import dynamic from "next/dynamic"
 
-// 🔥 The actual fix: Webpack needs the pure import string to build the app, 
-// so we simply tell TypeScript to shut up and ignore this specific line.
+// 🔥 DITCHING next/dynamic COMPLETELY. 
+// We import it normally, tell TypeScript to ignore the outdated type warning, 
+// and use our 'isMounted' state to make it safe for Next.js rendering.
 // @ts-ignore
-const Joyride: any = dynamic(() => import("react-joyride"), { ssr: false })
+import Joyride from "react-joyride"
 
 interface PageTourProps {
   steps: any[] 
@@ -17,7 +17,7 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
   const [run, setRun] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
 
-  // 1. Mount safely to avoid hydration errors
+  // 1. Mount safely to avoid hydration errors on the server
   useEffect(() => {
     setIsMounted(true)
   }, [])
@@ -46,11 +46,12 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
     // "finished" and "skipped" are the standard strings used by react-joyride
     if (["finished", "skipped"].includes(status)) {
       setRun(false)
-      // Save to local storage so it doesn't pop up every single time they log in
       localStorage.setItem(`cleanbuild_tour_${tourKey}`, "true")
     }
   }
 
+  // 🔥 This single line perfectly replaces the need for `next/dynamic`.
+  // It forces Next.js to wait until the browser loads to render the tour.
   if (!isMounted) return null
 
   return (
