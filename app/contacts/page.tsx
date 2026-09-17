@@ -16,6 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
+import { PageTour } from "@/components/page-tour"
 
 interface Contact {
   id: string
@@ -38,7 +39,7 @@ const INITIAL_CONTACTS: Contact[] = [
     phone: "(555) 000-0000",
     email: "hello@cleanbuild.us",
     address: "123 Tutorial Lane",
-    notes: "Keep track of all your subcontractors, vendors, and inspectors here. Click '+ Add New Contact' to get started!",
+    notes: "Keep track of all your subcontractors, vendors, and inspectors here. Click '+ Add Contact' to get started!",
     status: "Active",
   },
   {
@@ -54,7 +55,24 @@ const INITIAL_CONTACTS: Contact[] = [
   }
 ]
 
+// 🔥 Define the Tour Steps for Contacts
+const CONTACTS_TOUR_STEPS = [
+  {
+    target: ".tour-contacts-header",
+    content: "Welcome to Contacts & Vendors! Store all your subcontractors, suppliers, and inspectors here.",
+  },
+  {
+    target: ".tour-contacts-list",
+    content: "Search and quickly select contacts from your directory. The list filters instantly as you type.",
+  },
+  {
+    target: ".tour-contacts-details",
+    content: "View contact details, directly click to call or email them, and securely store notes on pricing and lead times.",
+  }
+]
+
 export default function ContactsPage() {
+  const [isMounted, setIsMounted] = useState(false)
   const [contacts, setContacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", INITIAL_CONTACTS)
   
   const [activeContactId, setActiveContactId] = useState<string>("")
@@ -63,6 +81,8 @@ export default function ContactsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
   const [newName, setNewName] = useState("")
   const [newCompany, setNewCompany] = useState("")
@@ -73,13 +93,16 @@ export default function ContactsPage() {
   const [newNotes, setNewNotes] = useState("")
   const [newStatus, setNewStatus] = useState<"Active" | "Preferred" | "On Hold">("Active")
 
-  // 🔥 Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
   const [permissions, setPermissions] = useState<Record<string, string> | null>(null)
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
@@ -119,7 +142,6 @@ export default function ContactsPage() {
     fetchUserAndPermissions()
   }, [])
 
-  // 🔥 Trigger for the Glass Wall Overlay
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const filteredContacts = contacts.filter((c) => {
@@ -209,12 +231,42 @@ export default function ContactsPage() {
     }
   }
 
+  const handleExportCSV = () => {
+    const headers = ["Name", "Company", "Trade", "Phone", "Email", "Address", "Status", "Notes"]
+    
+    const rows = contacts.map((c) => [
+      `"${c.name.replace(/"/g, '""')}"`,
+      `"${c.company.replace(/"/g, '""')}"`,
+      `"${c.trade.replace(/"/g, '""')}"`,
+      `"${c.phone.replace(/"/g, '""')}"`,
+      `"${c.email.replace(/"/g, '""')}"`,
+      `"${c.address.replace(/"/g, '""')}"`,
+      `"${c.status.replace(/"/g, '""')}"`,
+      `"${c.notes.replace(/"/g, '""')}"`
+    ])
+
+    const brandingRow = `"CleanBuild - Contacts & Vendors Directory"\n\n`
+    const csvContent = "data:text/csv;charset=utf-8," + brandingRow + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `CleanBuild_Contacts_${new Date().toISOString().split("T")[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  if (!isMounted) return null
+
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
       <PaywallOverlay show={showPaywall} />
+      <PageTour steps={CONTACTS_TOUR_STEPS} tourKey="contacts_tour" />
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-contacts-header */}
+      <div className="tour-contacts-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -226,210 +278,69 @@ export default function ContactsPage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
+        {/* Minimalist Action Layout */}
+        <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
+          
           {!isReadOnly && (
-            <Button 
+            <Button
               size="sm"
               onClick={handleOpenAddModal}
-              className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
+              className="tour-add-contact bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
-              + Add New Contact
+              + Add Contact
             </Button>
           )}
-          
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
-              <form onSubmit={handleSaveContact} className="flex flex-col w-full">
-                <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
-                  <DialogTitle className="text-lg font-bold text-orange-400">
-                    {isReadOnly ? "View Contact" : editingId ? "Edit Contact" : "Add New Contact / Vendor"}
-                  </DialogTitle>
-                  {!isReadOnly && (
-                    <DialogDescription className="text-xs text-slate-300 mt-1">
-                      {editingId 
-                        ? "Update the details for this vendor below." 
-                        : "Fill in vendor and trade details to save them to your active directory."}
-                    </DialogDescription>
-                  )}
-                </DialogHeader>
 
-                <div className="grid gap-4 px-6 py-4 bg-white flex-1 overflow-y-auto">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="name" className="text-xs font-semibold text-slate-700">Contact Person Name {isReadOnly ? "" : "*"}</Label>
-                      <Input
-                        id="name"
-                        placeholder="e.g. Dave Miller"
-                        value={newName}
-                        disabled={isReadOnly}
-                        onChange={(e) => setNewName(e.target.value)}
-                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="company" className="text-xs font-semibold text-slate-700">Business / Company Name {isReadOnly ? "" : "*"}</Label>
-                      <Input
-                        id="company"
-                        placeholder="e.g. Apex Electrical"
-                        value={newCompany}
-                        disabled={isReadOnly}
-                        onChange={(e) => setNewCompany(e.target.value)}
-                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
-                        required
-                      />
-                    </div>
-                  </div>
+          {/* Clean, Icon-Only Dropdown Trigger */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="trade" className="text-xs font-semibold text-slate-700">Trade / Specialty</Label>
-                      <select
-                        id="trade"
-                        value={newTrade}
-                        disabled={isReadOnly}
-                        onChange={(e) => setNewTrade(e.target.value)}
-                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
-                      >
-                        <option value="General Subcontractor">General Subcontractor</option>
-                        <option value="Electrician">Electrician</option>
-                        <option value="Plumbing">Plumbing</option>
-                        <option value="HVAC">HVAC</option>
-                        <option value="Framing & Carpentry">Framing & Carpentry</option>
-                        <option value="Tile & Flooring">Tile & Flooring</option>
-                        <option value="Drywall & Paint">Drywall & Paint</option>
-                        <option value="Masonry & Concrete">Masonry & Concrete</option>
-                        <option value="Roofing">Roofing</option>
-                        <option value="Inspector / Permitting">Inspector / Permitting</option>
-                        <option value="Material Supplier">Material Supplier</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="status" className="text-xs font-semibold text-slate-700">Status</Label>
-                      <select
-                        id="status"
-                        value={newStatus}
-                        disabled={isReadOnly}
-                        onChange={(e) => setNewStatus(e.target.value as "Active" | "Preferred" | "On Hold")}
-                        className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Preferred">Preferred</option>
-                        <option value="On Hold">On Hold</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="phone" className="text-xs font-semibold text-slate-700">Phone Number</Label>
-                      <Input
-                        id="phone"
-                        placeholder="(555) 000-0000"
-                        value={newPhone}
-                        disabled={isReadOnly}
-                        onChange={(e) => setNewPhone(e.target.value)}
-                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="email" className="text-xs font-semibold text-slate-700">Email Address</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="contact@company.com"
-                        value={newEmail}
-                        disabled={isReadOnly}
-                        onChange={(e) => setNewEmail(e.target.value)}
-                        className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="address" className="text-xs font-semibold text-slate-700">Office / Shop Address</Label>
-                    <Input
-                      id="address"
-                      placeholder="123 Main St, Suite 100, City, ST"
-                      value={newAddress}
-                      disabled={isReadOnly}
-                      onChange={(e) => setNewAddress(e.target.value)}
-                      className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="notes" className="text-xs font-semibold text-slate-700">Notes & Trade Details</Label>
-                    <textarea
-                      id="notes"
-                      placeholder="Rates, lead times, licensing info, or scheduling requirements..."
-                      value={newNotes}
-                      disabled={isReadOnly}
-                      onChange={(e) => setNewNotes(e.target.value)}
-                      className={`flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900 placeholder:text-slate-400"}`}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
-                  {isReadOnly ? (
-                    <Button 
-                      type="button"
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setIsModalOpen(false)} 
-                      className="w-full h-9 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+            {/* The Dropdown Menu Box */}
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {contacts.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setIsOptionsOpen(false)
+                        handleExportCSV()
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
                     >
-                      Close View
-                    </Button>
-                  ) : (
-                    <>
-                      <div className="flex gap-2 w-full">
-                        <Button 
-                          type="submit"
-                          size="sm"
-                          disabled={isSubmitting}
-                          className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
-                        >
-                          {isSubmitting ? "Saving..." : editingId ? "Update Contact" : "Save Contact"}
-                        </Button>
-                        
-                        <Button 
-                          type="button"
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setIsModalOpen(false)} 
-                          className="flex-1 h-9 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-
-                      {editingId && (
-                        <Button 
-                          type="button"
-                          variant="destructive" 
-                          size="sm" 
-                          onClick={() => handleDeleteContact(editingId)}
-                          className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold h-9"
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </>
+                      <span>📊</span> Export to CSV
+                    </button>
                   )}
+                  
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-contacts_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
                 </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start flex-1">
         
-        {/* Left Side: Directory List */}
-        <div className="md:col-span-4 space-y-3">
+        {/* Target: tour-contacts-list (Left Side) */}
+        <div className="tour-contacts-list md:col-span-4 space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Directory ({filteredContacts.length})
@@ -481,8 +392,8 @@ export default function ContactsPage() {
           </div>
         </div>
 
-        {/* Right Side: Active Contact Details */}
-        <div className="md:col-span-8">
+        {/* Target: tour-contacts-details (Right Side) */}
+        <div className="tour-contacts-details md:col-span-8">
           {activeContact ? (
             <Card className="bg-white border rounded-xl p-6 shadow-sm min-h-[420px] space-y-6">
               <div className="pb-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -515,7 +426,7 @@ export default function ContactsPage() {
                   </p>
                 </div>
                 
-                {/* Edit & Delete Action Buttons */}
+                {/* 🔥 Edit Action Button Only */}
                 <div className="flex items-center gap-2 shrink-0">
                   <Button 
                     size="sm" 
@@ -524,16 +435,6 @@ export default function ContactsPage() {
                   >
                     {isReadOnly ? "View" : "Edit"}
                   </Button>
-                  {!isReadOnly && (
-                    <Button 
-                      variant="destructive"
-                      size="sm" 
-                      onClick={() => handleDeleteContact(activeContact.id)}
-                      className="h-8 px-4 text-[11px] text-white font-bold rounded-md shadow-sm shrink-0 bg-rose-600 hover:bg-rose-500"
-                    >
-                      Delete
-                    </Button>
-                  )}
                 </div>
               </div>
 
@@ -588,6 +489,195 @@ export default function ContactsPage() {
           )}
         </div>
       </div>
+
+      {/* Main Edit / Add Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-[520px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5 max-h-[90vh]">
+          <form onSubmit={handleSaveContact} className="flex flex-col w-full h-full overflow-hidden">
+            <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+              <DialogTitle className="text-lg font-bold text-orange-400">
+                {isReadOnly ? "View Contact" : editingId ? "Edit Contact" : "Add New Contact / Vendor"}
+              </DialogTitle>
+              {!isReadOnly && (
+                <DialogDescription className="text-xs text-slate-300 mt-1">
+                  {editingId 
+                    ? "Update the details for this vendor below." 
+                    : "Fill in vendor and trade details to save them to your active directory."}
+                </DialogDescription>
+              )}
+            </DialogHeader>
+
+            <div className="grid gap-4 px-6 py-4 bg-white flex-1 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-xs font-semibold text-slate-700">Contact Person Name {isReadOnly ? "" : "*"}</Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g. Dave Miller"
+                    value={newName}
+                    disabled={isReadOnly}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="company" className="text-xs font-semibold text-slate-700">Business / Company Name {isReadOnly ? "" : "*"}</Label>
+                  <Input
+                    id="company"
+                    placeholder="e.g. Apex Electrical"
+                    value={newCompany}
+                    disabled={isReadOnly}
+                    onChange={(e) => setNewCompany(e.target.value)}
+                    className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="trade" className="text-xs font-semibold text-slate-700">Trade / Specialty</Label>
+                  <select
+                    id="trade"
+                    value={newTrade}
+                    disabled={isReadOnly}
+                    onChange={(e) => setNewTrade(e.target.value)}
+                    className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
+                  >
+                    <option value="General Subcontractor">General Subcontractor</option>
+                    <option value="Electrician">Electrician</option>
+                    <option value="Plumbing">Plumbing</option>
+                    <option value="HVAC">HVAC</option>
+                    <option value="Framing & Carpentry">Framing & Carpentry</option>
+                    <option value="Tile & Flooring">Tile & Flooring</option>
+                    <option value="Drywall & Paint">Drywall & Paint</option>
+                    <option value="Masonry & Concrete">Masonry & Concrete</option>
+                    <option value="Roofing">Roofing</option>
+                    <option value="Inspector / Permitting">Inspector / Permitting</option>
+                    <option value="Material Supplier">Material Supplier</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="status" className="text-xs font-semibold text-slate-700">Status</Label>
+                  <select
+                    id="status"
+                    value={newStatus}
+                    disabled={isReadOnly}
+                    onChange={(e) => setNewStatus(e.target.value as "Active" | "Preferred" | "On Hold")}
+                    className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Preferred">Preferred</option>
+                    <option value="On Hold">On Hold</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="phone" className="text-xs font-semibold text-slate-700">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    placeholder="(555) 000-0000"
+                    value={newPhone}
+                    disabled={isReadOnly}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-xs font-semibold text-slate-700">Email Address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="contact@company.com"
+                    value={newEmail}
+                    disabled={isReadOnly}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="address" className="text-xs font-semibold text-slate-700">Office / Shop Address</Label>
+                <Input
+                  id="address"
+                  placeholder="123 Main St, Suite 100, City, ST"
+                  value={newAddress}
+                  disabled={isReadOnly}
+                  onChange={(e) => setNewAddress(e.target.value)}
+                  className={`bg-white border-slate-200 text-sm h-9 shadow-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="notes" className="text-xs font-semibold text-slate-700">Notes & Trade Details</Label>
+                <textarea
+                  id="notes"
+                  placeholder="Rates, lead times, licensing info, or scheduling requirements..."
+                  value={newNotes}
+                  disabled={isReadOnly}
+                  onChange={(e) => setNewNotes(e.target.value)}
+                  className={`flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900 placeholder:text-slate-400"}`}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
+              {isReadOnly ? (
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setIsModalOpen(false)} 
+                  className="w-full h-9 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  Close View
+                </Button>
+              ) : (
+                <>
+                  <div className="flex gap-2 w-full">
+                    <Button 
+                      type="submit"
+                      size="sm"
+                      disabled={isSubmitting}
+                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
+                    >
+                      {isSubmitting ? "Saving..." : editingId ? "Save Changes" : "Save Contact"}
+                    </Button>
+                    
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setIsModalOpen(false)} 
+                      className="flex-1 h-9 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+
+                  {/* 🔥 Red Delete Button moved safely to the bottom of the modal */}
+                  {editingId && (
+                    <Button 
+                      type="button"
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={() => handleDeleteContact(editingId)}
+                      className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold h-9"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

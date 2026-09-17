@@ -43,7 +43,18 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
     return () => window.removeEventListener(`restart-tour-${tourKey}`, handleRestart)
   }, [tourKey, startTour])
 
-  // 3. Track Target Element Position & Smooth Scroll
+  // 3. Escape Key Failsafe
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && currentStep !== -1) {
+        endTour()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [currentStep, endTour])
+
+  // 4. Track Target Element Position & Smooth Scroll
   const updatePosition = useCallback(() => {
     if (currentStep >= 0 && currentStep < steps.length && typeof window !== "undefined") {
       setWindowDimensions({ width: window.innerWidth, height: window.innerHeight })
@@ -97,27 +108,55 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
   const width = targetRect.width + p * 2
   const height = targetRect.height + p * 2
 
-  // Smart Tooltip Positioning (Keeps it on the screen)
+  // Tooltip Settings
   const tooltipWidth = 320
-  const tooltipHeight = 160 
-  
-  let tooltipTop = top + height + 16
-  // Flip above element if it falls off the bottom of the screen
-  if (tooltipTop + tooltipHeight > windowDimensions.height) {
-    tooltipTop = top - tooltipHeight - 16
+  const estimatedTooltipHeight = 180 
+
+  // Available Screen Space calculations
+  const spaceAbove = top
+  const spaceBelow = windowDimensions.height - (top + height)
+  const spaceRight = windowDimensions.width - (left + width)
+  const spaceLeft = left
+
+  let tooltipTop = 0
+  let tooltipLeft = 0
+
+  // 🔥 SMART PLACEMENT LOGIC
+  if (height > windowDimensions.height * 0.45 && spaceRight > tooltipWidth + 32) {
+    // 1. Target is tall (like a sidebar) and there is space on the right: Pin Right
+    tooltipLeft = left + width + 16
+    tooltipTop = top + 32 
+  } else if (height > windowDimensions.height * 0.45 && spaceLeft > tooltipWidth + 32) {
+    // 2. Target is tall and there is space on the left: Pin Left
+    tooltipLeft = left - tooltipWidth - 16
+    tooltipTop = top + 32
+  } else if (spaceBelow >= estimatedTooltipHeight + 16 || spaceBelow > spaceAbove) {
+    // 3. Default behavior: Pin Below (Centered Horizontally)
+    tooltipTop = top + height + 16
+    tooltipLeft = left + (width / 2) - (tooltipWidth / 2)
+  } else {
+    // 4. Not enough room below: Pin Above (Centered Horizontally)
+    tooltipTop = top - estimatedTooltipHeight - 16
+    tooltipLeft = left + (width / 2) - (tooltipWidth / 2)
   }
 
-  // Center horizontally, but cap it so it doesn't fall off the sides
-  let tooltipLeft = left + (width / 2) - (tooltipWidth / 2)
-  if (tooltipLeft < 16) tooltipLeft = 16
-  if (tooltipLeft + tooltipWidth > windowDimensions.width - 16) {
+  // 🔥 THE FAILSAFE: Hard clamp so it never leaves the browser window
+  if (tooltipTop < 16) {
+    tooltipTop = 16
+  } else if (tooltipTop > windowDimensions.height - estimatedTooltipHeight - 16) {
+    tooltipTop = windowDimensions.height - estimatedTooltipHeight - 16
+  }
+
+  if (tooltipLeft < 16) {
+    tooltipLeft = 16
+  } else if (tooltipLeft + tooltipWidth > windowDimensions.width - 16) {
     tooltipLeft = windowDimensions.width - tooltipWidth - 16
   }
 
   return (
     <div className="fixed inset-0 z-[99999] pointer-events-none">
       
-      {/* THE SPOTLIGHT: Uses a massive box-shadow to black out the rest of the screen */}
+      {/* THE SPOTLIGHT */}
       <div
         className="absolute rounded-xl transition-all duration-300 ease-out pointer-events-auto shadow-[0_0_0_9999px_rgba(15,23,42,0.85)]"
         style={{
@@ -130,24 +169,27 @@ export function PageTour({ steps, tourKey }: PageTourProps) {
 
       {/* THE TOOLTIP */}
       <div
-        className="absolute bg-white rounded-xl shadow-2xl p-5 border border-slate-200 pointer-events-auto transition-all duration-300 ease-out"
+        className="absolute bg-white rounded-xl shadow-2xl p-5 border border-slate-200 pointer-events-auto transition-all duration-300 ease-out flex flex-col justify-between"
         style={{
           top: `${tooltipTop}px`,
           left: `${tooltipLeft}px`,
           width: `${tooltipWidth}px`,
+          minHeight: '160px'
         }}
       >
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] font-bold text-white bg-orange-500 px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">
-            Step {currentStep + 1} of {steps.length}
-          </span>
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-bold text-white bg-orange-500 px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">
+              Step {currentStep + 1} of {steps.length}
+            </span>
+          </div>
+          
+          <p className="text-sm text-slate-700 font-medium leading-relaxed mb-6">
+            {step.content}
+          </p>
         </div>
         
-        <p className="text-sm text-slate-700 font-medium leading-relaxed mb-6">
-          {step.content}
-        </p>
-        
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mt-auto pt-2">
           <button
             onClick={endTour}
             className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors"

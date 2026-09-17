@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
+import { PageTour } from "@/components/page-tour"
 
 export interface PunchItem {
   id: number
@@ -46,6 +47,26 @@ const INITIAL_PUNCH_LIST: PunchItem[] = [
   { id: 3, text: "Delete this task using the 'Edit' menu.", category: "General To-Do", completed: false },
 ]
 
+// 🔥 Define the Tour Steps for Punch List
+const PUNCH_LIST_TOUR_STEPS = [
+  {
+    target: ".tour-punch-header",
+    content: "Welcome to the Punch List! Track all your remaining tasks, inspections, and final fixes here.",
+  },
+  {
+    target: ".tour-punch-progress",
+    content: "Keep an eye on your overall completion. This bar fills up automatically as you check off tasks.",
+  },
+  {
+    target: ".tour-punch-folders",
+    content: "Organize tasks by category or trade. Use the '+' to quickly add tasks directly to a specific folder.",
+  },
+  {
+    target: ".tour-punch-add",
+    content: "Click here to create a new task. You can link them directly to schedule dates or assign emails for automated reminders!",
+  }
+]
+
 const getLocalTodayStr = () => {
   const d = new Date()
   const year = d.getFullYear()
@@ -71,6 +92,9 @@ export default function PunchListPage() {
   
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories")
   const [searchQuery, setSearchQuery] = useState<string>("")
+
+  // 🔥 State for Minimalist Dropdown Menu
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
   // Adding Custom Category State
   const [isAddingCategory, setIsAddingCategory] = useState(false)
@@ -156,7 +180,6 @@ export default function PunchListPage() {
     fetchUserAndPermissions()
   }, [])
 
-  // Trigger for the Glass Wall Overlay
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
@@ -366,14 +389,53 @@ export default function PunchListPage() {
     setIsModalOpen(false)
   }
 
+  // 🔥 CSV Export Engine
+  const handleExportCSV = () => {
+    const headers = ["Task / Description", "Category", "Status", "Due Date", "Assigned Emails", "Notes"]
+    
+    const rows = items.map((item) => {
+      let displayDueDate = item.dueDate || ""
+      if (item.linkedTaskId) {
+        const linkedTask = calendarTasks.find(t => t.id === item.linkedTaskId)
+        if (linkedTask) {
+          const baseDate = new Date(linkedTask.endDate + "T00:00:00")
+          if (item.linkedTaskOffset) baseDate.setDate(baseDate.getDate() + item.linkedTaskOffset)
+          displayDueDate = baseDate.toISOString().split("T")[0]
+        }
+      }
+
+      return [
+        `"${item.text.replace(/"/g, '""')}"`,
+        `"${item.category.replace(/"/g, '""')}"`,
+        `"${item.completed ? 'Completed' : 'Pending'}"`,
+        `"${displayDueDate}"`,
+        `"${(item.assignedEmails || []).join("; ").replace(/"/g, '""')}"`,
+        `"${(item.notes || "").replace(/"/g, '""')}"`
+      ]
+    })
+
+    const brandingRow = `"CleanBuild - Punch List & To-Do's"\n\n`
+    const csvContent = "data:text/csv;charset=utf-8," + brandingRow + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `CleanBuild_PunchList_${getLocalTodayStr()}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   if (!isMounted) return null
 
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
       <PaywallOverlay show={showPaywall} />
+      <PageTour steps={PUNCH_LIST_TOUR_STEPS} tourKey="punch_list_tour" />
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-punch-header with Minimalist Dropdown */}
+      <div className="tour-punch-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -385,31 +447,91 @@ export default function PunchListPage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
-          <div className="bg-slate-800/80 border border-slate-700 py-1.5 px-3 rounded-lg text-right">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Completion</span>
-            <span className="text-base font-extrabold text-emerald-400">
-              {progressPercent}% <span className="text-xs text-slate-300 font-medium ml-1">({completedCount}/{totalCount})</span>
-            </span>
-          </div>
-
+        {/* Minimalist Action Layout */}
+        <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
+          
           {!isReadOnly && (
             <Button
               size="sm"
               onClick={() => handleOpenAdd(null)}
-              className="bg-blue-600 hover:bg-blue-400 text-white h-10 text-xs font-semibold px-4 shadow-sm"
+              className="tour-punch-add bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Add To-Do
             </Button>
           )}
+
+          {/* Clean, Icon-Only Dropdown Trigger */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
+
+            {/* The Dropdown Menu Box */}
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {items.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setIsOptionsOpen(false)
+                        handleExportCSV()
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
+                    >
+                      <span>📊</span> Export to CSV
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-punch_list_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* 🔥 NEW: Dedicated Progress Bar Bar */}
+      <Card className="tour-punch-progress bg-white border border-slate-200 shadow-sm shrink-0 overflow-hidden">
+        <div className="p-4 md:px-8 flex flex-col md:flex-row items-center gap-5">
+          <div className="shrink-0 flex items-center gap-3">
+            <div className="h-11 w-11 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-extrabold text-base shadow-sm ring-1 ring-emerald-200">
+              {progressPercent}%
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Project Completion</h3>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mt-0.5">{completedCount} of {totalCount} Tasks Completed</p>
+            </div>
+          </div>
+          <div className="flex-1 w-full bg-slate-100 rounded-full h-3.5 overflow-hidden shadow-inner border border-slate-200/60">
+            <div 
+              className="bg-emerald-500 h-full rounded-full transition-all duration-1000 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+      </Card>
 
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
-            <div className="md:col-span-1 space-y-2">
+            <div className="tour-punch-folders md:col-span-1 space-y-2">
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 
                 <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2">
@@ -463,7 +585,7 @@ export default function PunchListPage() {
 
                           {/* Trash Can (SECOND, ONLY ON HOVER, RED) OR INVISIBLE PLACEHOLDER */}
                           {isProtectedFolder ? (
-                            <div className="h-6 w-6 shrink-0" /> /* Keeps alignment perfect */
+                            <div className="h-6 w-6 shrink-0" /> 
                           ) : (
                             <button
                               onClick={(e) => {
@@ -952,6 +1074,7 @@ export default function PunchListPage() {
                   </Button>
                 </div>
 
+                {/* 🔥 Red Delete Button moved safely to the bottom of the modal */}
                 {editingItem && (
                   <Button 
                     variant="destructive" 

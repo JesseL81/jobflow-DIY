@@ -67,6 +67,8 @@ export default function ExpenseTracker() {
   const [breakdownType, setBreakdownType] = useState<"materials" | "labor" | null>(null)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
   const [date, setDate] = useState("")
   const [description, setDescription] = useState("")
@@ -288,8 +290,8 @@ export default function ExpenseTracker() {
       
       <PageTour steps={EXPENSES_TOUR_STEPS} tourKey="expenses_tour" />
 
-      {/* Target: tour-expenses-header with Stacked Buttons */}
-      <div className="tour-expenses-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6 md:min-h-[140px] shrink-0">
+      {/* Target: tour-expenses-header with Minimalist Dropdown */}
+      <div className="tour-expenses-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -301,35 +303,58 @@ export default function ExpenseTracker() {
           </p>
         </div>
 
-        {/* Stacked Button Layout */}
-        <div className="flex flex-col w-full md:w-48 gap-2 shrink-0">
+        {/* Minimalist Action Layout: One primary button + "More Options" menu */}
+        <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
+          
           {!isReadOnly && (
             <Button
               size="sm"
               onClick={() => handleOpenModal()}
-              className="tour-log-expense w-full bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold shadow-sm"
+              className="tour-log-expense bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Log Expense
             </Button>
           )}
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCSV}
-            className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold shadow-sm"
-          >
-            📊 Export CSV
-          </Button>
 
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => window.dispatchEvent(new Event('restart-tour-expenses_tour'))}
-            className="w-full text-slate-400 border-slate-800 bg-transparent hover:bg-slate-800 hover:text-white h-8 text-[11px] font-semibold shadow-none border-none"
-          >
-            💡 Replay Tutorial
-          </Button>
+          {/* Clean, Icon-Only Dropdown Trigger */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
+
+            {/* The Dropdown Menu Box */}
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      handleExportCSV()
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
+                  >
+                    <span>📊</span> Export to CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-expenses_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -498,39 +523,17 @@ export default function ExpenseTracker() {
                             <TableCell className="text-right font-bold text-slate-900 text-xs">
                               ${lineTotal.toLocaleString()}
                             </TableCell>
+                            
+                            {/* 🔥 Permanently visible, standardized Action Buttons */}
                             <TableCell className="text-right whitespace-nowrap w-[80px]">
-                              <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                {isReadOnly ? (
-                                  <button
-                                    onClick={() => handleOpenModal(expense)}
-                                    className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
-                                    title="View Expense"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                  </button>
-                                ) : (
-                                  <>
-                                    <button
-                                      onClick={() => handleOpenModal(expense)}
-                                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-blue-100 hover:text-blue-600 transition-colors"
-                                      title="Edit Expense"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        if (window.confirm("Are you sure you want to delete this expense?")) {
-                                          handleDeleteExpense(expense.id)
-                                        }
-                                      }}
-                                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-colors"
-                                      title="Delete Expense"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                                    </button>
-                                  </>
-                                )}
+                              <div className="flex items-center justify-end gap-1">
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleOpenModal(expense)} 
+                                  className={`h-8 px-4 text-white font-bold text-[11px] rounded-md shadow-sm shrink-0 ${isReadOnly ? "bg-slate-600 hover:bg-slate-500" : "bg-blue-600 hover:bg-blue-500"}`}
+                                >
+                                  {isReadOnly ? "View" : "Edit"}
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -655,7 +658,7 @@ export default function ExpenseTracker() {
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsDialogOpen(false)} 
-                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
               >
                 Close View
               </Button>
@@ -664,7 +667,7 @@ export default function ExpenseTracker() {
                 <div className="flex gap-2 w-full">
                   <Button 
                     size="sm"
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
                     onClick={handleSaveExpense}
                     disabled={isSubmitting}
                   >
@@ -675,18 +678,19 @@ export default function ExpenseTracker() {
                     variant="outline" 
                     size="sm"
                     onClick={() => setIsDialogOpen(false)} 
-                    className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+                    className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
                   >
                     Cancel
                   </Button>
                 </div>
 
+                {/* 🔥 Red Delete Button moved safely to the bottom of the modal */}
                 {editingExpense && (
                   <Button 
                     variant="destructive" 
                     size="sm" 
                     onClick={() => handleDeleteExpense(editingExpense.id)} 
-                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold"
+                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold h-9"
                   >
                     Delete
                   </Button>
@@ -718,7 +722,7 @@ export default function ExpenseTracker() {
           <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white">
             <Button 
               size="sm"
-              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm" 
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-sm h-9" 
               onClick={handleSaveBudget}
             >
               Save Budget
@@ -728,7 +732,7 @@ export default function ExpenseTracker() {
               variant="outline" 
               size="sm"
               onClick={() => setIsBudgetDialogOpen(false)} 
-              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
             >
               Cancel
             </Button>
@@ -783,7 +787,7 @@ export default function ExpenseTracker() {
              {!isReadOnly && (
                <Button 
                  size="sm"
-                 className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-bold"
+                 className="flex-1 bg-blue-600 hover:bg-blue-400 text-white font-bold h-9"
                  onClick={() => {
                    setBreakdownType(null)
                    handleOpenModal()
@@ -792,7 +796,7 @@ export default function ExpenseTracker() {
                  + Log Expense
                </Button>
              )}
-             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className={`${isReadOnly ? 'w-full' : 'flex-1'} font-semibold text-slate-700 hover:bg-slate-100`}>
+             <Button variant="outline" size="sm" onClick={() => setBreakdownType(null)} className={`${isReadOnly ? 'w-full' : 'flex-1'} font-semibold text-slate-700 hover:bg-slate-100 h-9`}>
                Close List
              </Button>
           </div>

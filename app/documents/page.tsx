@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
+import { PageTour } from "@/components/page-tour"
 
 import JSZip from "jszip"
 import { saveAs } from "file-saver"
@@ -21,9 +22,9 @@ export interface DocumentItem {
   folder: string
   size: number
   dateAdded: string
-  fileData?: string // Legacy base64 support
-  filePath?: string // Supabase cloud storage path
-  isPendingUpload?: boolean // Offline-first sync flag
+  fileData?: string 
+  filePath?: string 
+  isPendingUpload?: boolean 
 }
 
 const DEFAULT_FOLDERS = [
@@ -56,6 +57,22 @@ const INITIAL_DOCS: DocumentItem[] = [
   },
 ]
 
+// 🔥 Define the Tour Steps for Documents
+const DOCUMENTS_TOUR_STEPS = [
+  {
+    target: ".tour-docs-header",
+    content: "Welcome to Documents & Files! Keep all your blueprints, permits, and installation manuals securely stored here.",
+  },
+  {
+    target: ".tour-docs-folders",
+    content: "Use these folders to organize your files. You can easily add custom folders as your project scales.",
+  },
+  {
+    target: ".tour-docs-list",
+    content: "You can drag and drop files directly onto this screen to instantly upload them and securely sync them to the cloud.",
+  }
+]
+
 function formatBytes(bytes: number, decimals = 1) {
   if (!+bytes) return "0 Bytes"
   const k = 1024
@@ -81,6 +98,9 @@ export default function DocumentsPage() {
   const [selectedFolder, setSelectedFolder] = useState<string>("All Files")
   const [searchQuery, setSearchQuery] = useState<string>("")
   
+  // 🔥 State for Minimalist Dropdown Menu
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
+
   // Custom Folder State
   const [isAddingFolder, setIsAddingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
@@ -184,7 +204,6 @@ export default function DocumentsPage() {
   }, [])
 
   // 🔥 OFFLINE-FIRST BACKGROUND SYNC ENGINE
-  // This watches for files marked as "Pending Sync" and uploads them the second you get internet.
   useEffect(() => {
     const syncPendingFiles = async () => {
       if (!navigator.onLine || isReadOnly) return
@@ -229,7 +248,6 @@ export default function DocumentsPage() {
       }
     }
 
-    // Attempt sync on mount, and anytime the browser fires an 'online' event
     syncPendingFiles()
     window.addEventListener('online', syncPendingFiles)
     return () => window.removeEventListener('online', syncPendingFiles)
@@ -308,7 +326,6 @@ export default function DocumentsPage() {
     }, 300)
   }
 
-  // 🔥 CORE FILE PROCESSING LOGIC (Handles both Input buttons and Drag & Drop)
   const processFiles = async (files: File[]) => {
     const newDocs: DocumentItem[] = []
     const targetFolder = uploadTargetFolder !== "All Files" ? uploadTargetFolder : "Plans & Permits"
@@ -317,7 +334,7 @@ export default function DocumentsPage() {
       try {
         const newId = Date.now().toString() + Math.random().toString(36).substring(7)
         
-        // 1. ALWAYS save locally first to ensure instant, offline availability
+        // 1. ALWAYS save locally first
         await set(`cleanbuild_file_${newId}`, file)
 
         let filePath = ""
@@ -334,7 +351,7 @@ export default function DocumentsPage() {
            
            if (!error && data) {
              filePath = data.path
-             isPendingUpload = false // Success! No background sync needed.
+             isPendingUpload = false 
            }
         }
 
@@ -358,13 +375,11 @@ export default function DocumentsPage() {
     setUploadTargetFolder(selectedFolder)
   }
 
-  // --- HTML Input Upload Handler ---
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isReadOnly || !e.target.files?.length) return
     await processFiles(Array.from(e.target.files))
   }
 
-  // --- Drag and Drop Handlers ---
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     if (isReadOnly) return
@@ -381,15 +396,12 @@ export default function DocumentsPage() {
     setIsDragging(false)
     if (isReadOnly || !e.dataTransfer.files?.length) return
     
-    // Set target folder based on what is currently active in the UI
     setUploadTargetFolder(selectedFolder)
     await processFiles(Array.from(e.dataTransfer.files))
   }
 
-  // --- SMART FILE OPENER ---
   const handleOpenFile = async (doc: DocumentItem) => {
     try {
-      // 1. Check local offline storage first (instant load)
       const localFile = await get<File | Blob>(`cleanbuild_file_${doc.id}`)
       if (localFile) {
         const url = URL.createObjectURL(localFile)
@@ -397,7 +409,6 @@ export default function DocumentsPage() {
         return
       }
 
-      // 2. If it's not on this device, fetch a secure URL from the Cloud
       if (doc.filePath) {
         const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.filePath, 60)
         if (error || !data) throw error
@@ -405,7 +416,6 @@ export default function DocumentsPage() {
         return
       }
 
-      // 3. Fallback for legacy dummy items
       if (doc.fileData) {
         const parts = doc.fileData.split(',')
         const mimeString = parts[0].split(':')[1].split(';')[0]
@@ -440,12 +450,12 @@ export default function DocumentsPage() {
       for (const doc of documents) {
         let fileBlob: Blob | null = (await get<File | Blob>(`cleanbuild_file_${doc.id}`)) || null
         
-        // If not stored locally, download from Cloud to zip it
         if (!fileBlob && doc.filePath) {
           const { data, error } = await supabase.storage.from('documents').download(doc.filePath)
           if (!error && data) fileBlob = data
         }
 
+        // Folders are automatically generated here based on the doc.folder mapping
         if (fileBlob) {
           projectFolder.folder(doc.folder || "Other")?.file(doc.name, fileBlob)
         } else if (doc.fileData) {
@@ -493,14 +503,11 @@ export default function DocumentsPage() {
     if (isReadOnly || !editingDoc) return
     setIsModalOpen(false)
     
-    // 1. Remove from local state
     const updatedList = documents.filter((d) => d.id !== editingDoc.id)
     setDocuments(updatedList)
 
-    // 2. Remove from Local Storage
     await del(`cleanbuild_file_${editingDoc.id}`)
 
-    // 3. Remove from Cloud Storage
     if (editingDoc.filePath && navigator.onLine) {
       await supabase.storage.from('documents').remove([editingDoc.filePath])
     }
@@ -516,8 +523,9 @@ export default function DocumentsPage() {
       onDrop={handleDrop}
     >
       <PaywallOverlay show={showPaywall} />
+      <PageTour steps={DOCUMENTS_TOUR_STEPS} tourKey="documents_tour" />
 
-      {/* 🔥 DRAG AND DROP OVERLAY */}
+      {/* DRAG AND DROP OVERLAY */}
       {isDragging && !isReadOnly && (
         <div className="absolute inset-0 z-50 bg-blue-600/10 border-4 border-blue-600 border-dashed m-6 rounded-xl flex items-center justify-center backdrop-blur-sm transition-all pointer-events-none">
           <div className="bg-white px-8 py-6 rounded-2xl shadow-2xl text-center flex flex-col items-center">
@@ -530,7 +538,8 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-docs-header with Minimalist Dropdown */}
+      <div className="tour-docs-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
             📁 Documents & Files {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
@@ -540,19 +549,9 @@ export default function DocumentsPage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
-          {(documents || []).length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isExporting}
-              onClick={handleExportAll}
-              className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
-            >
-              {isExporting ? "⏳ Zipping..." : "📦 Download All"}
-            </Button>
-          )}
-
+        {/* Minimalist Action Layout */}
+        <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
+          
           {!isReadOnly && (
             <>
               <input 
@@ -568,12 +567,57 @@ export default function DocumentsPage() {
                   setUploadTargetFolder(selectedFolder)
                   fileInputRef.current?.click()
                 }}
-                className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-5 shadow-sm rounded-lg"
+                className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
               >
                 + Upload File
               </Button>
             </>
           )}
+
+          {/* Clean, Icon-Only Dropdown Trigger */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
+
+            {/* The Dropdown Menu Box */}
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {(documents || []).length > 0 && (
+                    <button
+                      onClick={() => {
+                        setIsOptionsOpen(false)
+                        handleExportAll()
+                      }}
+                      disabled={isExporting}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                      <span>📦</span> {isExporting ? "Zipping..." : "Download All"}
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-documents_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -582,8 +626,8 @@ export default function DocumentsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
-            {/* --- FOLDERS SIDEBAR --- */}
-            <div className="md:col-span-1 space-y-4">
+            {/* Target: tour-docs-folders */}
+            <div className="tour-docs-folders md:col-span-1 space-y-4">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-xs space-y-1">
                 
                 <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2">
@@ -619,10 +663,8 @@ export default function DocumentsPage() {
                         </span>
                       </button>
 
-                      {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && fld !== "All Files" && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
-                          {/* Quick Add Plus */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -639,7 +681,6 @@ export default function DocumentsPage() {
                             +
                           </button>
 
-                          {/* Trash Can or Spacer */}
                           {isProtectedFolder ? (
                             <div className="h-6 w-6 shrink-0" />
                           ) : (
@@ -697,8 +738,8 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            {/* --- FILE LIST MANAGER --- */}
-            <div className="md:col-span-3 space-y-4">
+            {/* Target: tour-docs-list */}
+            <div className="tour-docs-list md:col-span-3 space-y-4">
               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex gap-2">
                 <Input
                   placeholder="Search file names..."
@@ -728,7 +769,6 @@ export default function DocumentsPage() {
                         <div className="overflow-hidden">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-slate-900 text-sm truncate">{doc.name}</h3>
-                            {/* 🔥 Cloud Sync Status Indicator */}
                             {doc.isPendingUpload ? (
                               <span title="Pending Cloud Sync" className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold shrink-0 animate-pulse">
                                 ⏳ Syncing

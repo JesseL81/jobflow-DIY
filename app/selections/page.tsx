@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { get, set } from "idb-keyval"
 import { syncManager } from "@/lib/syncManager"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
@@ -12,6 +12,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
+import { PageTour } from "@/components/page-tour"
+
+import html2canvas from "html2canvas-pro"
+import jsPDF from "jspdf"
+import JSZip from "jszip"
+import { saveAs } from "file-saver"
 
 export interface SelectionItem {
   id: string
@@ -115,11 +121,30 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
   },
 ]
 
+// 🔥 Define the Tour Steps for Selections
+const SELECTIONS_TOUR_STEPS = [
+  {
+    target: ".tour-selections-header",
+    content: "Welcome to Selections! This is where you track all your materials, fixtures, and finishes.",
+  },
+  {
+    target: ".tour-selections-filters",
+    content: "Use these folders to organize your items by Room or Category. You can add custom folders here too.",
+  },
+  {
+    target: ".tour-selections-budget",
+    content: "Set a target budget for each category, and watch your tracked spending automatically update as you select items.",
+  },
+  {
+    target: ".tour-add-item",
+    content: "When adding an item, check the 'Sync to Expenses' box to automatically send its cost directly to your project ledger!",
+  },
+]
+
 export default function SelectionsPage() {
   const [isMounted, setIsMounted] = useState(false)
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
   
-  // Dynamic Rooms & Categories
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
   const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_selections_rooms_list", DEFAULT_ROOMS)
   
@@ -130,7 +155,6 @@ export default function SelectionsPage() {
     "Cabinetry & Hardware": 1200,
   })
 
-  // Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
@@ -142,14 +166,21 @@ export default function SelectionsPage() {
   
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // 🔥 State for Minimalist Dropdown Menu
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
-  // Custom Adding States
+  // Export States
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState("")
+  const exportCardRef = useRef<HTMLDivElement>(null)
+  const [exportTarget, setExportTarget] = useState<SelectionItem | null>(null)
+
   const [isAddingRoom, setIsAddingRoom] = useState(false)
   const [newRoomName, setNewRoomName] = useState("")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
 
-  // Deleting States
   const [isRoomDeleteModalOpen, setIsRoomDeleteModalOpen] = useState(false)
   const [roomToDelete, setRoomToDelete] = useState<string | null>(null)
   const [roomDeleteMode, setRoomDeleteMode] = useState<"move" | "delete">("move")
@@ -180,7 +211,6 @@ export default function SelectionsPage() {
     setIsMounted(true)
   }, [])
 
-  // Self-Healing Sync: Ensures "All Rooms" and "All Categories" are always present at index 0
   useEffect(() => {
     if (isMounted) {
       if (rooms && rooms[0] !== "All Rooms") {
@@ -240,8 +270,6 @@ export default function SelectionsPage() {
     return isNaN(rawNum) ? 0 : rawNum
   }
 
-  const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items])
-
   const totalCost = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
   }, [items])
@@ -272,7 +300,6 @@ export default function SelectionsPage() {
     })
   }, [items, selectedCategory, selectedRoom, searchQuery])
 
-  // --- Custom Rooms & Categories Handlers ---
   const handleAddRoom = async () => {
     if (isReadOnly || !newRoomName.trim()) return
     const trimmed = newRoomName.trim()
@@ -295,7 +322,6 @@ export default function SelectionsPage() {
     setSelectedCategory(trimmed)
   }
 
-  // --- Delete Handlers ---
   const handleOpenDeleteRoom = (room: string) => {
     setRoomToDelete(room)
     const availableFallbacks = rooms.filter(r => r !== "All Rooms" && r !== room)
@@ -315,7 +341,6 @@ export default function SelectionsPage() {
         const idsToDelete = new Set(itemsInRoom.map(i => i.id))
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
         
-        // Clean up expenses 
         try {
            const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
            const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
@@ -355,7 +380,6 @@ export default function SelectionsPage() {
         const idsToDelete = new Set(itemsInCat.map(i => i.id))
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
 
-        // Clean up expenses
         try {
            const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
            const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
@@ -384,7 +408,6 @@ export default function SelectionsPage() {
     setIsBudgetModalOpen(false)
   }
 
-  // 🔥 Smart Add: Accepts pre-fills for the exact room/category
   const handleOpenAdd = (prefillRoom?: string | null, prefillCategory?: string | null) => {
     if (isReadOnly) return
     setIsSubmitting(false)
@@ -408,7 +431,7 @@ export default function SelectionsPage() {
     setFormCategory(item.category)
     setFormRoom(item.room || "Other")
     setFormUrl(item.vendorUrl)
-    setFormPrice(item.price.replace(/[^0-9.]/g, "")) // strip $ for the input
+    setFormPrice(item.price.replace(/[^0-9.]/g, "")) 
     setFormModel(item.modelNumber)
     setFormNotes(item.notes)
     setFormStatus(item.status || "Idea / Saved")
@@ -458,7 +481,6 @@ export default function SelectionsPage() {
         await setItems(updatedItemsList)
       }
 
-      // Sync to expenses logic
       if (formSyncToExpenses) {
         try {
           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
@@ -509,6 +531,70 @@ export default function SelectionsPage() {
     setIsModalOpen(false)
   }
 
+  // 🔥 Export Engine (Matching Vision Board)
+  const renderItemToCanvas = async (item: SelectionItem): Promise<HTMLCanvasElement | null> => {
+    setExportTarget(item)
+    await new Promise((r) => setTimeout(r, 150)) // allow React to render the hidden card
+    if (!exportCardRef.current) return null
+
+    return await html2canvas(exportCardRef.current, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+    })
+  }
+
+  const handleExportAll = async () => {
+    const safeItems = filteredItems || []
+    if (safeItems.length === 0) return
+
+    setIsExporting(true)
+    const zip = new JSZip()
+
+    try {
+      const masterPdf = new jsPDF("p", "mm", "a4")
+      const pdfWidth = masterPdf.internal.pageSize.getWidth()
+
+      for (let index = 0; index < safeItems.length; index++) {
+        const item = safeItems[index]
+        setExportProgress(`Processing item ${index + 1} of ${safeItems.length}...`)
+
+        // Create a unique folder inside the ZIP based on the room name
+        const roomName = item.room || "Uncategorized"
+        const roomFolder = zip.folder(roomName)
+
+        const canvas = await renderItemToCanvas(item)
+        if (!canvas) continue
+
+        const imgData = canvas.toDataURL("image/png")
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+
+        if (index > 0) masterPdf.addPage()
+        masterPdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
+
+        const singlePdf = new jsPDF("p", "mm", "a4")
+        singlePdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
+        
+        // Clean the filename to prevent saving issues
+        const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 30)
+        roomFolder?.file(`Selection_${safeTitle}_${item.id}.pdf`, singlePdf.output("blob"))
+      }
+
+      setExportProgress("Finalizing ZIP archive...")
+      zip.file(`Selections_Combined_Master.pdf`, masterPdf.output("blob"))
+
+      const todayStr = new Date().toISOString().split("T")[0]
+      const zipContent = await zip.generateAsync({ type: "blob" })
+      saveAs(zipContent, `Selections_Export_${todayStr}.zip`)
+    } catch (err) {
+      console.error("Export all failed:", err)
+    } finally {
+      setIsExporting(false)
+      setExportTarget(null)
+      setExportProgress("")
+    }
+  }
+
   const getStatusBadge = (status: SelectionItem["status"]) => {
     switch (status) {
       case "Idea / Saved": return <Badge className="bg-slate-100 text-slate-600 border-slate-200">Idea / Saved</Badge>
@@ -529,8 +615,10 @@ export default function SelectionsPage() {
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
       <PaywallOverlay show={showPaywall} />
+      <PageTour steps={SELECTIONS_TOUR_STEPS} tourKey="selections_tour" />
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-selections-header with Minimalist Dropdown */}
+      <div className="tour-selections-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -542,32 +630,79 @@ export default function SelectionsPage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-center w-full md:w-auto gap-2 shrink-0">
-          <div className="bg-slate-800/80 border border-slate-700 py-1.5 px-3 rounded-lg text-right">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Checked Total</span>
-            <span className="text-base font-extrabold text-emerald-400">
-              ${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-
+        {/* Minimalist Action Layout */}
+        <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
+          
           {!isReadOnly && (
             <Button
               size="sm"
               onClick={() => handleOpenAdd(null, null)}
-              className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
+              className="tour-add-item bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
-              + Add Item
+              + Add Selection
             </Button>
           )}
+
+          {/* Clean, Icon-Only Dropdown Trigger */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
+
+            {/* The Dropdown Menu Box */}
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {filteredItems.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setIsOptionsOpen(false)
+                        handleExportAll()
+                      }}
+                      disabled={isExporting}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                      <span>📦</span> {isExporting ? "Exporting..." : "Download All"}
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-selections_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
+        {isExporting && exportProgress && (
+          <div className="bg-indigo-50 border-b border-indigo-200 text-indigo-900 text-xs px-6 py-2.5 flex items-center justify-between animate-pulse">
+            <span>⏳ {exportProgress}</span>
+            <span className="font-semibold text-[11px] uppercase tracking-wider">Exporting</span>
+          </div>
+        )}
+
         <div className="p-6 space-y-6">
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
-            <div className="md:col-span-1 space-y-4">
+            <div className="tour-selections-filters md:col-span-1 space-y-4">
               
               {/* --- ROOMS FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
@@ -611,7 +746,7 @@ export default function SelectionsPage() {
                       {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && !isProtectedFolder && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
-                          {/* Quick Add Plus (FIRST, ALWAYS VISIBLE, ORANGE) */}
+                          {/* Quick Add Plus */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -627,7 +762,7 @@ export default function SelectionsPage() {
                             +
                           </button>
 
-                          {/* Trash Can (SECOND, ONLY ON HOVER, RED) */}
+                          {/* Trash Can */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -723,7 +858,6 @@ export default function SelectionsPage() {
                       {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && !isProtectedFolder && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
-                          {/* Quick Add Plus (FIRST, ALWAYS VISIBLE, ORANGE) */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -739,7 +873,6 @@ export default function SelectionsPage() {
                             +
                           </button>
 
-                          {/* Trash Can (SECOND, ONLY ON HOVER, RED) */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -797,7 +930,7 @@ export default function SelectionsPage() {
             <div className="md:col-span-3 space-y-4">
               
               {selectedCategory !== "All Categories" && (
-                <div className="bg-white p-4 rounded-xl border shadow-xs flex items-center justify-between gap-4">
+                <div className="tour-selections-budget bg-white p-4 rounded-xl border shadow-xs flex items-center justify-between gap-4">
                   <div>
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                       {selectedCategory} Budget Target
@@ -966,7 +1099,7 @@ export default function SelectionsPage() {
         </div>
       </Card>
 
-      {/* 🔥 NEW MODAL: DELETE ROOM FLOW */}
+      {/* DELETE ROOM MODAL */}
       <Dialog open={isRoomDeleteModalOpen} onOpenChange={setIsRoomDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1060,7 +1193,7 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 🔥 NEW MODAL: DELETE CATEGORY FLOW */}
+      {/* DELETE CATEGORY MODAL */}
       <Dialog open={isCategoryDeleteModalOpen} onOpenChange={setIsCategoryDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1386,6 +1519,57 @@ export default function SelectionsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 🔥 HIDDEN EXPORT RENDER DIV */}
+      <div className="absolute top-[-9999px] left-[-9999px]">
+        {exportTarget && (
+          <div
+            ref={exportCardRef}
+            className="w-[600px] bg-white p-8 border rounded-xl shadow-lg space-y-5 text-slate-900"
+          >
+            <div className="border-b pb-4">
+              <div className="flex items-center justify-between mb-2">
+                <Badge className="bg-slate-900 text-white text-xs px-2.5 py-0.5">{exportTarget.status}</Badge>
+                <span className="text-[10px] font-bold text-slate-400">ID: {exportTarget.id}</span>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 leading-tight">{exportTarget.title}</h2>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block font-bold text-[10px] uppercase tracking-wider mb-1">Room / Location</span>
+                <span className="font-bold text-base">{exportTarget.room || "N/A"}</span>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block font-bold text-[10px] uppercase tracking-wider mb-1">Category</span>
+                <span className="font-bold text-base">{exportTarget.category || "N/A"}</span>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block font-bold text-[10px] uppercase tracking-wider mb-1">Est. Price</span>
+                <span className="font-extrabold text-emerald-600 text-base">{exportTarget.price ? `$${exportTarget.price}` : "N/A"}</span>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block font-bold text-[10px] uppercase tracking-wider mb-1">Model / SKU</span>
+                <span className="font-bold text-base">{exportTarget.modelNumber || "N/A"}</span>
+              </div>
+            </div>
+
+            {exportTarget.vendorUrl && (
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block font-bold text-[10px] uppercase tracking-wider mb-1">Vendor Link</span>
+                <span className="font-semibold text-blue-600 text-sm break-all">{exportTarget.vendorUrl}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5 mt-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Notes & Requirements</span>
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm whitespace-pre-wrap leading-relaxed min-h-[80px]">
+                {exportTarget.notes || "No notes entered."}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
     </main>
   )

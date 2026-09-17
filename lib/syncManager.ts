@@ -58,7 +58,7 @@ export const syncManager = {
 
       await set(`dirty_${storeKey}`, false)
     } catch (error) {
-      console.error(`Cloud push failed for ${storeKey}, marking dirty:`, error)
+      console.warn(`Cloud push failed for ${storeKey}, marking dirty:`, error)
       await set(`dirty_${storeKey}`, true)
     }
   },

@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
+import { PageTour } from "@/components/page-tour"
 
 import html2canvas from "html2canvas-pro"
 import jsPDF from "jspdf"
@@ -35,7 +36,6 @@ interface VisionBoardItem {
   linkImage?: string
 }
 
-// 🔥 Renamed to "All Rooms"
 const DEFAULT_CATEGORIES = [
   "All Rooms",
   "Inspiration & Ideas",
@@ -55,6 +55,21 @@ const INITIAL_BOARD: VisionBoardItem[] = [
     url: "https://diy.cleanbuild.us",
     photos: ["/Gemini_bathroom.jpeg"],
   }
+]
+
+const VISION_BOARD_TOUR_STEPS = [
+  {
+    target: ".tour-vision-header",
+    content: "Welcome to the Vision Board! This is where you collect inspiration, material choices, and design ideas.",
+  },
+  {
+    target: ".tour-vision-folders",
+    content: "Organize your ideas into specific rooms or categories. Click here to filter your board, or add a custom folder.",
+  },
+  {
+    target: ".tour-vision-add",
+    content: "Click here to upload photos or paste a web link. We will automatically grab the image and title for you!",
+  },
 ]
 
 const formatDisplayDate = (dateStr: string) => {
@@ -79,14 +94,12 @@ export default function VisionBoardPage() {
   const [boardItems, setBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", INITIAL_BOARD)
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_vision_board_categories", DEFAULT_CATEGORIES)
   
-  // 🔥 Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   
-  // Defaulting to "All Rooms"
   const [selectedCategory, setSelectedCategory] = useState<string>("All Rooms")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
@@ -95,13 +108,14 @@ export default function VisionBoardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingItem, setEditingItem] = useState<VisionBoardItem | null>(null)
 
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
+
   const [itemDate, setItemDate] = useState("")
   const [itemCategory, setItemCategory] = useState("Inspiration & Ideas")
   const [itemNotes, setItemNotes] = useState("")
   const [itemUrl, setItemUrl] = useState("")
   const [itemPhotos, setItemPhotos] = useState<string[]>([])
 
-  // Rich Link State
   const [linkTitle, setLinkTitle] = useState("")
   const [linkDescription, setLinkDescription] = useState("")
   const [linkDomain, setLinkDomain] = useState("")
@@ -117,7 +131,6 @@ export default function VisionBoardPage() {
   const exportCardRef = useRef<HTMLDivElement>(null)
   const [exportTarget, setExportTarget] = useState<VisionBoardItem | null>(null)
 
-  // Category Deletion State
   const [isCategoryDeleteModalOpen, setIsCategoryDeleteModalOpen] = useState(false)
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null)
   const [categoryDeleteMode, setCategoryDeleteMode] = useState<"move" | "delete">("move")
@@ -127,27 +140,22 @@ export default function VisionBoardPage() {
     setIsMounted(true)
   }, [])
 
-  // 🔥 SELF-HEALING CATEGORY SYNC
-  // This instantly adds "All Rooms" back to the top of your list if it was previously deleted.
   useEffect(() => {
     if (isMounted && categories) {
       let needsUpdate = false
       let newCats = [...categories]
 
-      // Upgrade legacy "All Categories" to "All Rooms"
       const oldIndex = newCats.indexOf("All Categories")
       if (oldIndex !== -1) {
         newCats[oldIndex] = "All Rooms"
         needsUpdate = true
       }
 
-      // Ensure "All Rooms" exists
       if (!newCats.includes("All Rooms")) {
         newCats.unshift("All Rooms")
         needsUpdate = true
       }
 
-      // Ensure "All Rooms" is pinned to index 0
       if (newCats.indexOf("All Rooms") !== 0) {
         newCats = newCats.filter(c => c !== "All Rooms")
         newCats.unshift("All Rooms")
@@ -163,7 +171,6 @@ export default function VisionBoardPage() {
     }
   }, [isMounted, categories, selectedCategory, setCategories])
 
-  // Fetch Permissions
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
       try {
@@ -204,7 +211,6 @@ export default function VisionBoardPage() {
     fetchUserAndPermissions()
   }, [])
 
-  // Auto-Fetch Link Preview Logic
   useEffect(() => {
     if (!itemUrl.trim()) {
       setLinkTitle("")
@@ -414,14 +420,13 @@ export default function VisionBoardPage() {
     }
   }
 
+  // 🔥 UPDATED: Dynamic Room-Based Folder Architecture for Export All
   const handleExportAll = async () => {
     const safeItems = filteredItems || []
     if (safeItems.length === 0) return
 
     setIsExporting(true)
     const zip = new JSZip()
-    const pdfsFolder = zip.folder("Vision_Board_PDFs")
-    const photosFolder = zip.folder("All_Photos")
 
     try {
       const masterPdf = new jsPDF("p", "mm", "a4")
@@ -430,6 +435,10 @@ export default function VisionBoardPage() {
       for (let index = 0; index < safeItems.length; index++) {
         const item = safeItems[index]
         setExportProgress(`Processing item ${index + 1} of ${safeItems.length}...`)
+
+        // Create a unique folder inside the ZIP based on the room/category name
+        const roomName = item.category || "Uncategorized"
+        const roomFolder = zip.folder(roomName)
 
         const canvas = await renderItemToCanvas(item)
         if (!canvas) continue
@@ -442,14 +451,17 @@ export default function VisionBoardPage() {
 
         const singlePdf = new jsPDF("p", "mm", "a4")
         singlePdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
-        pdfsFolder?.file(`Vision_${item.date}.pdf`, singlePdf.output("blob"))
+        
+        // Save the PDF inside the specific Room Folder
+        roomFolder?.file(`Vision_${item.date}_${item.id}.pdf`, singlePdf.output("blob"))
 
+        // Save all attached photos inside the specific Room Folder
         const safePhotos = item?.photos || []
         if (Array.isArray(safePhotos) && safePhotos.length > 0) {
           for (let pIdx = 0; pIdx < safePhotos.length; pIdx++) {
             try {
               const jpgBlob = await fetchJpgBlob(safePhotos[pIdx])
-              photosFolder?.file(`${item.date}_photo_${pIdx + 1}.jpg`, jpgBlob)
+              roomFolder?.file(`${item.date}_${item.id}_photo_${pIdx + 1}.jpg`, jpgBlob)
             } catch (e) {
               console.error(`Failed to export photo for ${item.date}:`, e)
             }
@@ -458,7 +470,8 @@ export default function VisionBoardPage() {
       }
 
       setExportProgress("Finalizing ZIP archive...")
-      zip.file(`Vision_Board_Combined.pdf`, masterPdf.output("blob"))
+      // Keep the master combined PDF at the root of the ZIP
+      zip.file(`Vision_Board_Combined_Master.pdf`, masterPdf.output("blob"))
 
       const todayStr = getTodayInputDate()
       const zipContent = await zip.generateAsync({ type: "blob" })
@@ -603,8 +616,10 @@ export default function VisionBoardPage() {
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
       <PaywallOverlay show={showPaywall} />
+      <PageTour steps={VISION_BOARD_TOUR_STEPS} tourKey="vision_board_tour" />
 
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-vision-header with Minimalist Dropdown */}
+      <div className="tour-vision-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -616,28 +631,63 @@ export default function VisionBoardPage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0">
-          {(filteredItems || []).length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isExporting}
-              onClick={handleExportAll}
-              className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
-            >
-              📦 Download All
-            </Button>
-          )}
-
+        {/* Minimalist Action Layout: One primary button + "More Options" menu */}
+        <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
+          
           {!isReadOnly && (
             <Button
               size="sm"
-              className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
               onClick={() => handleOpenModal()}
+              className="tour-vision-add bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
               + Add Photos / Idea
             </Button>
           )}
+
+          {/* Clean, Icon-Only Dropdown Trigger */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
+
+            {/* The Dropdown Menu Box */}
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {(filteredItems || []).length > 0 && (
+                    <button
+                      onClick={() => {
+                        setIsOptionsOpen(false)
+                        handleExportAll()
+                      }}
+                      disabled={isExporting}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                      <span>📦</span> {isExporting ? "Exporting..." : "Download All"}
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-vision_board_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -651,10 +701,9 @@ export default function VisionBoardPage() {
 
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            <div className="md:col-span-3 space-y-2">
+            <div className="tour-vision-folders md:col-span-3 space-y-2">
               <div className="bg-white p-3 rounded-xl border shadow-sm space-y-1">
                 
-                {/* 🔥 UPDATED TO MATCH SELECTIONS */}
                 <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2">
                   Filter by Room
                 </span>
@@ -688,11 +737,9 @@ export default function VisionBoardPage() {
                         </span>
                       </button>
                       
-                      {/* FOLDER ACTIONS GROUP */}
                       {!isReadOnly && cat !== "All Rooms" && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
                           
-                          {/* Quick Add Plus (FIRST, ALWAYS VISIBLE, ORANGE) */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -708,7 +755,6 @@ export default function VisionBoardPage() {
                             +
                           </button>
 
-                          {/* Trash Can (SECOND, ONLY ON HOVER, RED) */}
                           {!isProtectedFolder && (
                             <button
                               onClick={(e) => {
@@ -804,7 +850,6 @@ export default function VisionBoardPage() {
                             </p>
                           )}
 
-                          {/* 🔥 RICH LINK PREVIEW CARD FOR MAIN VIEW */}
                           {item.url && (
                             <div className="pt-2">
                               {item.linkTitle || item.linkImage ? (
@@ -889,7 +934,7 @@ export default function VisionBoardPage() {
         </div>
       </Card>
 
-      {/* 🔥 NEW MODAL: DELETE CATEGORY FLOW */}
+      {/* DELETE CATEGORY MODAL */}
       <Dialog open={isCategoryDeleteModalOpen} onOpenChange={setIsCategoryDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1037,7 +1082,6 @@ export default function VisionBoardPage() {
                 placeholder="e.g. https://homedepot.com/..."
                 value={itemUrl}
                 disabled={isReadOnly}
-                // 🔥 NEW ONCHANGE FIX: Instantly clear error/preview state when a new URL is pasted
                 onChange={(e) => {
                   setItemUrl(e.target.value)
                   setFetchError(false)
@@ -1049,7 +1093,6 @@ export default function VisionBoardPage() {
                 className={`h-9 text-sm bg-white shadow-sm border-slate-200 w-full ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
 
-              {/* 🔥 FIREWALL FALLBACK UI */}
               {fetchError && !isReadOnly && (
                 <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3 shadow-sm">
                   <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
@@ -1072,7 +1115,6 @@ export default function VisionBoardPage() {
                 </div>
               )}
 
-              {/* 🔥 RICH LINK PREVIEW IN MODAL */}
               {(linkTitle || linkImage) && !fetchError && (
                 <div className="mt-2 relative border border-slate-200 rounded-lg overflow-hidden bg-slate-50 flex items-center gap-3 pr-2 h-16 shadow-sm">
                   {linkImage ? (

@@ -10,11 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
-
-// 🔥 Import the Tour component
 import { PageTour } from "@/components/page-tour"
 
-// Brought in from the Contacts page to type our linked vendors
 interface Contact {
   id: string
   name: string
@@ -51,7 +48,6 @@ const getLocalTodayStr = () => {
   return `${year}-${month}-${day}`
 }
 
-// 16-Color Palette
 const COLOR_PALETTE = [
   { bg: "bg-amber-400", text: "text-slate-900", label: "Amber Yellow" },
   { bg: "bg-emerald-400", text: "text-slate-900", label: "Mint Green" },
@@ -76,16 +72,14 @@ const INITIAL_TASKS: CalendarTask[] = [
   { id: 2, title: "Click me to edit colors & dates", color: "bg-amber-400", textColor: "text-slate-900", startDate: "2026-08-30", endDate: "2026-08-30" },
 ]
 
-// 🔥 Define the Tour Steps for the Schedule Page
 const SCHEDULE_TOUR_STEPS = [
   {
     target: ".tour-schedule-header",
     content: "Welcome to your Project Schedule! This is where you map out your entire build timeline.",
-    disableBeacon: true,
   },
   {
     target: ".tour-project-dates",
-    content: "Click here to set your overarching start and end dates. This controls the progress bar on your Dashboard.",
+    content: "Click the More Options menu to set your overarching start and end dates. This controls the progress bar on your Dashboard.",
   },
   {
     target: ".tour-calendar-grid",
@@ -103,7 +97,6 @@ export default function SchedulePage() {
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
 
-  // Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
@@ -128,6 +121,9 @@ export default function SchedulePage() {
   
   const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
   const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
+
+  // 🔥 State for the Minimalist Dropdown Menu
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
   const [tasks, setTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", INITIAL_TASKS)
   const [contacts] = useOfflineSync<Contact[]>("cleanbuild_contacts", []) 
@@ -600,12 +596,10 @@ export default function SchedulePage() {
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
       
       <PaywallOverlay show={showPaywall} />
-
-      {/* 🔥 The Product Tour Component */}
       <PageTour steps={SCHEDULE_TOUR_STEPS} tourKey="schedule_tour" />
 
       {/* Target: tour-schedule-header */}
-      <div className="tour-schedule-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-4 mb-6 md:h-[140px] shrink-0">
+      <div className="tour-schedule-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-4 mb-6 md:min-h-[140px] shrink-0">
         
         {/* Left Column */}
         <div className="flex flex-col justify-center">
@@ -655,57 +649,75 @@ export default function SchedulePage() {
           </Button>
         </div>
 
-        {/* Right Column */}
-        <div className="flex flex-col justify-center w-full md:w-auto md:justify-self-end gap-2 shrink-0">
+        {/* Right Column: Minimalist Action Layout */}
+        <div className="flex items-center justify-end w-full md:w-auto md:justify-self-end gap-2 shrink-0">
           
-          <div className="flex gap-2 w-full">
-            {/* 🔥 Replay Tutorial Button */}
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => window.dispatchEvent(new Event('restart-tour-schedule_tour'))}
-              className="flex-1 text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-2 shadow-sm"
-              title="Replay Tutorial"
-            >
-              💡 Replay
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTodayClick}
-              className="flex-1 text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
-            >
-              Today
-            </Button>
-            
-            {!isReadOnly && (
-              <Button
-                size="sm"
-                onClick={handleOpenAddEventModal}
-                className="flex-1 bg-blue-600 hover:bg-blue-400 text-white h-9 text-xs font-semibold px-4 shadow-sm"
-              >
-                + Add Event
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTodayClick}
+            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
+          >
+            Today
+          </Button>
 
           {!isReadOnly && (
             <Button
-              variant="outline"
               size="sm"
-              onClick={handleOpenDatesModal}
-              className="tour-project-dates w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
+              onClick={handleOpenAddEventModal}
+              className="bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
             >
-              📅 Project Dates
+              + Add Event
             </Button>
           )}
-          
+
+          {/* Clean, Icon-Only Dropdown Trigger */}
+          <div className="tour-project-dates relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              title="More Options"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </Button>
+
+            {/* The Dropdown Menu Box */}
+            {isOptionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => {
+                        setIsOptionsOpen(false)
+                        handleOpenDatesModal()
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
+                    >
+                      <span>📅</span> Set Project Dates
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => {
+                      setIsOptionsOpen(false)
+                      window.dispatchEvent(new Event('restart-tour-schedule_tour'))
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                  >
+                    <span>💡</span> Replay Tutorial
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
       </div>
 
-      {/* Target: tour-calendar-grid */}
       <Card className="tour-calendar-grid overflow-hidden border shadow-sm bg-white flex-1 flex flex-col">
         
         <div className="grid grid-cols-7 border-b text-center text-[11px] font-bold text-orange-600 uppercase tracking-wider bg-slate-50 py-2.5 shrink-0 shadow-sm z-10">
