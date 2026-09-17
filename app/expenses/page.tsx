@@ -10,8 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
-
-// 🔥 Import the Tour component
 import { PageTour } from "@/components/page-tour"
 
 interface Expense {
@@ -31,12 +29,10 @@ const INITIAL_EXPENSES: Expense[] = [
   { id: 5, date: "2026-07-20", description: "Railing Installation Subcontractor", materials: 120, labor: 400 },
 ]
 
-// 🔥 Define the Tour Steps for the Expenses Page
 const EXPENSES_TOUR_STEPS = [
   {
     target: ".tour-expenses-header",
     content: "Welcome to Project Expenses! This is where you track every dollar spent against your overall budget.",
-    disableBeacon: true,
   },
   {
     target: ".tour-budget-cards",
@@ -80,7 +76,6 @@ export default function ExpenseTracker() {
   const [tempBudget, setTempBudget] = useState<string>("23402")
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null)
 
-  // Auth, Permissions & Billing State
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
@@ -291,11 +286,10 @@ export default function ExpenseTracker() {
       
       <PaywallOverlay show={showPaywall} />
       
-      {/* 🔥 The Product Tour Component */}
       <PageTour steps={EXPENSES_TOUR_STEPS} tourKey="expenses_tour" />
 
-      {/* Target: tour-expenses-header */}
-      <div className="tour-expenses-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:h-[140px] shrink-0">
+      {/* Target: tour-expenses-header with Stacked Buttons */}
+      <div className="tour-expenses-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -307,42 +301,41 @@ export default function ExpenseTracker() {
           </p>
         </div>
 
-        <div className="flex items-center justify-center w-full md:w-auto gap-3 shrink-0 flex-wrap">
-          {/* 🔥 Replay Tutorial Button */}
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => window.dispatchEvent(new Event('restart-tour-expenses_tour'))}
-            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
-          >
-            💡 Replay Tutorial
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCSV}
-            className="text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold px-4 shadow-sm"
-          >
-            📊 Export CSV
-          </Button>
-
+        {/* Stacked Button Layout */}
+        <div className="flex flex-col w-full md:w-48 gap-2 shrink-0">
           {!isReadOnly && (
             <Button
               size="sm"
               onClick={() => handleOpenModal()}
-              className="tour-log-expense bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold px-4 shadow-sm"
+              className="tour-log-expense w-full bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold shadow-sm"
             >
               + Log Expense
             </Button>
           )}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            className="w-full text-white border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 text-xs font-semibold shadow-sm"
+          >
+            📊 Export CSV
+          </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.dispatchEvent(new Event('restart-tour-expenses_tour'))}
+            className="w-full text-slate-400 border-slate-800 bg-transparent hover:bg-slate-800 hover:text-white h-8 text-[11px] font-semibold shadow-none border-none"
+          >
+            💡 Replay Tutorial
+          </Button>
         </div>
       </div>
 
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         <div className="p-6 space-y-6">
 
-          {/* Target: tour-budget-cards */}
           <div className="tour-budget-cards grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             <Card className="bg-white border border-slate-200 shadow-xs rounded-xl">
               <CardHeader className="pb-2 p-5">
@@ -446,7 +439,6 @@ export default function ExpenseTracker() {
             </Card>
           </div>
 
-          {/* Target: tour-expense-ledger */}
           <Card className="tour-expense-ledger bg-white border border-slate-200 shadow-xs rounded-xl">
             <CardHeader className="p-6 pb-2">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -479,7 +471,6 @@ export default function ExpenseTracker() {
                       {expenses.map((expense) => {
                         const lineTotal = (expense.materials || 0) + (expense.labor || 0)
                         return (
-                          // 🔥 Added 'group' to TableRow to enable the hover-reveal action buttons
                           <TableRow key={expense.id} className="group hover:bg-slate-50/80 border-b border-slate-100">
                             <TableCell className="w-16">
                               {expense.receiptPhoto ? (
@@ -507,8 +498,6 @@ export default function ExpenseTracker() {
                             <TableCell className="text-right font-bold text-slate-900 text-xs">
                               ${lineTotal.toLocaleString()}
                             </TableCell>
-                            
-                            {/* 🔥 Sleek Hover-to-Reveal Actions */}
                             <TableCell className="text-right whitespace-nowrap w-[80px]">
                               <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                 {isReadOnly ? (
@@ -557,7 +546,6 @@ export default function ExpenseTracker() {
         </div>
       </Card>
 
-      {/* Main Expense Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[480px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -692,13 +680,23 @@ export default function ExpenseTracker() {
                     Cancel
                   </Button>
                 </div>
+
+                {editingExpense && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={() => handleDeleteExpense(editingExpense.id)} 
+                    className="w-full shadow-sm bg-rose-600 hover:bg-rose-500 text-white font-bold"
+                  >
+                    Delete
+                  </Button>
+                )}
               </>
             )}
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Budget Dialog */}
       <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
         <DialogContent className="sm:max-w-[360px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -738,7 +736,6 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
 
-      {/* Category Breakdown Dialog */}
       <Dialog open={breakdownType !== null} onOpenChange={(open) => { if (!open) setBreakdownType(null) }}>
         <DialogContent className="sm:max-w-[480px] max-h-[85vh] flex flex-col p-0 overflow-hidden border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white [&>button]:top-5 [&>button]:right-5">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800">
@@ -802,7 +799,6 @@ export default function ExpenseTracker() {
         </DialogContent>
       </Dialog>
 
-      {/* Lightbox Dialog */}
       <Dialog open={Boolean(lightboxPhoto)} onOpenChange={() => setLightboxPhoto(null)}>
         <DialogContent className="max-w-[90vw] md:max-w-3xl h-[80vh] p-2 bg-black/95 border-slate-800 flex flex-col items-center justify-center">
           <div className="relative w-full h-full flex items-center justify-center p-2">
