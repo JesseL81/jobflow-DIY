@@ -435,8 +435,7 @@ export default function PunchListPage() {
       <PageTour steps={PUNCH_LIST_TOUR_STEPS} tourKey="punch_list_tour" />
 
       {/* Target: tour-punch-header with Minimalist Dropdown */}
-      <div className="tour-punch-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
-        <div>
+<div className="tour-punch-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 md:min-h-[140px] shrink-0">        <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
               ✅ Punch List & To-Do's {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
