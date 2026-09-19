@@ -146,7 +146,9 @@ export default function SelectionsPage() {
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
   
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
-  const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_selections_rooms_list", DEFAULT_ROOMS)
+  
+  // 🔥 Step 1: Bind this directly to the Shared Vision Board Room key
+  const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
   
   const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
     "Plumbing Fixtures": 500,
@@ -210,6 +212,31 @@ export default function SelectionsPage() {
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  // 🔥 Smart Migration: Grabs any custom rooms you previously added to Selections and moves them to the new Shared list safely
+  useEffect(() => {
+    const performSmartMerge = async () => {
+      const hasMerged = localStorage.getItem("cleanbuild_rooms_merged_v2")
+      if (!hasMerged) {
+        try {
+          const oldRooms = await get<string[]>("cleanbuild_selections_rooms_list")
+          if (oldRooms && Array.isArray(oldRooms)) {
+            setRooms((currentShared) => {
+              const combined = Array.from(new Set([...oldRooms, ...currentShared]))
+              return ["All Rooms", ...combined.filter(r => r !== "All Rooms")]
+            })
+          }
+        } catch (e) {
+          console.error("Migration failed", e)
+        } finally {
+          localStorage.setItem("cleanbuild_rooms_merged_v2", "true")
+        }
+      }
+    }
+    if (isMounted) {
+      performSmartMerge()
+    }
+  }, [isMounted, setRooms])
 
   useEffect(() => {
     if (isMounted) {
@@ -1002,7 +1029,8 @@ export default function SelectionsPage() {
                               onChange={() => handleToggleCheck(item.id)}
                               className={`mt-1 h-4 w-4 rounded accent-indigo-600 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                             />
-                            <div>
+
+                            <div className="flex flex-col">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <Badge variant="outline" className={`text-[10px] font-semibold bg-slate-900 text-white hover:bg-slate-800`}>
                                   🏠 {item.room || "Other"}
@@ -1478,7 +1506,7 @@ export default function SelectionsPage() {
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsModalOpen(false)} 
-                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100"
+                className="w-full shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
               >
                 Close View
               </Button>
