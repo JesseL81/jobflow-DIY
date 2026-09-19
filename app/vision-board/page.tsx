@@ -650,11 +650,11 @@ export default function VisionBoardPage() {
         updatedItems = [updatedItem, ...(boardItems || [])]
       }
       
-      await setBoardItems(updatedItems)
+      setBoardItems(updatedItems)
 
       if (isPromoted) {
         const selectionTitle = linkTitle || updatedItem.notes.split('\n')[0].substring(0, 30) || "Vision Board Item"
-        const selectionPhoto = linkImage || (updatedItem.photos.length > 0 ? updatedItem.photos[0] : undefined)
+        const selectionPhoto = linkImage || ((updatedItem.photos || []).length > 0 ? updatedItem.photos[0] : undefined)
         
         const newSelection: SelectionItem = {
           id: finalIdStr,
@@ -677,7 +677,7 @@ export default function VisionBoardPage() {
           ? existingSelections.map(s => s.id === finalIdStr ? newSelection : s)
           : [newSelection, ...existingSelections]
 
-        await setSelections(updatedSelectionsList)
+        setSelections(updatedSelectionsList)
 
         if (syncToExpenses && estimatedPrice) {
           const cost = parseFloat(estimatedPrice.replace(/[^0-9.]/g, '')) || 0
@@ -695,14 +695,14 @@ export default function VisionBoardPage() {
               ? existingExpenses.map(e => e.id === finalId ? newExpense : e)
               : [newExpense, ...existingExpenses]
 
-            await setExpenses(updatedExpensesList)
+            setExpenses(updatedExpensesList)
             if (typeof window !== "undefined") {
               window.dispatchEvent(new Event("expenses-updated"))
             }
           }
         } else if (!syncToExpenses) {
           const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
-          await setExpenses(updatedExpensesList)
+          setExpenses(updatedExpensesList)
           if (typeof window !== "undefined") {
             window.dispatchEvent(new Event("expenses-updated"))
           }
@@ -710,10 +710,10 @@ export default function VisionBoardPage() {
 
       } else {
         const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
-        await setSelections(updatedSelectionsList)
+        setSelections(updatedSelectionsList)
 
         const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
-        await setExpenses(updatedExpensesList)
+        setExpenses(updatedExpensesList)
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("expenses-updated"))
         }
@@ -732,13 +732,13 @@ export default function VisionBoardPage() {
     const finalIdStr = finalId.toString()
 
     const updatedItems = (boardItems || []).filter((l) => l.id !== finalId)
-    await setBoardItems(updatedItems)
+    setBoardItems(updatedItems)
     
     const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
-    await setSelections(updatedSelectionsList)
+    setSelections(updatedSelectionsList)
     
     const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
-    await setExpenses(updatedExpensesList)
+    setExpenses(updatedExpensesList)
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("expenses-updated"))
     }
@@ -754,6 +754,7 @@ export default function VisionBoardPage() {
       <PaywallOverlay show={showPaywall} />
       <PageTour steps={VISION_BOARD_TOUR_STEPS} tourKey="vision_board_tour" />
 
+      {/* Target: tour-vision-header with Minimalist Dropdown */}
       <div className="tour-vision-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -766,6 +767,7 @@ export default function VisionBoardPage() {
           </p>
         </div>
 
+        {/* Minimalist Action Layout: One primary button + "More Options" menu */}
         <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           {!isReadOnly && (
@@ -968,6 +970,7 @@ export default function VisionBoardPage() {
                         <div className="space-y-3 flex-1 w-full">
                           
                           <div className="flex flex-wrap items-center gap-2">
+                            {/* 🔥 Visual Feedback: The Locked Badge */}
                             {item.isPromoted && (
                               <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold shadow-xs">
                                 ✅ Selected
@@ -1079,6 +1082,7 @@ export default function VisionBoardPage() {
         </div>
       </Card>
 
+      {/* DELETE CATEGORY MODAL */}
       <Dialog open={isCategoryDeleteModalOpen} onOpenChange={setIsCategoryDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1126,7 +1130,7 @@ export default function VisionBoardPage() {
                           <select
                             value={categoryMoveTarget}
                             onChange={(e) => setCategoryMoveTarget(e.target.value)}
-                            className="flex w-full h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
                           >
                             {(rooms || []).filter(c => c !== "All Rooms" && c !== categoryToDelete).map(c => (
                               <option key={c} value={c}>{c}</option>
@@ -1172,6 +1176,7 @@ export default function VisionBoardPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Main Edit Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1185,10 +1190,10 @@ export default function VisionBoardPage() {
             )}
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-white">
+          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="item-date" className="block mb-1 font-semibold text-slate-700 text-xs">Date Added</label>
+              <div className="grid gap-1.5">
+                <Label htmlFor="item-date" className="font-semibold text-slate-700 text-xs">Date Added</Label>
                 <Input
                   id="item-date"
                   type="date"
@@ -1199,14 +1204,14 @@ export default function VisionBoardPage() {
                 />
               </div>
 
-              <div>
-                <label htmlFor="item-category" className="block mb-1 font-semibold text-slate-700 text-xs">Room / Area</label>
+              <div className="grid gap-1.5">
+                <Label htmlFor="item-category" className="font-semibold text-slate-700 text-xs">Room / Area</Label>
                 <select
                   id="item-category"
                   value={itemCategory}
                   disabled={isReadOnly}
                   onChange={(e) => setItemCategory(e.target.value)}
-                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {(rooms || []).filter(c => c !== "All Rooms").map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -1215,9 +1220,9 @@ export default function VisionBoardPage() {
               </div>
             </div>
 
-            <div className="border-t border-slate-100 pt-3">
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL</label>
+            <div className="grid gap-1.5 border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL</Label>
                 {isFetchingPreview && <span className="text-[10px] text-blue-600 font-bold animate-pulse">Fetching link preview...</span>}
               </div>
               <Input
@@ -1285,8 +1290,8 @@ export default function VisionBoardPage() {
               )}
             </div>
 
-            <div>
-              <label htmlFor="item-notes" className="block mb-1 font-semibold text-slate-700 text-xs">Idea Summary & Notes</label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="item-notes" className="font-semibold text-slate-700 text-xs">Idea Summary & Notes</Label>
               <textarea
                 id="item-notes"
                 rows={3}
@@ -1294,12 +1299,12 @@ export default function VisionBoardPage() {
                 value={itemNotes}
                 disabled={isReadOnly}
                 onChange={(e) => setItemNotes(e.target.value)}
-                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
             
-            <div className="border-t border-slate-100 pt-3 mt-1">
-              <label className="block mb-1 font-semibold text-slate-700 text-xs">Attached Board Photos</label>
+            <div className="grid gap-1.5 border-t border-slate-100 pt-3 mt-1">
+              <Label className="font-semibold text-slate-700 text-xs">Attached Board Photos</Label>
               
               {!isReadOnly && (
                 <div className="flex gap-2 mt-1">
@@ -1362,18 +1367,18 @@ export default function VisionBoardPage() {
                   <div className="p-4 pt-0 space-y-4 border-t border-emerald-100 bg-white">
                     <div className="grid grid-cols-2 gap-3 mt-3">
                       <div>
-                        <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Material Category</label>
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Material Category</Label>
                         <select
                           value={materialCategory}
                           onChange={(e) => setMaterialCategory(e.target.value)}
-                          className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           {MATERIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Estimated Price</label>
-                        <div className="relative">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Estimated Price</Label>
+                        <div className="relative mt-1">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">$</span>
                           <Input
                             placeholder="0.00"

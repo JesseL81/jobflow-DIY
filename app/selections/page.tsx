@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { get } from "idb-keyval"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -212,13 +211,12 @@ export default function SelectionsPage() {
   const [formPhotoUrl, setFormPhotoUrl] = useState<string>("")
   const [formSyncToVisionBoard, setFormSyncToVisionBoard] = useState<boolean>(false)
 
-  // Smart Merge Engine
   useEffect(() => {
-    const performSmartMerge = async () => {
+    const performSmartMerge = () => {
       const hasMerged = localStorage.getItem("cleanbuild_rooms_merged_selections")
       if (!hasMerged) {
-        const oldRooms = await get<string[]>("cleanbuild_selections_rooms_list") || []
-        const currentShared = await get<string[]>("cleanbuild_shared_rooms") || DEFAULT_ROOMS
+        const oldRooms = JSON.parse(localStorage.getItem("cleanbuild_selections_rooms_list") || "[]")
+        const currentShared = rooms || DEFAULT_ROOMS
         
         const combined = Array.from(new Set([...oldRooms, ...currentShared]))
         const fixed = ["All Rooms", ...combined.filter(r => r !== "All Rooms" && r !== "All Categories")]
@@ -227,8 +225,8 @@ export default function SelectionsPage() {
         localStorage.setItem("cleanbuild_rooms_merged_selections", "true")
       }
     }
-    performSmartMerge()
-  }, [setRooms])
+    if (isMounted) performSmartMerge()
+  }, [isMounted, rooms, setRooms])
 
   useEffect(() => {
     setIsMounted(true)
@@ -356,7 +354,7 @@ export default function SelectionsPage() {
   const handleToggleCheck = async (id: string) => {
     if (isReadOnly) return
     const updatedItems = (items || []).map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
-    await setItems(updatedItems)
+    setItems(updatedItems)
   }
 
   const filteredItems = useMemo(() => {
@@ -375,7 +373,7 @@ export default function SelectionsPage() {
     if (isReadOnly || !newRoomName.trim()) return
     const trimmed = newRoomName.trim()
     if (!(rooms || []).includes(trimmed)) {
-      await setRooms([...(rooms || []), trimmed])
+      setRooms([...(rooms || []), trimmed])
     }
     setNewRoomName("")
     setIsAddingRoom(false)
@@ -386,7 +384,7 @@ export default function SelectionsPage() {
     if (isReadOnly || !newCategoryName.trim()) return
     const trimmed = newCategoryName.trim()
     if (!(categories || []).includes(trimmed)) {
-      await setCategories([...(categories || []), trimmed])
+      setCategories([...(categories || []), trimmed])
     }
     setNewCategoryName("")
     setIsAddingCategory(false)
@@ -413,7 +411,7 @@ export default function SelectionsPage() {
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
         
         const filteredExpenses = (expenses || []).filter(e => !idsToDelete.has(e.id.toString()))
-        await setExpenses(filteredExpenses)
+        setExpenses(filteredExpenses)
         if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
 
       } else if (roomDeleteMode === "move" && roomMoveTarget) {
@@ -422,8 +420,8 @@ export default function SelectionsPage() {
         )
       }
     }
-    await setItems(updatedItems)
-    await setRooms((rooms || []).filter(r => r !== roomToDelete))
+    setItems(updatedItems)
+    setRooms((rooms || []).filter(r => r !== roomToDelete))
     if (selectedRoom === roomToDelete) setSelectedRoom("All Rooms")
     setIsRoomDeleteModalOpen(false)
     setRoomToDelete(null)
@@ -449,7 +447,7 @@ export default function SelectionsPage() {
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
 
         const filteredExpenses = (expenses || []).filter(e => !idsToDelete.has(e.id.toString()))
-        await setExpenses(filteredExpenses)
+        setExpenses(filteredExpenses)
         if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
 
       } else if (categoryDeleteMode === "move" && categoryMoveTarget) {
@@ -458,8 +456,8 @@ export default function SelectionsPage() {
         )
       }
     }
-    await setItems(updatedItems)
-    await setCategories((categories || []).filter(c => c !== categoryToDelete))
+    setItems(updatedItems)
+    setCategories((categories || []).filter(c => c !== categoryToDelete))
     if (selectedCategory === categoryToDelete) setSelectedCategory("All Categories")
     setIsCategoryDeleteModalOpen(false)
     setCategoryToDelete(null)
@@ -469,7 +467,7 @@ export default function SelectionsPage() {
     if (isReadOnly) return
     const num = parseFloat(tempBudgetVal) || 0
     const updatedBudgets = { ...categoryBudgets, [selectedCategory]: num }
-    await setCategoryBudgets(updatedBudgets)
+    setCategoryBudgets(updatedBudgets)
     setIsBudgetModalOpen(false)
   }
 
@@ -556,7 +554,7 @@ export default function SelectionsPage() {
         ? (items || []).map((i) => (i.id === editingItem.id ? updatedItem : i))
         : [updatedItem, ...(items || [])]
       
-      await setItems(updatedItemsList)
+      setItems(updatedItemsList)
 
       const existingVbItem = (visionBoardItems || []).find(v => v.id === parsedId)
       
@@ -584,10 +582,10 @@ export default function SelectionsPage() {
             ? (visionBoardItems || []).map(v => v.id === parsedId ? vbItem : v)
             : [vbItem, ...(visionBoardItems || [])]
             
-        await setVisionBoardItems(newVbList)
+        setVisionBoardItems(newVbList)
       } else if (editingItem?.syncToVisionBoard && !formSyncToVisionBoard) {
           const newVbList = (visionBoardItems || []).filter(v => v.id !== parsedId)
-          await setVisionBoardItems(newVbList)
+          setVisionBoardItems(newVbList)
       }
 
       if (formSyncToExpenses) {
@@ -600,11 +598,11 @@ export default function SelectionsPage() {
           date: new Date().toISOString().split("T")[0],
         }
         const newExpenseList = [newExpenseRecord, ...filteredExpenses]
-        await setExpenses(newExpenseList)
+        setExpenses(newExpenseList)
         if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
       } else if (editingItem && editingItem.syncToExpenses && !formSyncToExpenses) {
         const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
-        await setExpenses(filteredExpenses)
+        setExpenses(filteredExpenses)
         if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
       }
 
@@ -619,13 +617,13 @@ export default function SelectionsPage() {
     const parsedId = parseInt(editingItem.id)
 
     const updatedItems = (items || []).filter((i) => i.id !== editingItem.id)
-    await setItems(updatedItems)
+    setItems(updatedItems)
     
     const updatedVB = (visionBoardItems || []).filter(v => v.id !== parsedId)
-    await setVisionBoardItems(updatedVB)
+    setVisionBoardItems(updatedVB)
 
     const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
-    await setExpenses(filteredExpenses)
+    setExpenses(filteredExpenses)
     if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
 
     setIsModalOpen(false)
@@ -714,7 +712,6 @@ export default function SelectionsPage() {
       <PaywallOverlay show={showPaywall} />
       <PageTour steps={SELECTIONS_TOUR_STEPS} tourKey="selections_tour" />
 
-      {/* Target: tour-selections-header with Minimalist Dropdown */}
       <div className="tour-selections-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -797,7 +794,6 @@ export default function SelectionsPage() {
             
             <div className="tour-selections-filters md:col-span-1 space-y-4">
               
-              {/* --- ROOMS FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2">
                   Filter by Room
@@ -905,7 +901,6 @@ export default function SelectionsPage() {
                 )}
               </div>
 
-              {/* --- CATEGORIES FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2 mt-2">
                   Filter by Category
@@ -1384,6 +1379,7 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Budget Dialog */}
       <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
         <DialogContent className="sm:max-w-[360px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1421,6 +1417,7 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Main Item Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] relative z-10">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0 relative z-10">
@@ -1516,6 +1513,7 @@ export default function SelectionsPage() {
                 className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
 
+              {/* 🔥 Auto-Fetch Link Preview Block */}
               {fetchError && !isReadOnly && (
                 <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3 shadow-sm">
                   <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
@@ -1689,6 +1687,7 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* 🔥 HIDDEN EXPORT RENDER DIV */}
       <div className="absolute top-[-9999px] left-[-9999px]">
         {exportTarget && (
           <div
