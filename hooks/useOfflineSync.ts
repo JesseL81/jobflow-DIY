@@ -26,14 +26,15 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
            }
         }
         
-        // 🔥 The Fix: Global keys bypass the project namespace
         const isGlobal = storeKey === "cleanbuild_projects_list"
         const localKey = (wid && !isGlobal) ? `${storeKey}_${wid}` : storeKey
         localKeyRef.current = localKey
 
         let localData = await get<T>(localKey)
         
-        if (localData === undefined && localKey !== storeKey) {
+        // 🔥 FIX 1: Only migrate legacy data into the PRIMARY workspace. 
+        // Brand new projects (which start with 'proj_') get a strict blank slate.
+        if (localData === undefined && localKey !== storeKey && wid && !wid.startsWith("proj_")) {
           const legacyData = await get<T>(storeKey)
           if (legacyData !== undefined) {
             localData = legacyData
@@ -71,9 +72,12 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
 
     const handleWorkspaceChange = () => {
       if (isMounted) {
-        // 🔥 The Fix: Don't force global keys to wipe/reload on workspace switch
         if (storeKey !== "cleanbuild_projects_list") {
           setIsLoaded(false)
+          // 🔥 FIX 2: Instantly wipe the UI screen clean the millisecond the project switches!
+          setData(fallbackData)
+          currentDataRef.current = fallbackData
+          // Then fetch the new project's data
           initialize() 
         }
       }

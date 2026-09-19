@@ -18,7 +18,7 @@ export const ALL_STORE_KEYS = [
   "cleanbuild_shared_rooms",
   "cleanbuild_documents_folders",
   "cleanbuild_documents_items",
-  "cleanbuild_projects_list" // 🔥 Added to master sync list
+  "cleanbuild_projects_list" 
 ] as const
 
 const getWorkspaceContext = async () => {
@@ -48,7 +48,6 @@ export const syncManager = {
          return
       }
 
-      // 🔥 The Fix: Global keys save directly to your User ID, not the child workspace
       const targetWorkspaceId = isGlobal 
         ? userData.user.id 
         : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) : userData.user.id)
@@ -94,7 +93,9 @@ export const syncManager = {
     const localDataKey = isGlobal ? storeKey : `${storeKey}_${wid}`
 
     const legacyDirty = await get(`dirty_${storeKey}`)
-    if (legacyDirty && !isGlobal) {
+    
+    // 🔥 FIX: Prevent legacy dirty flags from cross-contaminating new blank projects
+    if (legacyDirty && !isGlobal && wid && !wid.startsWith("proj_")) {
        await set(localDirtyKey, true)
        await set(`dirty_${storeKey}`, false)
     }
