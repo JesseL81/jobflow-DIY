@@ -171,7 +171,6 @@ export default function DashboardPage() {
         setCurrentUserEmail(user.email)
         localStorage.setItem("cleanbuild_user_id", user.id)
         
-        // 🔥 The Fix: Safely auto-seed the primary project only if the array is genuinely empty
         setProjectsList((prev) => {
           if (!prev || prev.length === 0) {
             return [{ id: user.id, name: "My Primary Project", role: "owner" }]
@@ -242,6 +241,34 @@ export default function DashboardPage() {
     
     setIsCreateModalOpen(false)
     setNewProjectName("")
+  }
+
+  // 🔥 Project Deletion Engine
+  const handleDeleteProject = async () => {
+    if (!activeProject.startsWith("proj_")) {
+      alert("You cannot delete your primary project.")
+      return
+    }
+
+    const projToDelete = projectsList.find(p => p.id === activeProject)
+    
+    if (!window.confirm(`Are you sure you want to permanently delete "${projToDelete?.name || 'this project'}" and all its data? This cannot be undone.`)) {
+      return
+    }
+
+    // Remove from the master list
+    const updatedList = projectsList.filter(p => p.id !== activeProject)
+    await setProjectsList(updatedList)
+
+    // Find a fallback project (the primary account)
+    const primaryProject = updatedList.find(p => !p.id.startsWith("proj_")) || updatedList[0]
+    const newActiveId = primaryProject ? primaryProject.id : "default"
+
+    // Switch active workspace safely back to primary
+    localStorage.setItem("cleanbuild_active_workspace", newActiveId)
+    setActiveProject(newActiveId)
+    window.dispatchEvent(new Event("workspace-changed"))
+    setIsOptionsOpen(false)
   }
 
   const hideExpenses = isGuest && permissions?.expenses === "hidden"
@@ -489,10 +516,20 @@ export default function DashboardPage() {
                       setIsOptionsOpen(false)
                       window.dispatchEvent(new Event('restart-tour-dashboard_tour'))
                     }}
-                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
                   >
                     <span>💡</span> Replay Tutorial
                   </button>
+
+                  {/* 🔥 The Delete Project Button */}
+                  {activeProject.startsWith("proj_") && (
+                    <button
+                      onClick={handleDeleteProject}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors border-t border-slate-100"
+                    >
+                      <span>🗑️</span> Delete Project
+                    </button>
+                  )}
                 </div>
               </>
             )}

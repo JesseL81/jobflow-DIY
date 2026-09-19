@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase"
 import { clear } from "idb-keyval"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { useOfflineSync } from "@/hooks/useOfflineSync"
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -34,7 +35,11 @@ const routeToPermissionKey: Record<string, string> = {
   "/contacts": "contacts",
 }
 
-type Workspace = { id: string; name: string; isOwner: boolean }
+interface ProjectWorkspace {
+  id: string
+  name: string
+  role: "owner" | "guest"
+}
 
 function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
@@ -62,7 +67,12 @@ function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGE
 export default function SidebarNav() {
   const pathname = usePathname()
   
-  const [projectName, setProjectName] = useState("My Project")
+  // 🔥 New Multi-Project Sync Source
+  const [projectsList, setProjectsList] = useOfflineSync<ProjectWorkspace[]>("cleanbuild_projects_list", [])
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
+  const [currentUserId, setCurrentUserId] = useState<string>("")
+
+  const [projectName, setProjectName] = useState("My Primary Project")
   const [isEditingName, setIsEditingName] = useState(false)
   const [tempName, setTempName] = useState("")
 
@@ -70,65 +80,47 @@ export default function SidebarNav() {
   const [isGuest, setIsGuest] = useState(false)
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isNavLoading, setIsNavLoading] = useState(true)
-
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
   const [isSwitching, setIsSwitching] = useState(false)
-  
   const [restrictedModalOpen, setRestrictedModalOpen] = useState(false)
 
+  // Listen for Dashboard project switches
   useEffect(() => {
-    const savedName = localStorage.getItem("cleanbuild_project_name")
-    if (savedName) setProjectName(savedName)
-
-    const verifyCloudName = async () => {
-      try {
-        const cloudName = await syncManager.pullFromCloud("cleanbuild_project_name")
-        if (cloudName && typeof cloudName === "string" && cloudName !== savedName) {
-          setProjectName(cloudName)
-          localStorage.setItem("cleanbuild_project_name", cloudName)
-          window.dispatchEvent(new Event("project-name-updated"))
-        }
-      } catch (e) {}
+    const handleWorkspaceChange = () => {
+      const wid = localStorage.getItem("cleanbuild_active_workspace") || currentUserId
+      setActiveWorkspaceId(wid)
     }
-    verifyCloudName()
-  }, [])
+    
+    window.addEventListener("workspace-changed", handleWorkspaceChange)
+    handleWorkspaceChange()
+    
+    return () => window.removeEventListener("workspace-changed", handleWorkspaceChange)
+  }, [currentUserId])
+
+  // Sync Sidebar Name with Active Project Data
+  useEffect(() => {
+    if ((projectsList || []).length > 0 && activeWorkspaceId) {
+      const activeProj = projectsList.find(p => p.id === activeWorkspaceId)
+      if (activeProj) {
+        setProjectName(activeProj.name)
+        setTempName(activeProj.name)
+      } else {
+        setProjectName("My Primary Project")
+        setTempName("My Primary Project")
+      }
+    }
+  }, [projectsList, activeWorkspaceId])
 
   useEffect(() => {
     const fetchCoreData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
+        setCurrentUserId(user.id)
 
         const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
         if (profile) setAccountTier(profile.tier)
 
-        const { data: workspaceData, error: rpcError } = await supabase.rpc("get_workspace_list", {
-          current_user_id: user.id,
-          current_email: user.email
-        })
-        
-        let availableWorkspaces: Workspace[] = []
-        if (workspaceData && !rpcError) {
-          availableWorkspaces = workspaceData.map((w: any) => ({
-            id: w.id,
-            name: w.name,
-            isOwner: w.is_owner
-          }))
-        } else {
-          availableWorkspaces = [{ id: user.id, name: "🏠 My Build", isOwner: true }]
-        }
-        
-        setWorkspaces(availableWorkspaces)
-
-        let currentWorkspaceId = localStorage.getItem("cleanbuild_active_workspace")
-        
-        if (!currentWorkspaceId || !availableWorkspaces.find(w => w.id === currentWorkspaceId)) {
-          const sharedWorkspace = availableWorkspaces.find(w => !w.isOwner)
-          currentWorkspaceId = sharedWorkspace ? sharedWorkspace.id : user.id
-          localStorage.setItem("cleanbuild_active_workspace", currentWorkspaceId)
-        }
-        
+        const currentWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
         setActiveWorkspaceId(currentWorkspaceId)
 
         if (currentWorkspaceId === user.id) {
@@ -157,26 +149,52 @@ export default function SidebarNav() {
 
   const handleSaveProjectName = async () => {
     const finalName = tempName.trim() || "My Project"
-    setProjectName(finalName)
-    localStorage.setItem("cleanbuild_project_name", finalName)
     
-    try {
-      await syncManager.pushToCloud("cleanbuild_project_name", finalName)
-    } catch (e) {}
-
-    window.dispatchEvent(new Event("project-name-updated"))
+    const updatedList = (projectsList || []).map(p => 
+      p.id === activeWorkspaceId ? { ...p, name: finalName } : p
+    )
+    
+    // Safety fallback: if list is entirely empty, seed it
+    if (updatedList.length === 0 && currentUserId) {
+      updatedList.push({ id: currentUserId, name: finalName, role: "owner" })
+    }
+    
+    await setProjectsList(updatedList)
+    setProjectName(finalName)
     setIsEditingName(false)
+    window.dispatchEvent(new Event("workspace-changed"))
   }
 
   const handleWorkspaceChange = async (newWorkspaceId: string) => {
     if (newWorkspaceId === activeWorkspaceId) return
 
     setIsSwitching(true)
-    await clear()
     localStorage.setItem("cleanbuild_active_workspace", newWorkspaceId)
-    localStorage.removeItem("cleanbuild_project_name")
+    window.dispatchEvent(new Event("workspace-changed"))
     window.location.href = "/dashboard"
   }
+
+  const handleDeleteProject = async () => {
+    if (!activeWorkspaceId.startsWith("proj_")) return
+    
+    if (!window.confirm(`🚨 Are you sure you want to permanently delete "${projectName}" and all its tasks, expenses, and photos? This cannot be undone.`)) {
+      return
+    }
+    
+    setIsSwitching(true)
+    
+    const updatedList = (projectsList || []).filter(p => p.id !== activeWorkspaceId)
+    await setProjectsList(updatedList)
+    
+    const fallbackId = currentUserId || "default"
+    localStorage.setItem("cleanbuild_active_workspace", fallbackId)
+    setActiveWorkspaceId(fallbackId)
+    
+    window.dispatchEvent(new Event("workspace-changed"))
+    window.location.href = "/dashboard"
+  }
+
+  const isSecondaryProject = activeWorkspaceId.startsWith("proj_")
 
   return (
     <div className="w-full flex flex-col h-full relative">
@@ -207,17 +225,28 @@ export default function SidebarNav() {
               placeholder="Project Name..."
             />
           ) : (
-            <div className="flex items-center gap-3 w-full group">
+            <div className="flex items-center gap-2 w-full group">
               {!isGuest && accountTier !== "free" && (
-                <button 
-                  onClick={() => { setTempName(projectName); setIsEditingName(true); }}
-                  className="text-base text-slate-500 hover:text-orange-400 transition-colors shrink-0"
-                  title="Edit Project Name"
-                >
-                  ✏️
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button 
+                    onClick={() => { setTempName(projectName); setIsEditingName(true); }}
+                    className="text-base text-slate-500 hover:text-orange-400 transition-colors"
+                    title="Edit Project Name"
+                  >
+                    ✏️
+                  </button>
+                  {isSecondaryProject && (
+                    <button 
+                      onClick={handleDeleteProject}
+                      className="text-base text-slate-500 hover:text-rose-500 transition-colors"
+                      title="Delete Project"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
               )}
-              <span className="text-base font-bold text-slate-200 truncate" title={projectName}>
+              <span className="text-base font-bold text-slate-200 truncate ml-1" title={projectName}>
                 {projectName}
               </span>
             </div>
@@ -225,16 +254,17 @@ export default function SidebarNav() {
         </div>
       </div>
 
-      {workspaces.length > 1 && (
+      {/* Global Project Switcher Pills */}
+      {(projectsList || []).length > 1 && (
         <div className="px-4 pb-4 shrink-0">
-          <div className="bg-slate-900 p-1.5 rounded-lg flex items-center border border-slate-700 shadow-inner gap-1">
-            {workspaces.map((w) => {
+          <div className="bg-slate-900 p-1.5 rounded-lg flex items-center border border-slate-700 shadow-inner gap-1 overflow-x-auto custom-scrollbar">
+            {(projectsList || []).map((w) => {
               const isActive = activeWorkspaceId === w.id
               return (
                 <button
                   key={w.id}
                   onClick={() => handleWorkspaceChange(w.id)}
-                  className={`flex-1 text-[11px] font-bold py-2 px-2 rounded-md transition-all truncate ${
+                  className={`flex-1 min-w-[70px] text-[11px] font-bold py-2 px-2 rounded-md transition-all truncate ${
                     isActive
                       ? "bg-blue-600 text-white shadow-sm"
                       : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
