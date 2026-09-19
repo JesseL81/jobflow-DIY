@@ -243,7 +243,6 @@ export default function DashboardPage() {
     setNewProjectName("")
   }
 
-  // 🔥 Project Deletion Engine
   const handleDeleteProject = async () => {
     if (!activeProject.startsWith("proj_")) {
       alert("You cannot delete your primary project.")
@@ -256,15 +255,12 @@ export default function DashboardPage() {
       return
     }
 
-    // Remove from the master list
     const updatedList = projectsList.filter(p => p.id !== activeProject)
     await setProjectsList(updatedList)
 
-    // Find a fallback project (the primary account)
     const primaryProject = updatedList.find(p => !p.id.startsWith("proj_")) || updatedList[0]
     const newActiveId = primaryProject ? primaryProject.id : "default"
 
-    // Switch active workspace safely back to primary
     localStorage.setItem("cleanbuild_active_workspace", newActiveId)
     setActiveProject(newActiveId)
     window.dispatchEvent(new Event("workspace-changed"))
@@ -507,25 +503,25 @@ export default function DashboardPage() {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </Button>
 
+            {/* 🔥 Updated Dropdown UI to dark blue slate */}
             {isOptionsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
                   <button
                     onClick={() => {
                       setIsOptionsOpen(false)
                       window.dispatchEvent(new Event('restart-tour-dashboard_tour'))
                     }}
-                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 transition-colors"
                   >
                     <span>💡</span> Replay Tutorial
                   </button>
 
-                  {/* 🔥 The Delete Project Button */}
                   {activeProject.startsWith("proj_") && (
                     <button
                       onClick={handleDeleteProject}
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors border-t border-slate-100"
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-400 hover:bg-slate-700 hover:text-rose-300 flex items-center gap-2 transition-colors border-t border-slate-700"
                     >
                       <span>🗑️</span> Delete Project
                     </button>

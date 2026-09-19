@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { syncManager } from "@/lib/syncManager"
 import { supabase } from "@/lib/supabase"
-import { clear } from "idb-keyval"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
@@ -67,7 +66,7 @@ function LogoCBBlock({ className = "h-9 w-9", ...props }: React.SVGProps<SVGSVGE
 export default function SidebarNav() {
   const pathname = usePathname()
   
-  // 🔥 New Multi-Project Sync Source
+  // Multi-Project Sync Source
   const [projectsList, setProjectsList] = useOfflineSync<ProjectWorkspace[]>("cleanbuild_projects_list", [])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("")
   const [currentUserId, setCurrentUserId] = useState<string>("")
@@ -80,7 +79,6 @@ export default function SidebarNav() {
   const [isGuest, setIsGuest] = useState(false)
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isNavLoading, setIsNavLoading] = useState(true)
-  const [isSwitching, setIsSwitching] = useState(false)
   const [restrictedModalOpen, setRestrictedModalOpen] = useState(false)
 
   // Listen for Dashboard project switches
@@ -165,46 +163,8 @@ export default function SidebarNav() {
     window.dispatchEvent(new Event("workspace-changed"))
   }
 
-  const handleWorkspaceChange = async (newWorkspaceId: string) => {
-    if (newWorkspaceId === activeWorkspaceId) return
-
-    setIsSwitching(true)
-    localStorage.setItem("cleanbuild_active_workspace", newWorkspaceId)
-    window.dispatchEvent(new Event("workspace-changed"))
-    window.location.href = "/dashboard"
-  }
-
-  const handleDeleteProject = async () => {
-    if (!activeWorkspaceId.startsWith("proj_")) return
-    
-    if (!window.confirm(`🚨 Are you sure you want to permanently delete "${projectName}" and all its tasks, expenses, and photos? This cannot be undone.`)) {
-      return
-    }
-    
-    setIsSwitching(true)
-    
-    const updatedList = (projectsList || []).filter(p => p.id !== activeWorkspaceId)
-    await setProjectsList(updatedList)
-    
-    const fallbackId = currentUserId || "default"
-    localStorage.setItem("cleanbuild_active_workspace", fallbackId)
-    setActiveWorkspaceId(fallbackId)
-    
-    window.dispatchEvent(new Event("workspace-changed"))
-    window.location.href = "/dashboard"
-  }
-
-  const isSecondaryProject = activeWorkspaceId.startsWith("proj_")
-
   return (
     <div className="w-full flex flex-col h-full relative">
-      
-      {isSwitching && (
-        <div className="absolute inset-0 bg-slate-900/80 z-50 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400"></div>
-        </div>
-      )}
-
       <div className="px-4 pt-5 pb-4 flex flex-col gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <LogoCBBlock className="h-10 w-10 shrink-0 drop-shadow-md" />
@@ -225,59 +185,23 @@ export default function SidebarNav() {
               placeholder="Project Name..."
             />
           ) : (
-            <div className="flex items-center gap-2 w-full group">
+            <div className="flex items-center gap-3 w-full group">
               {!isGuest && accountTier !== "free" && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <button 
-                    onClick={() => { setTempName(projectName); setIsEditingName(true); }}
-                    className="text-base text-slate-500 hover:text-orange-400 transition-colors"
-                    title="Edit Project Name"
-                  >
-                    ✏️
-                  </button>
-                  {isSecondaryProject && (
-                    <button 
-                      onClick={handleDeleteProject}
-                      className="text-base text-slate-500 hover:text-rose-500 transition-colors"
-                      title="Delete Project"
-                    >
-                      🗑️
-                    </button>
-                  )}
-                </div>
+                <button 
+                  onClick={() => { setTempName(projectName); setIsEditingName(true); }}
+                  className="text-base text-slate-500 hover:text-orange-400 transition-colors shrink-0"
+                  title="Edit Project Name"
+                >
+                  ✏️
+                </button>
               )}
-              <span className="text-base font-bold text-slate-200 truncate ml-1" title={projectName}>
+              <span className="text-base font-bold text-slate-200 truncate" title={projectName}>
                 {projectName}
               </span>
             </div>
           )}
         </div>
       </div>
-
-      {/* Global Project Switcher Pills */}
-      {(projectsList || []).length > 1 && (
-        <div className="px-4 pb-4 shrink-0">
-          <div className="bg-slate-900 p-1.5 rounded-lg flex items-center border border-slate-700 shadow-inner gap-1 overflow-x-auto custom-scrollbar">
-            {(projectsList || []).map((w) => {
-              const isActive = activeWorkspaceId === w.id
-              return (
-                <button
-                  key={w.id}
-                  onClick={() => handleWorkspaceChange(w.id)}
-                  className={`flex-1 min-w-[70px] text-[11px] font-bold py-2 px-2 rounded-md transition-all truncate ${
-                    isActive
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  }`}
-                  title={w.name}
-                >
-                  {w.name}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       <div className="mx-4 mb-4 h-[3px] bg-orange-500 rounded-full shrink-0" />
 
