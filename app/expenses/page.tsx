@@ -513,7 +513,13 @@ export default function ExpenseTracker() {
                             <TableCell className="font-medium text-slate-600 text-xs whitespace-nowrap">
                               {formatDisplayDate(expense.date)}
                             </TableCell>
-                            <TableCell className="font-semibold text-slate-900 text-xs">{expense.description}</TableCell>
+                            {/* 🔥 Truncated Description Cell */}
+                            <TableCell 
+                              className="font-semibold text-slate-900 text-xs max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px] truncate"
+                              title={expense.description}
+                            >
+                              {expense.description}
+                            </TableCell>
                             <TableCell className="text-right text-blue-600 font-semibold text-xs">
                               {expense.materials ? `$${expense.materials.toLocaleString()}` : "-"}
                             </TableCell>
@@ -524,7 +530,6 @@ export default function ExpenseTracker() {
                               ${lineTotal.toLocaleString()}
                             </TableCell>
                             
-                            {/* 🔥 Permanently visible, standardized Action Buttons */}
                             <TableCell className="text-right whitespace-nowrap w-[80px]">
                               <div className="flex items-center justify-end gap-1">
                                 <Button 
@@ -684,7 +689,6 @@ export default function ExpenseTracker() {
                   </Button>
                 </div>
 
-                {/* 🔥 Red Delete Button moved safely to the bottom of the modal */}
                 {editingExpense && (
                   <Button 
                     variant="destructive" 
@@ -766,7 +770,13 @@ export default function ExpenseTracker() {
                   .map(expense => (
                     <TableRow key={expense.id} className="hover:bg-slate-50/50">
                       <TableCell className="px-2 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDisplayDate(expense.date)}</TableCell>
-                      <TableCell className="px-2 py-3 text-xs font-medium text-slate-900">{expense.description}</TableCell>
+                      {/* 🔥 Truncated Description Cell for Breakdown Modal */}
+                      <TableCell 
+                        className="px-2 py-3 text-xs font-medium text-slate-900 max-w-[120px] sm:max-w-[180px] truncate"
+                        title={expense.description}
+                      >
+                        {expense.description}
+                      </TableCell>
                       <TableCell className={`px-2 py-3 text-right text-xs font-bold ${breakdownType === 'materials' ? 'text-blue-600' : 'text-purple-600'}`}>
                         ${breakdownType === 'materials' ? expense.materials?.toLocaleString() : expense.labor?.toLocaleString()}
                       </TableCell>
