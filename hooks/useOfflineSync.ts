@@ -7,15 +7,30 @@ import { supabase } from "@/lib/supabase"
 
 // 🔥 Blank Slate Engine: Wipes example data for secondary projects while keeping structural defaults
 function getBlankSlate<T>(key: string, fallback: T): T {
-  // We want to keep standard folders/rooms/dates so the UI doesn't break
+  // We want to keep standard folders/rooms so the UI doesn't break
   if (
     key === "cleanbuild_shared_rooms" || 
     key === "cleanbuild_selections_categories_list" || 
     key === "cleanbuild_vision_board_categories" ||
-    key === "cleanbuild_project_dates" ||
     key === "cleanbuild_projects_list"
   ) {
     return fallback
+  }
+
+  // 🔥 FIX: Give new projects a fresh timeline starting today and ending in 30 days
+  if (key === "cleanbuild_project_dates") {
+    const today = new Date()
+    const nextMonth = new Date(today)
+    nextMonth.setDate(today.getDate() + 30)
+    
+    const formatDate = (d: Date) => {
+      const yyyy = d.getFullYear()
+      const mm = String(d.getMonth() + 1).padStart(2, "0")
+      const dd = String(d.getDate()).padStart(2, "0")
+      return `${yyyy}-${mm}-${dd}`
+    }
+    
+    return { startDate: formatDate(today), endDate: formatDate(nextMonth) } as unknown as T
   }
   
   // Dynamically wipe out the tutorial data
@@ -62,7 +77,7 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
           }
         }
         
-        // 🔥 Determine if this project gets the Tutorial Data or a Blank Slate
+        // Determine if this project gets the Tutorial Data or a Blank Slate
         const targetFallback = isSecondaryProject ? getBlankSlate(storeKey, fallbackData) : fallbackData
 
         if (isMounted) {
@@ -98,7 +113,7 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
         if (storeKey !== "cleanbuild_projects_list") {
           setIsLoaded(false)
           
-          // 🔥 The UI Wipe: Instantly clears the screen to a Blank Slate on project switch
+          // Instantly clear the screen to a Blank Slate on project switch
           const newWid = localStorage.getItem("cleanbuild_active_workspace")
           const isSecondary = newWid && newWid.startsWith("proj_")
           const targetFallback = isSecondary ? getBlankSlate(storeKey, fallbackData) : fallbackData
