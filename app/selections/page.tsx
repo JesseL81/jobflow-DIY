@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { PageTour } from "@/components/page-tour"
@@ -32,7 +31,6 @@ export interface SelectionItem {
   checked: boolean
   syncToExpenses?: boolean
   photoUrl?: string 
-  // 🔥 Bi-directional sync fields
   syncToVisionBoard?: boolean
   linkTitle?: string
   linkDescription?: string
@@ -40,7 +38,6 @@ export interface SelectionItem {
   linkImage?: string
 }
 
-// Ensure the structure perfectly matches the Vision Board data
 interface VisionBoardItem {
   id: number
   date: string 
@@ -144,8 +141,6 @@ const SELECTIONS_TOUR_STEPS = [
 export default function SelectionsPage() {
   const [isMounted, setIsMounted] = useState(false)
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
-  
-  // 🔥 Import Vision Board list to enable bi-directional saves
   const [visionBoardItems, setVisionBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", [])
   
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
@@ -208,7 +203,6 @@ export default function SelectionsPage() {
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Idea / Saved")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
   
-  // 🔥 New Unfurl / Autofetch State
   const [linkTitle, setLinkTitle] = useState("")
   const [linkDescription, setLinkDescription] = useState("")
   const [linkDomain, setLinkDomain] = useState("")
@@ -292,7 +286,6 @@ export default function SelectionsPage() {
     fetchUserAndPermissions()
   }, [])
 
-  // 🔥 Auto-Fetch Link Previews engine
   useEffect(() => {
     if (!formUrl.trim()) {
       setLinkTitle("")
@@ -327,7 +320,7 @@ export default function SelectionsPage() {
         setLinkDescription(json.description || "")
         setLinkDomain(json.domain || fallbackDomain)
         setLinkImage(json.image || "")
-        if (json.title && !formTitle) setFormTitle(json.title) // Auto-fill title if empty
+        if (json.title && !formTitle) setFormTitle(json.title) 
       } else {
         setFetchError(true)
         setLinkDomain(fallbackDomain)
@@ -501,7 +494,6 @@ export default function SelectionsPage() {
     setFormStatus("Idea / Saved")
     setFormSyncToExpenses(false)
     
-    // Clear autofurl state
     setFormPhotoUrl("")
     setLinkTitle("")
     setLinkDescription("")
@@ -526,7 +518,6 @@ export default function SelectionsPage() {
     setFormStatus(item.status || "Idea / Saved")
     setFormSyncToExpenses(!!item.syncToExpenses)
     
-    // Pre-load autofurl state
     setFormPhotoUrl(item.photoUrl || "")
     setLinkTitle(item.linkTitle || "")
     setLinkDescription(item.linkDescription || "")
@@ -538,7 +529,6 @@ export default function SelectionsPage() {
     setIsModalOpen(true)
   }
 
-  // 🔥 3-Way Sync Engine (Mirroring the Vision Board process)
   const handleSaveItem = async () => {
     if (isReadOnly || !formTitle.trim() || isSubmitting) return
     setIsSubmitting(true)
@@ -561,8 +551,6 @@ export default function SelectionsPage() {
         status: formStatus,
         checked: formSyncToExpenses ? true : (editingItem ? editingItem.checked : true),
         syncToExpenses: formSyncToExpenses,
-        
-        // Auto-fetch data
         photoUrl: finalLinkImage,
         syncToVisionBoard: formSyncToVisionBoard,
         linkTitle: linkTitle || formTitle.trim(),
@@ -571,14 +559,12 @@ export default function SelectionsPage() {
         linkImage: finalLinkImage
       }
 
-      // 1. Save to Selections Local Storage
       const updatedItemsList = editingItem 
         ? items.map((i) => (i.id === editingItem.id ? updatedItem : i))
         : [updatedItem, ...items]
       
       await setItems(updatedItemsList)
 
-      // 2. Sync to Vision Board
       const existingVbItem = (visionBoardItems || []).find(v => v.id === parsedId)
       
       if (formSyncToVisionBoard) {
@@ -611,7 +597,6 @@ export default function SelectionsPage() {
           await setVisionBoardItems(newVbList)
       }
 
-      // 3. Sync to Expenses Ledger
       if (formSyncToExpenses) {
         try {
           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
@@ -652,15 +637,12 @@ export default function SelectionsPage() {
     if (isReadOnly || !editingItem) return
     const parsedId = parseInt(editingItem.id)
 
-    // Remove from Selections
     const updatedItems = items.filter((i) => i.id !== editingItem.id)
     await setItems(updatedItems)
     
-    // Remove from Vision Board
     const updatedVB = (visionBoardItems || []).filter(v => v.id !== parsedId)
     await setVisionBoardItems(updatedVB)
 
-    // Remove from Expenses
     try {
       const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
       const filteredExpenses = existingExpenses.filter((e) => e.id !== parsedId)
@@ -914,6 +896,7 @@ export default function SelectionsPage() {
                   )
                 })}
 
+                {/* Add Custom Room */}
                 {isAddingRoom ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -1022,6 +1005,7 @@ export default function SelectionsPage() {
                   )
                 })}
 
+                {/* Add Custom Category */}
                 {isAddingCategory ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -1288,7 +1272,7 @@ export default function SelectionsPage() {
                           <select
                             value={roomMoveTarget}
                             onChange={(e) => setRoomMoveTarget(e.target.value)}
-                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
+                            className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             {rooms.filter(r => r !== "All Rooms" && r !== roomToDelete).map(r => (
                               <option key={r} value={r}>{r}</option>
@@ -1382,7 +1366,7 @@ export default function SelectionsPage() {
                           <select
                             value={categoryMoveTarget}
                             onChange={(e) => setCategoryMoveTarget(e.target.value)}
-                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
+                            className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             {categories.filter(c => c !== "All Categories" && c !== categoryToDelete).map(c => (
                               <option key={c} value={c}>{c}</option>
@@ -1435,7 +1419,7 @@ export default function SelectionsPage() {
             <DialogTitle className="text-orange-400 font-bold">Set Budget Target</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 px-6 py-4 bg-white">
-            <Label htmlFor="budget-input" className="text-xs font-semibold text-slate-700">Estimated Allowance / Budget ($)</Label>
+            <label htmlFor="budget-input" className="block text-xs font-semibold text-slate-700 mb-1">Estimated Allowance / Budget ($)</label>
             <Input
               id="budget-input"
               type="number"
@@ -1468,35 +1452,35 @@ export default function SelectionsPage() {
 
       {/* Main Item Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
-          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] relative z-10">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0 relative z-10">
             <DialogTitle className="text-orange-400 font-bold">
               {isReadOnly ? "View Material Selection" : editingItem ? "Edit Material Selection" : "Add New Material Selection"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-white">
             <div>
-              <Label htmlFor="item-title" className="text-xs font-semibold text-slate-700">Item Name / Title {isReadOnly ? "" : "*"}</Label>
+              <label htmlFor="item-title" className="block text-xs font-bold text-slate-700 mb-1">Item Name / Title {isReadOnly ? "" : "*"}</label>
               <Input 
                 id="item-title" 
                 placeholder="e.g. Kohler Pull-Down Kitchen Faucet" 
                 value={formTitle} 
                 disabled={isReadOnly}
                 onChange={(e) => setFormTitle(e.target.value)} 
-                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="item-room" className="text-xs font-semibold text-slate-700">Room / Location</Label>
+                <label htmlFor="item-room" className="block text-xs font-bold text-slate-700 mb-1">Room / Location</label>
                 <select
                   id="item-room"
                   value={formRoom}
                   disabled={isReadOnly}
                   onChange={(e) => setFormRoom(e.target.value)}
-                  className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {rooms.filter((r) => r !== "All Rooms").map((r) => (
                     <option key={r} value={r}>
@@ -1507,13 +1491,13 @@ export default function SelectionsPage() {
               </div>
 
               <div>
-                <Label htmlFor="item-cat" className="text-xs font-semibold text-slate-700">Material Category</Label>
+                <label htmlFor="item-cat" className="block text-xs font-bold text-slate-700 mb-1">Material Category</label>
                 <select
                   id="item-cat"
                   value={formCategory}
                   disabled={isReadOnly}
                   onChange={(e) => setFormCategory(e.target.value)}
-                  className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {categories.filter((c) => c !== "All Categories").map((c) => (
                     <option key={c} value={c}>
@@ -1525,13 +1509,13 @@ export default function SelectionsPage() {
             </div>
 
             <div>
-              <Label htmlFor="item-status" className="text-xs font-semibold text-slate-700">Status</Label>
+              <label htmlFor="item-status" className="block text-xs font-bold text-slate-700 mb-1">Status</label>
               <select
                 id="item-status"
                 value={formStatus}
                 disabled={isReadOnly}
                 onChange={(e) => setFormStatus(e.target.value as SelectionItem["status"])}
-                className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               >
                 <option value="Idea / Saved">Idea / Saved</option>
                 <option value="Selected">Selected</option>
@@ -1542,8 +1526,8 @@ export default function SelectionsPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="item-url" className="text-xs font-semibold text-slate-700">Product Link / URL</Label>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="item-url" className="block text-xs font-bold text-slate-700">Product Link / URL</label>
                 {isFetchingPreview && <span className="text-[10px] text-blue-600 font-bold animate-pulse">Fetching link preview...</span>}
               </div>
               <Input 
@@ -1559,7 +1543,7 @@ export default function SelectionsPage() {
                     setLinkDomain("")
                     setLinkDescription("")
                 }} 
-                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
 
               {/* 🔥 Auto-Fetch Link Preview Block */}
@@ -1608,8 +1592,8 @@ export default function SelectionsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="item-price" className="text-xs font-semibold text-slate-700">Est. Price</Label>
-                <div className="relative mt-1">
+                <label htmlFor="item-price" className="block text-xs font-bold text-slate-700 mb-1">Est. Price</label>
+                <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-medium">$</span>
                   <Input 
                     id="item-price" 
@@ -1622,37 +1606,37 @@ export default function SelectionsPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="item-model" className="text-xs font-semibold text-slate-700">Model / SKU #</Label>
+                <label htmlFor="item-model" className="block text-xs font-bold text-slate-700 mb-1">Model / SKU #</label>
                 <Input 
                   id="item-model" 
                   placeholder="e.g. K-596-VS" 
                   value={formModel} 
                   disabled={isReadOnly}
                   onChange={(e) => setFormModel(e.target.value)} 
-                  className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="item-notes" className="text-xs font-semibold text-slate-700">Notes / Requirements</Label>
+              <label htmlFor="item-notes" className="block text-xs font-bold text-slate-700 mb-1">Notes / Requirements</label>
               <Input 
                 id="item-notes" 
                 placeholder="e.g. Needs 3/8 valve connection, matte black finish" 
                 value={formNotes} 
                 disabled={isReadOnly}
                 onChange={(e) => setFormNotes(e.target.value)} 
-                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
-            <div className="grid gap-3 pt-2">
-              <div className="flex items-center justify-between p-3 bg-indigo-50/80 border border-indigo-200 rounded-lg">
+            <div className="space-y-2 pt-2">
+              <label className={`flex items-center justify-between p-3 bg-indigo-50/80 border border-indigo-200 rounded-lg ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
                 <div>
-                  <Label htmlFor="sync-vision-toggle" className={`font-semibold text-indigo-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+                  <span className="font-semibold text-indigo-950 text-xs block">
                     📷 Sync to Vision Board
-                  </Label>
-                  <p className="text-[11px] text-indigo-800 mt-1">
+                  </span>
+                  <p className="text-[11px] text-indigo-800 mt-1 pr-4">
                     Copies this selection back to your Vision Board for visual reference.
                   </p>
                 </div>
@@ -1664,14 +1648,14 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormSyncToVisionBoard(e.target.checked)}
                   className={`h-5 w-5 accent-indigo-600 rounded shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                 />
-              </div>
+              </label>
 
-              <div className="flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg">
+              <label className={`flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
                 <div>
-                  <Label htmlFor="sync-expenses-toggle" className={`font-semibold text-emerald-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+                  <span className="font-semibold text-emerald-950 text-xs block">
                     💰 Sync to Expenses Tab
-                  </Label>
-                  <p className="text-[11px] text-emerald-800 mt-1">
+                  </span>
+                  <p className="text-[11px] text-emerald-800 mt-1 pr-4">
                     Automatically logs material price under Project Expenses.
                   </p>
                 </div>
@@ -1683,12 +1667,12 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormSyncToExpenses(e.target.checked)}
                   className={`h-5 w-5 accent-emerald-600 rounded shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                 />
-              </div>
+              </label>
             </div>
 
           </div>
 
-          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white items-center">
+          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
             {isReadOnly ? (
               <Button 
                 variant="outline" 

@@ -1,20 +1,15 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
+import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { supabase } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription, 
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { PageTour } from "@/components/page-tour"
 
@@ -55,7 +50,7 @@ interface SelectionItem {
   photoUrl?: string
 }
 
-interface Expense {
+interface ExpenseItem {
   id: number
   date: string
   description: string
@@ -135,7 +130,7 @@ export default function VisionBoardPage() {
   const [boardItems, setBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", INITIAL_BOARD)
   const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
   const [selections, setSelections] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", [])
-  const [expenses, setExpenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", [])
+  const [expenses, setExpenses] = useOfflineSync<ExpenseItem[]>("cleanbuild_expenses", [])
 
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
@@ -365,16 +360,35 @@ export default function VisionBoardPage() {
     setCategoryToDelete(null)
   }
 
-  const sortedItems = useMemo(() => {
-    return [...(boardItems || [])].sort((a, b) => (b?.date || "").localeCompare(a?.date || ""))
-  }, [boardItems])
+  // 🔥 Dynamically merge Selections into the Vision Board List
+  const combinedItems = useMemo(() => {
+    const boardItemIds = new Set((boardItems || []).map(b => b.id.toString()))
+    const standaloneSelections = (selections || []).filter(s => !boardItemIds.has(s.id))
+
+    const mappedSelections: VisionBoardItem[] = standaloneSelections.map(s => ({
+      id: parseInt(s.id) || Date.now(),
+      date: new Date().toISOString().split("T")[0],
+      category: s.room || "All Rooms",
+      notes: s.notes || "",
+      url: s.vendorUrl,
+      photos: s.photoUrl ? [s.photoUrl] : [],
+      linkTitle: s.title,
+      materialCategory: s.category,
+      estimatedPrice: s.price,
+      isPromoted: true,
+      syncToExpenses: s.syncToExpenses,
+    }))
+
+    const merged = [...(boardItems || []), ...mappedSelections]
+    return merged.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+  }, [boardItems, selections])
 
   const filteredItems = useMemo(() => {
-    return (sortedItems || []).filter(item => {
+    return (combinedItems || []).filter(item => {
       if (selectedRoom === "All Rooms") return true
       return (item?.category || "Kitchen") === selectedRoom
     })
-  }, [sortedItems, selectedRoom])
+  }, [combinedItems, selectedRoom])
 
   const filteredPhotos = useMemo(() => {
     return (filteredItems || []).flatMap((item) => {
@@ -670,29 +684,42 @@ export default function VisionBoardPage() {
         if (syncToExpenses && estimatedPrice) {
           const cost = parseFloat(estimatedPrice.replace(/[^0-9.]/g, '')) || 0
           if (cost > 0) {
-            const newExpense: Expense = {
+            const newExpense: ExpenseItem = {
               id: finalId,
               date: itemDate,
               description: `Selection: ${selectionTitle} (${itemCategory})`,
               materials: cost,
               labor: 0
             }
-            const existingExpenses = expenses || []
-            const expExists = existingExpenses.some(e => e.id === finalId)
-            const updatedExpensesList = expExists
-              ? existingExpenses.map(e => e.id === finalId ? newExpense : e)
-              : [newExpense, ...existingExpenses]
+            try {
+              const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+              const expExists = existingExpenses.some(e => e.id === finalId)
+              const updatedExpensesList = expExists
+                ? existingExpenses.map(e => e.id === finalId ? newExpense : e)
+                : [newExpense, ...existingExpenses]
 
-            await setExpenses(updatedExpensesList)
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new Event("expenses-updated"))
+              await set("cleanbuild_expenses", updatedExpensesList)
+              setExpenses(updatedExpensesList)
+              await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new Event("expenses-updated"))
+              }
+            } catch (err) {
+              console.error("Failed to sync expense:", err)
             }
           }
         } else if (!syncToExpenses) {
-          const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
-          await setExpenses(updatedExpensesList)
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new Event("expenses-updated"))
+          try {
+            const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+            const updatedExpensesList = existingExpenses.filter(e => e.id !== finalId)
+            await set("cleanbuild_expenses", updatedExpensesList)
+            setExpenses(updatedExpensesList)
+            await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("expenses-updated"))
+            }
+          } catch (err) {
+            console.error("Failed to unsync expense:", err)
           }
         }
 
@@ -700,10 +727,17 @@ export default function VisionBoardPage() {
         const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
         await setSelections(updatedSelectionsList)
 
-        const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
-        await setExpenses(updatedExpensesList)
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new Event("expenses-updated"))
+        try {
+          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+          const updatedExpensesList = existingExpenses.filter(e => e.id !== finalId)
+          await set("cleanbuild_expenses", updatedExpensesList)
+          setExpenses(updatedExpensesList)
+          await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("expenses-updated"))
+          }
+        } catch (err) {
+          console.error("Failed to remove expense:", err)
         }
       }
 
@@ -725,10 +759,17 @@ export default function VisionBoardPage() {
     const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
     await setSelections(updatedSelectionsList)
     
-    const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
-    await setExpenses(updatedExpensesList)
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("expenses-updated"))
+    try {
+      const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+      const updatedExpensesList = existingExpenses.filter(e => e.id !== finalId)
+      await set("cleanbuild_expenses", updatedExpensesList)
+      setExpenses(updatedExpensesList)
+      await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("expenses-updated"))
+      }
+    } catch (err) {
+      console.error("Failed to delete expense:", err)
     }
     
     setIsModalOpen(false) 
@@ -832,8 +873,8 @@ export default function VisionBoardPage() {
                 
                 {(rooms || []).map((cat) => {
                   const catCount = cat === "All Rooms" 
-                    ? (boardItems || []).length 
-                    : (boardItems || []).filter((l) => (l?.category || "Kitchen") === cat).length
+                    ? (combinedItems || []).length 
+                    : (combinedItems || []).filter((l) => (l?.category || "Kitchen") === cat).length
                   
                   const isActive = selectedRoom === cat
                   const isProtectedFolder = cat === "All Rooms"
@@ -1117,7 +1158,7 @@ export default function VisionBoardPage() {
                           <select
                             value={categoryMoveTarget}
                             onChange={(e) => setCategoryMoveTarget(e.target.value)}
-                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
+                            className="flex w-full h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             {(rooms || []).filter(c => c !== "All Rooms" && c !== categoryToDelete).map(c => (
                               <option key={c} value={c}>{c}</option>
@@ -1177,10 +1218,10 @@ export default function VisionBoardPage() {
             )}
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-white">
             <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="item-date" className="font-semibold text-slate-700 text-xs">Date Added</Label>
+              <div>
+                <label htmlFor="item-date" className="block mb-1 font-semibold text-slate-700 text-xs">Date Added</label>
                 <Input
                   id="item-date"
                   type="date"
@@ -1191,14 +1232,14 @@ export default function VisionBoardPage() {
                 />
               </div>
 
-              <div className="grid gap-1.5">
-                <Label htmlFor="item-category" className="font-semibold text-slate-700 text-xs">Room / Area</Label>
+              <div>
+                <label htmlFor="item-category" className="block mb-1 font-semibold text-slate-700 text-xs">Room / Area</label>
                 <select
                   id="item-category"
                   value={itemCategory}
                   disabled={isReadOnly}
                   onChange={(e) => setItemCategory(e.target.value)}
-                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {(rooms || []).filter(c => c !== "All Rooms").map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -1207,9 +1248,9 @@ export default function VisionBoardPage() {
               </div>
             </div>
 
-            <div className="grid gap-1.5 border-t border-slate-100 pt-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL</Label>
+            <div className="border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL</label>
                 {isFetchingPreview && <span className="text-[10px] text-blue-600 font-bold animate-pulse">Fetching link preview...</span>}
               </div>
               <Input
@@ -1277,8 +1318,8 @@ export default function VisionBoardPage() {
               )}
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="item-notes" className="font-semibold text-slate-700 text-xs">Idea Summary & Notes</Label>
+            <div>
+              <label htmlFor="item-notes" className="block mb-1 font-semibold text-slate-700 text-xs">Idea Summary & Notes</label>
               <textarea
                 id="item-notes"
                 rows={3}
@@ -1286,12 +1327,12 @@ export default function VisionBoardPage() {
                 value={itemNotes}
                 disabled={isReadOnly}
                 onChange={(e) => setItemNotes(e.target.value)}
-                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
             
-            <div className="grid gap-1.5 border-t border-slate-100 pt-3 mt-1">
-              <Label className="font-semibold text-slate-700 text-xs">Attached Board Photos</Label>
+            <div className="border-t border-slate-100 pt-3 mt-1">
+              <label className="block mb-1 font-semibold text-slate-700 text-xs">Attached Board Photos</label>
               
               {!isReadOnly && (
                 <div className="flex gap-2 mt-1">
@@ -1354,18 +1395,18 @@ export default function VisionBoardPage() {
                   <div className="p-4 pt-0 space-y-4 border-t border-emerald-100 bg-white">
                     <div className="grid grid-cols-2 gap-3 mt-3">
                       <div>
-                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Material Category</Label>
+                        <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Material Category</label>
                         <select
                           value={materialCategory}
                           onChange={(e) => setMaterialCategory(e.target.value)}
-                          className="mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none"
+                          className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           {MATERIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Estimated Price</Label>
-                        <div className="relative mt-1">
+                        <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Estimated Price</label>
+                        <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">$</span>
                           <Input
                             placeholder="0.00"
