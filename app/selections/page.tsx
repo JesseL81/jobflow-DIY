@@ -31,6 +31,31 @@ export interface SelectionItem {
   status: "Idea / Saved" | "Selected" | "Under Review" | "Ordered" | "Delivered"
   checked: boolean
   syncToExpenses?: boolean
+  photoUrl?: string 
+  // 🔥 Bi-directional sync fields
+  syncToVisionBoard?: boolean
+  linkTitle?: string
+  linkDescription?: string
+  linkDomain?: string
+  linkImage?: string
+}
+
+// Ensure the structure perfectly matches the Vision Board data
+interface VisionBoardItem {
+  id: number
+  date: string 
+  category: string
+  notes: string
+  url?: string
+  photos: string[]
+  linkTitle?: string
+  linkDescription?: string
+  linkDomain?: string
+  linkImage?: string
+  isPromoted?: boolean
+  materialCategory?: string
+  estimatedPrice?: string
+  syncToExpenses?: boolean
 }
 
 interface ExpenseItem {
@@ -79,6 +104,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     status: "Selected",
     checked: true,
     syncToExpenses: false,
+    syncToVisionBoard: false,
   },
   {
     id: "2",
@@ -92,36 +118,10 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     status: "Ordered",
     checked: true,
     syncToExpenses: false,
-  },
-  {
-    id: "3",
-    title: "60-inch Double Vanity in Navy Blue",
-    category: "Cabinetry & Hardware",
-    room: "Master Bathroom",
-    vendorUrl: "https://www.wayfair.com",
-    price: "1150.00",
-    modelNumber: "WF-VAN-60-NV",
-    notes: "Includes quartz countertop & undermount sinks.",
-    status: "Delivered",
-    checked: false,
-    syncToExpenses: false,
-  },
-  {
-    id: "4",
-    title: "Brushed Brass Vanity Sconce Lights (Pair)",
-    category: "Lighting & Electrical",
-    room: "Powder Room",
-    vendorUrl: "https://www.amazon.com",
-    price: "145.00",
-    modelNumber: "B08X3P912",
-    notes: "Checking warm white 3000K LED compatibility.",
-    status: "Under Review",
-    checked: false,
-    syncToExpenses: false,
-  },
+    syncToVisionBoard: false,
+  }
 ]
 
-// 🔥 Define the Tour Steps for Selections
 const SELECTIONS_TOUR_STEPS = [
   {
     target: ".tour-selections-header",
@@ -129,7 +129,7 @@ const SELECTIONS_TOUR_STEPS = [
   },
   {
     target: ".tour-selections-filters",
-    content: "Use these folders to organize your items by Room or Category. You can add custom folders here too.",
+    content: "Use these folders to organize your items by Room or Category. The Rooms list is now perfectly synced with your Vision Board!",
   },
   {
     target: ".tour-selections-budget",
@@ -137,7 +137,7 @@ const SELECTIONS_TOUR_STEPS = [
   },
   {
     target: ".tour-add-item",
-    content: "When adding an item, check the 'Sync to Expenses' box to automatically send its cost directly to your project ledger!",
+    content: "When adding an item, just paste the URL to auto-fetch the product image, and easily sync it to both Expenses and your Vision Board!",
   },
 ]
 
@@ -145,8 +145,11 @@ export default function SelectionsPage() {
   const [isMounted, setIsMounted] = useState(false)
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
   
+  // 🔥 Import Vision Board list to enable bi-directional saves
+  const [visionBoardItems, setVisionBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", [])
+  
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
-  const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_selections_rooms_list", DEFAULT_ROOMS)
+  const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
   
   const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
     "Plumbing Fixtures": 500,
@@ -167,10 +170,8 @@ export default function SelectionsPage() {
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // 🔥 State for Minimalist Dropdown Menu
   const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
-  // Export States
   const [isExporting, setIsExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState("")
   const exportCardRef = useRef<HTMLDivElement>(null)
@@ -206,6 +207,35 @@ export default function SelectionsPage() {
   const [formNotes, setFormNotes] = useState("")
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Idea / Saved")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
+  
+  // 🔥 New Unfurl / Autofetch State
+  const [linkTitle, setLinkTitle] = useState("")
+  const [linkDescription, setLinkDescription] = useState("")
+  const [linkDomain, setLinkDomain] = useState("")
+  const [linkImage, setLinkImage] = useState("")
+  const [isFetchingPreview, setIsFetchingPreview] = useState(false)
+  const [fetchError, setFetchError] = useState(false)
+  const [formPhotoUrl, setFormPhotoUrl] = useState<string>("")
+  const [formSyncToVisionBoard, setFormSyncToVisionBoard] = useState<boolean>(false)
+
+  // Smart Merge Engine
+  useEffect(() => {
+    const performSmartMerge = async () => {
+      const hasMerged = localStorage.getItem("cleanbuild_rooms_merged_selections")
+      if (!hasMerged) {
+        const oldRooms = await get<string[]>("cleanbuild_selections_rooms_list") || []
+        const currentShared = await get<string[]>("cleanbuild_shared_rooms") || DEFAULT_ROOMS
+        
+        const combined = Array.from(new Set([...oldRooms, ...currentShared]))
+        const fixed = ["All Rooms", ...combined.filter(r => r !== "All Rooms" && r !== "All Categories")]
+        
+        await set("cleanbuild_shared_rooms", fixed)
+        setRooms(fixed)
+        localStorage.setItem("cleanbuild_rooms_merged_selections", "true")
+      }
+    }
+    performSmartMerge()
+  }, [setRooms])
 
   useEffect(() => {
     setIsMounted(true)
@@ -261,6 +291,55 @@ export default function SelectionsPage() {
     }
     fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Auto-Fetch Link Previews engine
+  useEffect(() => {
+    if (!formUrl.trim()) {
+      setLinkTitle("")
+      setLinkDescription("")
+      setLinkDomain("")
+      setLinkImage("")
+      setFetchError(false)
+      return
+    }
+
+    const delayDebounceFn = setTimeout(() => {
+      if (formUrl.startsWith("http") && !linkTitle && !isFetchingPreview && !fetchError) {
+        fetchLinkPreview(formUrl)
+      }
+    }, 800)
+
+    return () => clearTimeout(delayDebounceFn)
+  }, [formUrl])
+
+  const fetchLinkPreview = async (urlToFetch: string) => {
+    setIsFetchingPreview(true)
+    setFetchError(false)
+    try {
+      const res = await fetch(`/api/unfurl?url=${encodeURIComponent(urlToFetch.trim())}`)
+      const json = await res.json()
+      
+      let fallbackDomain = ""
+      try { fallbackDomain = new URL(urlToFetch).hostname.replace('www.', '') } catch(e) {}
+
+      if (res.ok && !json.error) {
+        setLinkTitle(json.title || "")
+        setLinkDescription(json.description || "")
+        setLinkDomain(json.domain || fallbackDomain)
+        setLinkImage(json.image || "")
+        if (json.title && !formTitle) setFormTitle(json.title) // Auto-fill title if empty
+      } else {
+        setFetchError(true)
+        setLinkDomain(fallbackDomain)
+      }
+    } catch (e) {
+      console.error("Failed to fetch link preview:", e)
+      setFetchError(true)
+      try { setLinkDomain(new URL(urlToFetch).hostname.replace('www.', '')) } catch(err) {}
+    } finally {
+      setIsFetchingPreview(false)
+    }
+  }
 
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
@@ -421,6 +500,16 @@ export default function SelectionsPage() {
     setFormNotes("")
     setFormStatus("Idea / Saved")
     setFormSyncToExpenses(false)
+    
+    // Clear autofurl state
+    setFormPhotoUrl("")
+    setLinkTitle("")
+    setLinkDescription("")
+    setLinkDomain("")
+    setLinkImage("")
+    setFormSyncToVisionBoard(false)
+    setFetchError(false)
+
     setIsModalOpen(true)
   }
 
@@ -436,60 +525,102 @@ export default function SelectionsPage() {
     setFormNotes(item.notes)
     setFormStatus(item.status || "Idea / Saved")
     setFormSyncToExpenses(!!item.syncToExpenses)
+    
+    // Pre-load autofurl state
+    setFormPhotoUrl(item.photoUrl || "")
+    setLinkTitle(item.linkTitle || "")
+    setLinkDescription(item.linkDescription || "")
+    setLinkDomain(item.linkDomain || "")
+    setLinkImage(item.linkImage || item.photoUrl || "")
+    setFormSyncToVisionBoard(!!item.syncToVisionBoard)
+    setFetchError(false)
+
     setIsModalOpen(true)
   }
 
+  // 🔥 3-Way Sync Engine (Mirroring the Vision Board process)
   const handleSaveItem = async () => {
     if (isReadOnly || !formTitle.trim() || isSubmitting) return
     setIsSubmitting(true)
 
     try {
       const itemPriceNumber = extractPrice(formPrice)
-      let updatedItem: SelectionItem
+      const finalLinkImage = linkImage || formPhotoUrl
+      const parsedId = editingItem ? (parseInt(editingItem.id) || Date.now()) : Date.now()
+      const finalIdStr = parsedId.toString()
 
-      if (editingItem) {
-        updatedItem = {
-          ...editingItem,
-          title: formTitle.trim(),
-          category: formCategory,
-          room: formRoom,
-          vendorUrl: formUrl.trim(),
-          price: formPrice.trim(),
-          modelNumber: formModel.trim(),
-          notes: formNotes.trim(),
-          status: formStatus,
-          checked: formSyncToExpenses ? true : editingItem.checked,
-          syncToExpenses: formSyncToExpenses,
-        }
-        const updatedItemsList = items.map((i) => (i.id === editingItem.id ? updatedItem : i))
-        await setItems(updatedItemsList)
-      } else {
-        updatedItem = {
-          id: Date.now().toString(),
-          title: formTitle.trim(),
-          category: formCategory,
-          room: formRoom,
-          vendorUrl: formUrl.trim(),
-          price: formPrice.trim(),
-          modelNumber: formModel.trim(),
-          notes: formNotes.trim(),
-          status: formStatus,
-          checked: true,
-          syncToExpenses: formSyncToExpenses,
-        }
-        const updatedItemsList = [updatedItem, ...items]
-        await setItems(updatedItemsList)
+      const updatedItem: SelectionItem = {
+        id: finalIdStr,
+        title: formTitle.trim(),
+        category: formCategory,
+        room: formRoom,
+        vendorUrl: formUrl.trim(),
+        price: formPrice.trim(),
+        modelNumber: formModel.trim(),
+        notes: formNotes.trim(),
+        status: formStatus,
+        checked: formSyncToExpenses ? true : (editingItem ? editingItem.checked : true),
+        syncToExpenses: formSyncToExpenses,
+        
+        // Auto-fetch data
+        photoUrl: finalLinkImage,
+        syncToVisionBoard: formSyncToVisionBoard,
+        linkTitle: linkTitle || formTitle.trim(),
+        linkDescription,
+        linkDomain,
+        linkImage: finalLinkImage
       }
 
+      // 1. Save to Selections Local Storage
+      const updatedItemsList = editingItem 
+        ? items.map((i) => (i.id === editingItem.id ? updatedItem : i))
+        : [updatedItem, ...items]
+      
+      await setItems(updatedItemsList)
+
+      // 2. Sync to Vision Board
+      const existingVbItem = (visionBoardItems || []).find(v => v.id === parsedId)
+      
+      if (formSyncToVisionBoard) {
+        const vbItem: VisionBoardItem = {
+            ...existingVbItem,
+            id: parsedId,
+            date: existingVbItem?.date || new Date().toISOString().split("T")[0],
+            category: updatedItem.room,
+            notes: updatedItem.notes,
+            url: updatedItem.vendorUrl,
+            photos: existingVbItem?.photos?.length ? existingVbItem.photos : (finalLinkImage ? [finalLinkImage] : []),
+            linkTitle: updatedItem.linkTitle,
+            linkDescription: updatedItem.linkDescription,
+            linkDomain: updatedItem.linkDomain,
+            linkImage: updatedItem.linkImage,
+            isPromoted: true,
+            materialCategory: updatedItem.category,
+            estimatedPrice: updatedItem.price,
+            syncToExpenses: updatedItem.syncToExpenses
+        }
+        
+        const vbExists = (visionBoardItems || []).some(v => v.id === parsedId)
+        const newVbList = vbExists 
+            ? (visionBoardItems || []).map(v => v.id === parsedId ? vbItem : v)
+            : [vbItem, ...(visionBoardItems || [])]
+            
+        await setVisionBoardItems(newVbList)
+      } else if (editingItem?.syncToVisionBoard && !formSyncToVisionBoard) {
+          const newVbList = (visionBoardItems || []).filter(v => v.id !== parsedId)
+          await setVisionBoardItems(newVbList)
+      }
+
+      // 3. Sync to Expenses Ledger
       if (formSyncToExpenses) {
         try {
           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
           const filteredExpenses = editingItem
-            ? existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
+            ? existingExpenses.filter((e) => e.id !== parsedId)
             : existingExpenses
 
           const newExpenseRecord: ExpenseItem = {
-            id: parseInt(updatedItem.id) || Date.now(),
+            id: parsedId,
             description: `Selection: ${updatedItem.title} (${updatedItem.room} - ${updatedItem.category})`,
             materials: itemPriceNumber,
             labor: 0,
@@ -504,7 +635,7 @@ export default function SelectionsPage() {
       } else if (editingItem && editingItem.syncToExpenses && !formSyncToExpenses) {
         try {
           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-          const filteredExpenses = existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
+          const filteredExpenses = existingExpenses.filter((e) => e.id !== parsedId)
           await set("cleanbuild_expenses", filteredExpenses)
           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
           window.dispatchEvent(new Event("expenses-updated"))
@@ -519,22 +650,31 @@ export default function SelectionsPage() {
 
   const handleDeleteItem = async () => {
     if (isReadOnly || !editingItem) return
+    const parsedId = parseInt(editingItem.id)
+
+    // Remove from Selections
     const updatedItems = items.filter((i) => i.id !== editingItem.id)
     await setItems(updatedItems)
+    
+    // Remove from Vision Board
+    const updatedVB = (visionBoardItems || []).filter(v => v.id !== parsedId)
+    await setVisionBoardItems(updatedVB)
+
+    // Remove from Expenses
     try {
       const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-      const filteredExpenses = existingExpenses.filter((e) => e.id !== parseInt(editingItem.id))
+      const filteredExpenses = existingExpenses.filter((e) => e.id !== parsedId)
       await set("cleanbuild_expenses", filteredExpenses)
       await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
       window.dispatchEvent(new Event("expenses-updated"))
     } catch (err) {}
+
     setIsModalOpen(false)
   }
 
-  // 🔥 Export Engine (Matching Vision Board)
   const renderItemToCanvas = async (item: SelectionItem): Promise<HTMLCanvasElement | null> => {
     setExportTarget(item)
-    await new Promise((r) => setTimeout(r, 150)) // allow React to render the hidden card
+    await new Promise((r) => setTimeout(r, 150))
     if (!exportCardRef.current) return null
 
     return await html2canvas(exportCardRef.current, {
@@ -559,7 +699,6 @@ export default function SelectionsPage() {
         const item = safeItems[index]
         setExportProgress(`Processing item ${index + 1} of ${safeItems.length}...`)
 
-        // Create a unique folder inside the ZIP based on the room name
         const roomName = item.room || "Uncategorized"
         const roomFolder = zip.folder(roomName)
 
@@ -575,7 +714,6 @@ export default function SelectionsPage() {
         const singlePdf = new jsPDF("p", "mm", "a4")
         singlePdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
         
-        // Clean the filename to prevent saving issues
         const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 30)
         roomFolder?.file(`Selection_${safeTitle}_${item.id}.pdf`, singlePdf.output("blob"))
       }
@@ -630,9 +768,7 @@ export default function SelectionsPage() {
           </p>
         </div>
 
-        {/* Minimalist Action Layout */}
         <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
-          
           {!isReadOnly && (
             <Button
               size="sm"
@@ -643,7 +779,6 @@ export default function SelectionsPage() {
             </Button>
           )}
 
-          {/* Clean, Icon-Only Dropdown Trigger */}
           <div className="relative">
             <Button
               variant="outline"
@@ -655,7 +790,6 @@ export default function SelectionsPage() {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </Button>
 
-            {/* The Dropdown Menu Box */}
             {isOptionsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
@@ -743,10 +877,8 @@ export default function SelectionsPage() {
                         </span>
                       </button>
                       
-                      {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && !isProtectedFolder && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
-                          {/* Quick Add Plus */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -762,7 +894,6 @@ export default function SelectionsPage() {
                             +
                           </button>
 
-                          {/* Trash Can */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -783,7 +914,6 @@ export default function SelectionsPage() {
                   )
                 })}
 
-                {/* Add Custom Room */}
                 {isAddingRoom ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -855,7 +985,6 @@ export default function SelectionsPage() {
                         </span>
                       </button>
                       
-                      {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && !isProtectedFolder && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
                           <button
@@ -893,7 +1022,6 @@ export default function SelectionsPage() {
                   )
                 })}
 
-                {/* Add Custom Category */}
                 {isAddingCategory ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -1002,7 +1130,15 @@ export default function SelectionsPage() {
                               onChange={() => handleToggleCheck(item.id)}
                               className={`mt-1 h-4 w-4 rounded accent-indigo-600 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                             />
-                            <div>
+                            
+                            {/* 🔥 Display Thumbnail Photo if pushed from Vision Board or Autofurled */}
+                            {(item.photoUrl || item.linkImage) && (
+                              <div className="h-14 w-14 shrink-0 rounded-md border border-slate-200 overflow-hidden bg-white flex items-center justify-center shadow-xs">
+                                <img src={item.photoUrl || item.linkImage} alt="Selection thumbnail" className="max-h-full max-w-full object-cover" />
+                              </div>
+                            )}
+
+                            <div className="flex flex-col">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <Badge variant="outline" className={`text-[10px] font-semibold bg-slate-900 text-white hover:bg-slate-800`}>
                                   🏠 {item.room || "Other"}
@@ -1011,6 +1147,11 @@ export default function SelectionsPage() {
                                   📁 {item.category}
                                 </Badge>
                                 {getStatusBadge(item.status)}
+                                {item.syncToVisionBoard && (
+                                  <Badge className="bg-indigo-600 text-white border-indigo-700 text-[10px] font-bold shadow-xs">
+                                    Vision Board 📷
+                                  </Badge>
+                                )}
                                 {item.syncToExpenses && (
                                   <Badge className="bg-emerald-600 text-white border-emerald-700 text-[10px] font-bold">
                                     Synced to Expenses 💰
@@ -1401,15 +1542,68 @@ export default function SelectionsPage() {
             </div>
 
             <div>
-              <Label htmlFor="item-url" className="text-xs font-semibold text-slate-700">Product Link / URL</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="item-url" className="text-xs font-semibold text-slate-700">Product Link / URL</Label>
+                {isFetchingPreview && <span className="text-[10px] text-blue-600 font-bold animate-pulse">Fetching link preview...</span>}
+              </div>
               <Input 
                 id="item-url" 
                 placeholder="https://www.homedepot.com/p/..." 
                 value={formUrl} 
                 disabled={isReadOnly}
-                onChange={(e) => setFormUrl(e.target.value)} 
+                onChange={(e) => {
+                    setFormUrl(e.target.value)
+                    setFetchError(false)
+                    setLinkTitle("")
+                    setLinkImage("")
+                    setLinkDomain("")
+                    setLinkDescription("")
+                }} 
                 className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
+
+              {/* 🔥 Auto-Fetch Link Preview Block */}
+              {fetchError && !isReadOnly && (
+                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3 shadow-sm">
+                  <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                    ⚠️ <strong>{linkDomain || "This retailer"}</strong> blocked our automatic preview bot. To create your image card, please paste the details manually below:
+                  </p>
+                  <div className="grid gap-2">
+                    <Input 
+                      placeholder="Image Address (Right-click photo -> Copy Image Address)" 
+                      value={linkImage} 
+                      onChange={e => setLinkImage(e.target.value)} 
+                      className="h-8 text-xs bg-white border-amber-200 shadow-sm" 
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(linkTitle || linkImage || formPhotoUrl) && !fetchError && (
+                <div className="mt-2 relative border border-slate-200 rounded-lg overflow-hidden bg-slate-50 flex items-center gap-3 pr-2 h-16 shadow-sm">
+                  {linkImage || formPhotoUrl ? (
+                    <div className="h-16 w-16 bg-white shrink-0 flex items-center justify-center p-1 border-r border-slate-200">
+                      <img src={linkImage || formPhotoUrl} className="max-h-full max-w-full object-contain" alt="Link preview thumbnail" />
+                    </div>
+                  ) : (
+                    <div className="h-16 w-16 bg-slate-200 shrink-0 flex items-center justify-center text-xl">🔗</div>
+                  )}
+                  <div className="flex-1 overflow-hidden py-1">
+                    <p className="text-xs font-bold text-slate-900 truncate">{linkTitle || formTitle || formUrl}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate mt-0.5">{linkDomain}</p>
+                  </div>
+                  {!isReadOnly && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setLinkTitle(""); setLinkImage(""); setLinkDomain(""); setLinkDescription(""); setFormPhotoUrl(""); setFetchError(false); }} 
+                      className="h-6 w-6 shrink-0 bg-slate-200 hover:bg-rose-100 hover:text-rose-600 text-slate-500 rounded flex items-center justify-center transition-colors shadow-sm"
+                      title="Clear Preview"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1452,24 +1646,46 @@ export default function SelectionsPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 mt-1 bg-emerald-50/80 border border-emerald-200 rounded-lg">
-              <div>
-                <Label htmlFor="sync-expenses-toggle" className={`font-semibold text-emerald-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
-                  💰 Sync to Expenses Tab
-                </Label>
-                <p className="text-[11px] text-emerald-800 mt-1">
-                  Automatically logs material price under Project Expenses & updates Dashboard totals.
-                </p>
+            <div className="grid gap-3 pt-2">
+              <div className="flex items-center justify-between p-3 bg-indigo-50/80 border border-indigo-200 rounded-lg">
+                <div>
+                  <Label htmlFor="sync-vision-toggle" className={`font-semibold text-indigo-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+                    📷 Sync to Vision Board
+                  </Label>
+                  <p className="text-[11px] text-indigo-800 mt-1">
+                    Copies this selection back to your Vision Board for visual reference.
+                  </p>
+                </div>
+                <input
+                  id="sync-vision-toggle"
+                  type="checkbox"
+                  checked={formSyncToVisionBoard}
+                  disabled={isReadOnly}
+                  onChange={(e) => setFormSyncToVisionBoard(e.target.checked)}
+                  className={`h-5 w-5 accent-indigo-600 rounded shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
+                />
               </div>
-              <input
-                id="sync-expenses-toggle"
-                type="checkbox"
-                checked={formSyncToExpenses}
-                disabled={isReadOnly}
-                onChange={(e) => setFormSyncToExpenses(e.target.checked)}
-                className={`h-5 w-5 accent-emerald-600 rounded shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
-              />
+
+              <div className="flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg">
+                <div>
+                  <Label htmlFor="sync-expenses-toggle" className={`font-semibold text-emerald-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+                    💰 Sync to Expenses Tab
+                  </Label>
+                  <p className="text-[11px] text-emerald-800 mt-1">
+                    Automatically logs material price under Project Expenses.
+                  </p>
+                </div>
+                <input
+                  id="sync-expenses-toggle"
+                  type="checkbox"
+                  checked={formSyncToExpenses}
+                  disabled={isReadOnly}
+                  onChange={(e) => setFormSyncToExpenses(e.target.checked)}
+                  className={`h-5 w-5 accent-emerald-600 rounded shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
+                />
+              </div>
             </div>
+
           </div>
 
           <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white items-center">
@@ -1534,6 +1750,12 @@ export default function SelectionsPage() {
               </div>
               <h2 className="text-2xl font-bold text-slate-900 leading-tight">{exportTarget.title}</h2>
             </div>
+
+            {(exportTarget.photoUrl || exportTarget.linkImage) && (
+              <div className="border rounded-lg overflow-hidden h-48 bg-slate-50 flex items-center justify-center">
+                <img src={exportTarget.photoUrl || exportTarget.linkImage} alt="Product Image" className="max-h-full object-contain" />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">

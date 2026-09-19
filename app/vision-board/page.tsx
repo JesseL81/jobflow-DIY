@@ -34,23 +34,64 @@ interface VisionBoardItem {
   linkDescription?: string
   linkDomain?: string
   linkImage?: string
+  isPromoted?: boolean
+  materialCategory?: string
+  estimatedPrice?: string
+  syncToExpenses?: boolean
 }
 
-const DEFAULT_CATEGORIES = [
+interface SelectionItem {
+  id: string
+  title: string
+  category: string
+  room: string
+  vendorUrl: string
+  price: string
+  modelNumber: string
+  notes: string
+  status: "Idea / Saved" | "Selected" | "Under Review" | "Ordered" | "Delivered"
+  checked: boolean
+  syncToExpenses?: boolean
+  photoUrl?: string
+}
+
+interface Expense {
+  id: number
+  date: string
+  description: string
+  materials: number
+  labor: number
+}
+
+const DEFAULT_ROOMS = [
   "All Rooms",
-  "Inspiration & Ideas",
-  "Materials & Finishes",
-  "Trim",
-  "Paint",
-  "Lighting",
-  "Hardware & Fixtures"
+  "Kitchen",
+  "Master Bathroom",
+  "Guest Bathroom",
+  "Powder Room",
+  "Living & Dining",
+  "Bedrooms",
+  "Laundry / Mudroom",
+  "Exterior",
+  "Other",
+]
+
+const MATERIAL_CATEGORIES = [
+  "Plumbing Fixtures",
+  "Tile & Flooring",
+  "Lighting & Electrical",
+  "Appliances",
+  "Paint & Finishes",
+  "Cabinetry & Hardware",
+  "Doors & Trim",
+  "Other"
 ]
 
 const INITIAL_BOARD: VisionBoardItem[] = [
   {
     id: 1,
     date: "2026-08-28",
-    category: "Inspiration & Ideas",
+    category: "Master Bathroom",
     notes: "👋 Welcome to the Vision Board! Paste a link to a product below, and we will automatically unfurl it into a rich image card just like an iMessage.",
     url: "https://diy.cleanbuild.us",
     photos: ["/Gemini_bathroom.jpeg"],
@@ -64,11 +105,11 @@ const VISION_BOARD_TOUR_STEPS = [
   },
   {
     target: ".tour-vision-folders",
-    content: "Organize your ideas into specific rooms or categories. Click here to filter your board, or add a custom folder.",
+    content: "Organize your ideas into specific rooms. These rooms automatically sync with your Selections tab!",
   },
   {
     target: ".tour-vision-add",
-    content: "Click here to upload photos or paste a web link. We will automatically grab the image and title for you!",
+    content: "Click here to add an idea. You can now instantly 'Promote' an idea to a Selection and sync its cost to your expenses!",
   },
 ]
 
@@ -92,15 +133,17 @@ export default function VisionBoardPage() {
   const [isMounted, setIsMounted] = useState(false)
   
   const [boardItems, setBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", INITIAL_BOARD)
-  const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_vision_board_categories", DEFAULT_CATEGORIES)
-  
+  const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
+  const [selections, setSelections] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", [])
+  const [expenses, setExpenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", [])
+
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
   const [isReadOnly, setIsReadOnly] = useState(false)
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   
-  const [selectedCategory, setSelectedCategory] = useState<string>("All Rooms")
+  const [selectedRoom, setSelectedRoom] = useState<string>("All Rooms")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
   
@@ -111,7 +154,7 @@ export default function VisionBoardPage() {
   const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
   const [itemDate, setItemDate] = useState("")
-  const [itemCategory, setItemCategory] = useState("Inspiration & Ideas")
+  const [itemCategory, setItemCategory] = useState("Kitchen")
   const [itemNotes, setItemNotes] = useState("")
   const [itemUrl, setItemUrl] = useState("")
   const [itemPhotos, setItemPhotos] = useState<string[]>([])
@@ -122,6 +165,11 @@ export default function VisionBoardPage() {
   const [linkImage, setLinkImage] = useState("")
   const [isFetchingPreview, setIsFetchingPreview] = useState(false)
   const [fetchError, setFetchError] = useState(false) 
+
+  const [isPromoted, setIsPromoted] = useState(false)
+  const [materialCategory, setMaterialCategory] = useState("Plumbing Fixtures")
+  const [estimatedPrice, setEstimatedPrice] = useState("")
+  const [syncToExpenses, setSyncToExpenses] = useState(false)
 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null)
   
@@ -134,42 +182,42 @@ export default function VisionBoardPage() {
   const [isCategoryDeleteModalOpen, setIsCategoryDeleteModalOpen] = useState(false)
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null)
   const [categoryDeleteMode, setCategoryDeleteMode] = useState<"move" | "delete">("move")
-  const [categoryMoveTarget, setCategoryMoveTarget] = useState<string>("Inspiration & Ideas")
+  const [categoryMoveTarget, setCategoryMoveTarget] = useState<string>("Kitchen")
 
   useEffect(() => {
     setIsMounted(true)
   }, [])
 
   useEffect(() => {
-    if (isMounted && categories) {
+    if (isMounted && rooms) {
       let needsUpdate = false
-      let newCats = [...categories]
+      let newRooms = [...rooms]
 
-      const oldIndex = newCats.indexOf("All Categories")
+      const oldIndex = newRooms.indexOf("All Categories")
       if (oldIndex !== -1) {
-        newCats[oldIndex] = "All Rooms"
+        newRooms[oldIndex] = "All Rooms"
         needsUpdate = true
       }
 
-      if (!newCats.includes("All Rooms")) {
-        newCats.unshift("All Rooms")
+      if (!newRooms.includes("All Rooms")) {
+        newRooms.unshift("All Rooms")
         needsUpdate = true
       }
 
-      if (newCats.indexOf("All Rooms") !== 0) {
-        newCats = newCats.filter(c => c !== "All Rooms")
-        newCats.unshift("All Rooms")
+      if (newRooms.indexOf("All Rooms") !== 0) {
+        newRooms = newRooms.filter(c => c !== "All Rooms")
+        newRooms.unshift("All Rooms")
         needsUpdate = true
       }
 
       if (needsUpdate) {
-        setCategories(newCats)
-        if (selectedCategory === "All Categories") {
-          setSelectedCategory("All Rooms")
+        setRooms(newRooms)
+        if (selectedRoom === "All Categories") {
+          setSelectedRoom("All Rooms")
         }
       }
     }
-  }, [isMounted, categories, selectedCategory, setCategories])
+  }, [isMounted, rooms, selectedRoom, setRooms])
 
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
@@ -246,7 +294,6 @@ export default function VisionBoardPage() {
         setLinkDomain(json.domain || fallbackDomain)
         setLinkImage(json.image || "")
       } else {
-        console.log("Retailer blocked preview, skipping autofurl.")
         setFetchError(true)
         setLinkDomain(fallbackDomain)
       }
@@ -265,25 +312,25 @@ export default function VisionBoardPage() {
     if (isReadOnly || !newCategoryName.trim()) return
     const trimmed = newCategoryName.trim()
     
-    if ((categories || []).includes(trimmed)) {
+    if ((rooms || []).includes(trimmed)) {
       setNewCategoryName("")
       setIsAddingCategory(false)
       return
     }
 
-    const updatedCategories = [...(categories || []), trimmed]
-    setCategories(updatedCategories)
+    const updatedCategories = [...(rooms || []), trimmed]
+    setRooms(updatedCategories)
 
     setNewCategoryName("")
     setIsAddingCategory(false)
-    setSelectedCategory(trimmed) 
+    setSelectedRoom(trimmed) 
   }
 
   const handleOpenDeleteCategory = (cat: string) => {
     setCategoryToDelete(cat)
     
-    const availableFallbacks = (categories || []).filter(c => c !== "All Rooms" && c !== cat)
-    setCategoryMoveTarget(availableFallbacks.includes("Inspiration & Ideas") ? "Inspiration & Ideas" : availableFallbacks[0] || "")
+    const availableFallbacks = (rooms || []).filter(c => c !== "All Rooms" && c !== cat)
+    setCategoryMoveTarget(availableFallbacks.includes("Kitchen") ? "Kitchen" : availableFallbacks[0] || "")
     
     setCategoryDeleteMode("move")
     setIsCategoryDeleteModalOpen(true)
@@ -308,10 +355,10 @@ export default function VisionBoardPage() {
     }
 
     setBoardItems(updatedItems)
-    setCategories((categories || []).filter(c => c !== categoryToDelete))
+    setRooms((rooms || []).filter(c => c !== categoryToDelete))
 
-    if (selectedCategory === categoryToDelete) {
-      setSelectedCategory("All Rooms")
+    if (selectedRoom === categoryToDelete) {
+      setSelectedRoom("All Rooms")
     }
 
     setIsCategoryDeleteModalOpen(false)
@@ -324,10 +371,10 @@ export default function VisionBoardPage() {
 
   const filteredItems = useMemo(() => {
     return (sortedItems || []).filter(item => {
-      if (selectedCategory === "All Rooms") return true
-      return (item?.category || "Inspiration & Ideas") === selectedCategory
+      if (selectedRoom === "All Rooms") return true
+      return (item?.category || "Kitchen") === selectedRoom
     })
-  }, [sortedItems, selectedCategory])
+  }, [sortedItems, selectedRoom])
 
   const filteredPhotos = useMemo(() => {
     return (filteredItems || []).flatMap((item) => {
@@ -420,7 +467,6 @@ export default function VisionBoardPage() {
     }
   }
 
-  // 🔥 UPDATED: Dynamic Room-Based Folder Architecture for Export All
   const handleExportAll = async () => {
     const safeItems = filteredItems || []
     if (safeItems.length === 0) return
@@ -436,7 +482,6 @@ export default function VisionBoardPage() {
         const item = safeItems[index]
         setExportProgress(`Processing item ${index + 1} of ${safeItems.length}...`)
 
-        // Create a unique folder inside the ZIP based on the room/category name
         const roomName = item.category || "Uncategorized"
         const roomFolder = zip.folder(roomName)
 
@@ -452,10 +497,8 @@ export default function VisionBoardPage() {
         const singlePdf = new jsPDF("p", "mm", "a4")
         singlePdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
         
-        // Save the PDF inside the specific Room Folder
         roomFolder?.file(`Vision_${item.date}_${item.id}.pdf`, singlePdf.output("blob"))
 
-        // Save all attached photos inside the specific Room Folder
         const safePhotos = item?.photos || []
         if (Array.isArray(safePhotos) && safePhotos.length > 0) {
           for (let pIdx = 0; pIdx < safePhotos.length; pIdx++) {
@@ -470,7 +513,6 @@ export default function VisionBoardPage() {
       }
 
       setExportProgress("Finalizing ZIP archive...")
-      // Keep the master combined PDF at the root of the ZIP
       zip.file(`Vision_Board_Combined_Master.pdf`, masterPdf.output("blob"))
 
       const todayStr = getTodayInputDate()
@@ -504,7 +546,7 @@ export default function VisionBoardPage() {
     if (itemToEdit) {
       setEditingItem(itemToEdit)
       setItemDate(itemToEdit.date || getTodayInputDate())
-      setItemCategory(itemToEdit.category || "Inspiration & Ideas")
+      setItemCategory(itemToEdit.category || "Kitchen")
       setItemNotes(itemToEdit.notes || "")
       setItemUrl(itemToEdit.url || "")
       setItemPhotos(Array.isArray(itemToEdit.photos) ? itemToEdit.photos : [])
@@ -513,13 +555,18 @@ export default function VisionBoardPage() {
       setLinkDescription(itemToEdit.linkDescription || "")
       setLinkDomain(itemToEdit.linkDomain || "")
       setLinkImage(itemToEdit.linkImage || "")
+      
+      setIsPromoted(itemToEdit.isPromoted || false)
+      setMaterialCategory(itemToEdit.materialCategory || "Plumbing Fixtures")
+      setEstimatedPrice(itemToEdit.estimatedPrice || "")
+      setSyncToExpenses(itemToEdit.syncToExpenses || false)
     } else {
       if (isReadOnly) return
       const defaultDate = getTodayInputDate()
       setEditingItem(null)
       setItemDate(defaultDate)
       
-      setItemCategory(prefillCategory || (selectedCategory !== "All Rooms" ? selectedCategory : "Inspiration & Ideas"))
+      setItemCategory(prefillCategory || (selectedRoom !== "All Rooms" ? selectedRoom : "Kitchen"))
       
       setItemNotes("")
       setItemUrl("")
@@ -528,6 +575,11 @@ export default function VisionBoardPage() {
       setLinkDescription("")
       setLinkDomain("")
       setLinkImage("")
+      
+      setIsPromoted(false)
+      setMaterialCategory("Plumbing Fixtures")
+      setEstimatedPrice("")
+      setSyncToExpenses(false)
     }
     setIsModalOpen(true)
   }
@@ -559,44 +611,102 @@ export default function VisionBoardPage() {
     setIsSubmitting(true)
 
     try {
-      let updatedItems: VisionBoardItem[] = []
+      const finalId = editingItem ? editingItem.id : Date.now()
+      const finalIdStr = finalId.toString()
 
-      if (editingItem) {
-        updatedItems = (boardItems || []).map((l) =>
-          l.id === editingItem.id
-            ? {
-                ...l,
-                date: itemDate,
-                category: itemCategory,
-                notes: itemNotes,
-                url: itemUrl.trim(),
-                photos: itemPhotos || [],
-                linkTitle,
-                linkDescription,
-                linkDomain,
-                linkImage,
-              }
-            : l
-        )
-      } else {
-        updatedItems = [
-          {
-            id: Date.now(),
-            date: itemDate,
-            category: itemCategory,
-            notes: itemNotes,
-            url: itemUrl.trim(),
-            photos: itemPhotos || [],
-            linkTitle,
-            linkDescription,
-            linkDomain,
-            linkImage,
-          },
-          ...(boardItems || []),
-        ]
+      const updatedItem: VisionBoardItem = {
+        id: finalId,
+        date: itemDate,
+        category: itemCategory,
+        notes: itemNotes,
+        url: itemUrl.trim(),
+        photos: itemPhotos || [],
+        linkTitle,
+        linkDescription,
+        linkDomain,
+        linkImage,
+        isPromoted,
+        materialCategory: isPromoted ? materialCategory : undefined,
+        estimatedPrice: isPromoted ? estimatedPrice : undefined,
+        syncToExpenses: isPromoted ? syncToExpenses : false
       }
 
-      setBoardItems(updatedItems)
+      let updatedItems: VisionBoardItem[] = []
+      if (editingItem) {
+        updatedItems = (boardItems || []).map((l) => l.id === finalId ? updatedItem : l)
+      } else {
+        updatedItems = [updatedItem, ...(boardItems || [])]
+      }
+      
+      await setBoardItems(updatedItems)
+
+      if (isPromoted) {
+        const selectionTitle = linkTitle || updatedItem.notes.split('\n')[0].substring(0, 30) || "Vision Board Item"
+        const selectionPhoto = linkImage || (updatedItem.photos.length > 0 ? updatedItem.photos[0] : undefined)
+        
+        const newSelection: SelectionItem = {
+          id: finalIdStr,
+          title: selectionTitle,
+          room: itemCategory,
+          category: materialCategory,
+          status: "Selected",
+          vendorUrl: itemUrl,
+          price: estimatedPrice,
+          modelNumber: "",
+          notes: itemNotes,
+          photoUrl: selectionPhoto,
+          checked: syncToExpenses,
+          syncToExpenses: syncToExpenses
+        }
+        
+        const existingSelections = selections || []
+        const exists = existingSelections.some(s => s.id === finalIdStr)
+        const updatedSelectionsList = exists
+          ? existingSelections.map(s => s.id === finalIdStr ? newSelection : s)
+          : [newSelection, ...existingSelections]
+
+        await setSelections(updatedSelectionsList)
+
+        if (syncToExpenses && estimatedPrice) {
+          const cost = parseFloat(estimatedPrice.replace(/[^0-9.]/g, '')) || 0
+          if (cost > 0) {
+            const newExpense: Expense = {
+              id: finalId,
+              date: itemDate,
+              description: `Selection: ${selectionTitle} (${itemCategory})`,
+              materials: cost,
+              labor: 0
+            }
+            const existingExpenses = expenses || []
+            const expExists = existingExpenses.some(e => e.id === finalId)
+            const updatedExpensesList = expExists
+              ? existingExpenses.map(e => e.id === finalId ? newExpense : e)
+              : [newExpense, ...existingExpenses]
+
+            await setExpenses(updatedExpensesList)
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("expenses-updated"))
+            }
+          }
+        } else if (!syncToExpenses) {
+          const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
+          await setExpenses(updatedExpensesList)
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("expenses-updated"))
+          }
+        }
+
+      } else {
+        const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
+        await setSelections(updatedSelectionsList)
+
+        const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
+        await setExpenses(updatedExpensesList)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("expenses-updated"))
+        }
+      }
+
       setIsModalOpen(false)
     } finally {
       setIsSubmitting(false)
@@ -605,12 +715,26 @@ export default function VisionBoardPage() {
 
   const handleDeleteItem = async () => {
     if (isReadOnly || !editingItem) return
-    const updatedItems = (boardItems || []).filter((l) => l.id !== editingItem.id)
-    setBoardItems(updatedItems)
+    
+    const finalId = editingItem.id
+    const finalIdStr = finalId.toString()
+
+    const updatedItems = (boardItems || []).filter((l) => l.id !== finalId)
+    await setBoardItems(updatedItems)
+    
+    const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
+    await setSelections(updatedSelectionsList)
+    
+    const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
+    await setExpenses(updatedExpensesList)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("expenses-updated"))
+    }
+    
     setIsModalOpen(false) 
   }
 
-  if (!isMounted) return null;
+  if (!isMounted) return null
 
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
@@ -631,7 +755,7 @@ export default function VisionBoardPage() {
           </p>
         </div>
 
-        {/* Minimalist Action Layout: One primary button + "More Options" menu */}
+        {/* Minimalist Action Layout */}
         <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           {!isReadOnly && (
@@ -644,7 +768,6 @@ export default function VisionBoardPage() {
             </Button>
           )}
 
-          {/* Clean, Icon-Only Dropdown Trigger */}
           <div className="relative">
             <Button
               variant="outline"
@@ -656,7 +779,6 @@ export default function VisionBoardPage() {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </Button>
 
-            {/* The Dropdown Menu Box */}
             {isOptionsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
@@ -708,13 +830,13 @@ export default function VisionBoardPage() {
                   Filter by Room
                 </span>
                 
-                {(categories || []).map((cat) => {
+                {(rooms || []).map((cat) => {
                   const catCount = cat === "All Rooms" 
                     ? (boardItems || []).length 
-                    : (boardItems || []).filter((l) => (l?.category || "Inspiration & Ideas") === cat).length
+                    : (boardItems || []).filter((l) => (l?.category || "Kitchen") === cat).length
                   
-                  const isActive = selectedCategory === cat
-                  const isProtectedFolder = cat === "All Rooms" || cat === "Inspiration & Ideas"
+                  const isActive = selectedRoom === cat
+                  const isProtectedFolder = cat === "All Rooms"
 
                   return (
                     <div 
@@ -724,22 +846,23 @@ export default function VisionBoardPage() {
                       }`}
                     >
                       <button
-                        onClick={() => setSelectedCategory(cat)}
+                        onClick={() => setSelectedRoom(cat)}
                         className={`flex-1 flex items-center justify-between px-3 py-2 text-xs font-semibold text-left truncate ${
                           isActive ? "text-white" : "text-slate-600"
                         }`}
                       >
-                        <span className="truncate">{cat}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                          isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"
-                        }`}>
-                          {catCount}
-                        </span>
+                        <div className="flex items-center gap-2 truncate">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                            isActive ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-500"
+                          }`}>
+                            {catCount}
+                          </span>
+                          <span className="truncate">{cat}</span>
+                        </div>
                       </button>
                       
                       {!isReadOnly && cat !== "All Rooms" && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
-                          
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -782,7 +905,7 @@ export default function VisionBoardPage() {
                     <Input
                       value={newCategoryName}
                       onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="New category name..."
+                      placeholder="New room name..."
                       className="h-8 text-xs bg-slate-50 border-slate-300"
                       autoFocus
                       onKeyDown={(e) => {
@@ -813,7 +936,7 @@ export default function VisionBoardPage() {
                         onClick={() => setIsAddingCategory(true)}
                         className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-dashed border-slate-300"
                       >
-                        + Add Custom Category
+                        + Add Custom Room
                       </button>
                     </div>
                   )
@@ -824,24 +947,36 @@ export default function VisionBoardPage() {
             <div className="md:col-span-9">
               {(filteredItems || []).length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-xl text-slate-400 text-sm border-2 border-dashed border-slate-200 shadow-sm">
-                  No images or ideas found in this category.<br />
+                  No images or ideas found in this room.<br />
                   {!isReadOnly && <span>Click <strong>"+ Add Photos / Idea"</strong> to start building your vision board.</span>}
                 </div>
               ) : (
                 <div className="space-y-6">
                   {(filteredItems || []).map((item) => (
-                    <Card key={item.id} className="p-5 border border-slate-200 shadow-sm bg-white overflow-hidden">
+                    <Card key={item.id} className={`p-5 border shadow-sm bg-white overflow-hidden transition-all ${item.isPromoted ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-slate-200'}`}>
                       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start">
                         <div className="space-y-3 flex-1 w-full">
                           
                           <div className="flex flex-wrap items-center gap-2">
+                            {item.isPromoted && (
+                              <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold shadow-xs">
+                                ✅ Selected
+                              </Badge>
+                            )}
+                            
                             <Badge className="bg-slate-900 text-white hover:bg-slate-800 text-[10px]">
                               📅 Added: {formatDisplayDate(item.date)}
                             </Badge>
                             
                             <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50 text-[10px]">
-                              📁 {item.category || "Inspiration & Ideas"}
+                              📁 {item.category || "Kitchen"}
                             </Badge>
+                            
+                            {item.isPromoted && item.estimatedPrice && (
+                              <Badge variant="outline" className="text-slate-600 border-slate-200 bg-slate-50 text-[10px] font-semibold">
+                                💰 {item.estimatedPrice}
+                              </Badge>
+                            )}
                           </div>
 
                           {item.notes && (
@@ -984,7 +1119,7 @@ export default function VisionBoardPage() {
                             onChange={(e) => setCategoryMoveTarget(e.target.value)}
                             className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
                           >
-                            {(categories || []).filter(c => c !== "All Rooms" && c !== categoryToDelete).map(c => (
+                            {(rooms || []).filter(c => c !== "All Rooms" && c !== categoryToDelete).map(c => (
                               <option key={c} value={c}>{c}</option>
                             ))}
                           </select>
@@ -1057,7 +1192,7 @@ export default function VisionBoardPage() {
               </div>
 
               <div className="grid gap-1.5">
-                <Label htmlFor="item-category" className="font-semibold text-slate-700 text-xs">Folder / Category</Label>
+                <Label htmlFor="item-category" className="font-semibold text-slate-700 text-xs">Room / Area</Label>
                 <select
                   id="item-category"
                   value={itemCategory}
@@ -1065,7 +1200,7 @@ export default function VisionBoardPage() {
                   onChange={(e) => setItemCategory(e.target.value)}
                   className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
-                  {(categories || []).filter(c => c !== "All Rooms").map(c => (
+                  {(rooms || []).filter(c => c !== "All Rooms").map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -1160,13 +1295,13 @@ export default function VisionBoardPage() {
               
               {!isReadOnly && (
                 <div className="flex gap-2 mt-1">
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors h-9">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white py-2 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors h-9">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
                     Camera
                     <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoUpload} className="hidden" />
                   </label>
 
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors h-9">
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white py-2 px-3 rounded-md shadow-sm font-semibold text-xs transition-colors h-9">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                     Upload File
                     <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
@@ -1199,6 +1334,63 @@ export default function VisionBoardPage() {
                 </div>
               )}
             </div>
+
+            {!isReadOnly && (
+              <div className="border border-emerald-200 bg-emerald-50/50 rounded-xl overflow-hidden mt-2">
+                <label className="flex items-center gap-3 p-3.5 cursor-pointer hover:bg-emerald-50 transition-colors">
+                  <input 
+                    type="checkbox" 
+                    checked={isPromoted}
+                    onChange={(e) => setIsPromoted(e.target.checked)}
+                    className="h-5 w-5 accent-emerald-600 rounded shrink-0"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-emerald-900 block">Promote to Official Selection</span>
+                    <span className="text-[10px] font-semibold text-emerald-700 block mt-0.5">Automatically copies this item to the Selections tab.</span>
+                  </div>
+                </label>
+
+                {isPromoted && (
+                  <div className="p-4 pt-0 space-y-4 border-t border-emerald-100 bg-white">
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Material Category</Label>
+                        <select
+                          value={materialCategory}
+                          onChange={(e) => setMaterialCategory(e.target.value)}
+                          className="mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none"
+                        >
+                          {MATERIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Estimated Price</Label>
+                        <div className="relative mt-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">$</span>
+                          <Input
+                            placeholder="0.00"
+                            value={estimatedPrice}
+                            onChange={(e) => setEstimatedPrice(e.target.value)}
+                            className="pl-7 h-9 text-sm bg-white shadow-sm border-slate-200"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                      <input 
+                        type="checkbox" 
+                        checked={syncToExpenses}
+                        onChange={(e) => setSyncToExpenses(e.target.checked)}
+                        className="h-4 w-4 accent-blue-600 rounded shrink-0"
+                      />
+                      <span className="text-xs font-semibold text-slate-700">Sync cost to Project Expenses</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
 
           <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
@@ -1266,8 +1458,8 @@ export default function VisionBoardPage() {
                 <span className="font-semibold">{formatDisplayDate(exportTarget.date)}</span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-md border text-xs">
-                <span className="text-slate-500 block font-medium">Category</span>
-                <span className="font-semibold">{exportTarget.category || "Inspiration & Ideas"}</span>
+                <span className="text-slate-500 block font-medium">Room</span>
+                <span className="font-semibold">{exportTarget.category || "Kitchen"}</span>
               </div>
             </div>
 
