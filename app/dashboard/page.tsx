@@ -124,7 +124,6 @@ export default function DashboardPage() {
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
   
-  // 🔥 Header state for Project Dropdown and Options Menu
   const [activeProject, setActiveProject] = useState("default")
   const [isOptionsOpen, setIsOptionsOpen] = useState(false)
   
@@ -134,39 +133,63 @@ export default function DashboardPage() {
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
+  // 🔥 OFFLINE-FIRST AUTH ENGINE
   useEffect(() => {
-    const fetchUserAndPermissions = async () => {
+    // 1. INSTANT LOCAL CACHE LOAD (Renders UI in 0ms)
+    const cachedWorkspace = localStorage.getItem("cleanbuild_active_workspace")
+    const cachedUserId = localStorage.getItem("cleanbuild_user_id")
+    const cachedTier = localStorage.getItem("cleanbuild_account_tier") || "free"
+    const cachedPerms = localStorage.getItem("cleanbuild_guest_permissions")
+
+    if (cachedWorkspace && cachedUserId && cachedWorkspace !== cachedUserId) {
+      setIsGuest(true)
+      if (cachedPerms) setPermissions(JSON.parse(cachedPerms))
+    } else {
+      setIsGuest(false)
+    }
+
+    setAccountTier(cachedTier)
+    setIsCheckingAuth(false) // Unblock the UI instantly so the user can interact
+
+    // 2. SILENT BACKGROUND NETWORK SYNC
+    const backgroundAuthSync = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (user?.email) {
-          setCurrentUserEmail(user.email)
-          
-          const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
-          if (profile) setAccountTier(profile.tier)
-          
-          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
+        if (!user?.email) return
 
-          if (activeWorkspaceId === user.id) {
-            setIsGuest(false)
-          } else {
-            setIsGuest(true)
-            const { data: guestInvite } = await supabase
-              .from("project_members")
-              .select("permissions")
-              .eq("invite_email", user.email)
-              .ilike("status", "active")
-              .maybeSingle()
+        setCurrentUserEmail(user.email)
+        localStorage.setItem("cleanbuild_user_id", user.id)
+        
+        const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
+        if (profile) {
+          setAccountTier(profile.tier)
+          localStorage.setItem("cleanbuild_account_tier", profile.tier)
+        }
+        
+        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
 
-            if (guestInvite?.permissions) {
-              setPermissions(guestInvite.permissions)
-            }
+        if (activeWorkspaceId === user.id) {
+          setIsGuest(false)
+        } else {
+          setIsGuest(true)
+          const { data: guestInvite } = await supabase
+            .from("project_members")
+            .select("permissions")
+            .eq("invite_email", user.email)
+            .ilike("status", "active")
+            .maybeSingle()
+
+          if (guestInvite?.permissions) {
+            setPermissions(guestInvite.permissions)
+            localStorage.setItem("cleanbuild_guest_permissions", JSON.stringify(guestInvite.permissions))
           }
         }
-      } finally {
-        setIsCheckingAuth(false)
+      } catch (error) {
+        console.error("Background auth sync failed:", error)
       }
     }
-    fetchUserAndPermissions()
+    
+    backgroundAuthSync()
   }, [])
 
   const hideExpenses = isGuest && permissions?.expenses === "hidden"
@@ -373,7 +396,7 @@ export default function DashboardPage() {
           </p>
         </div>
         
-        {/* 🔥 Action Area: Project Dropdown + Options Menu */}
+        {/* Action Area: Project Dropdown + Options Menu */}
         <div className="flex items-center justify-start md:justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           <div className="relative flex-1 md:flex-none">
