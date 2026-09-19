@@ -17,10 +17,10 @@ export const ALL_STORE_KEYS = [
   "cleanbuild_contacts",
   "cleanbuild_shared_rooms",
   "cleanbuild_documents_folders",
-  "cleanbuild_documents_items"
+  "cleanbuild_documents_items",
+  "cleanbuild_projects_list" // 🔥 Added to master sync list
 ] as const
 
-// Helper to reliably grab the active workspace context
 const getWorkspaceContext = async () => {
   let wid = typeof window !== 'undefined' ? localStorage.getItem("cleanbuild_active_workspace") : null
   if (!wid) {
@@ -34,24 +34,24 @@ export const syncManager = {
   async pushToCloud(storeKey: string, data: any) {
     try {
       const wid = await getWorkspaceContext()
-      const localDirtyKey = `dirty_${storeKey}_${wid}`
+      const isGlobal = storeKey === "cleanbuild_projects_list"
+      const localDirtyKey = isGlobal ? `dirty_${storeKey}` : `dirty_${storeKey}_${wid}`
 
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        console.warn(`✈️ Offline: Queuing ${storeKey} for cloud sync.`)
         await set(localDirtyKey, true)
         return
       }
 
-      // Check auth status without blocking execution
       const { data: userData } = await supabase.auth.getUser()
       if (!userData?.user?.id) {
          await set(localDirtyKey, true)
          return
       }
 
-      const targetWorkspaceId = typeof window !== 'undefined' 
-        ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) 
-        : userData.user.id
+      // 🔥 The Fix: Global keys save directly to your User ID, not the child workspace
+      const targetWorkspaceId = isGlobal 
+        ? userData.user.id 
+        : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) : userData.user.id)
 
       const { data: existingData, error: updateError } = await supabase
         .from("cloud_sync")
@@ -81,18 +81,20 @@ export const syncManager = {
     } catch (error) {
       console.warn(`Cloud push failed for ${storeKey}, marking dirty:`, error)
       const wid = await getWorkspaceContext()
-      await set(`dirty_${storeKey}_${wid}`, true)
+      const isGlobal = storeKey === "cleanbuild_projects_list"
+      await set(isGlobal ? `dirty_${storeKey}` : `dirty_${storeKey}_${wid}`, true)
     }
   },
 
   async pullFromCloud(storeKey: string) {
     const wid = await getWorkspaceContext()
-    const localDirtyKey = `dirty_${storeKey}_${wid}`
-    const localDataKey = `${storeKey}_${wid}`
+    const isGlobal = storeKey === "cleanbuild_projects_list"
+    
+    const localDirtyKey = isGlobal ? `dirty_${storeKey}` : `dirty_${storeKey}_${wid}`
+    const localDataKey = isGlobal ? storeKey : `${storeKey}_${wid}`
 
-    // 🔥 Dirty Flag Migration: Preserve unsynced offline data from before the multi-project upgrade
     const legacyDirty = await get(`dirty_${storeKey}`)
-    if (legacyDirty) {
+    if (legacyDirty && !isGlobal) {
        await set(localDirtyKey, true)
        await set(`dirty_${storeKey}`, false)
     }
@@ -111,9 +113,9 @@ export const syncManager = {
     const { data: userData } = await supabase.auth.getUser()
     if (!userData?.user?.id) return null
 
-    const targetWorkspaceId = typeof window !== 'undefined' 
-        ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) 
-        : userData.user.id
+    const targetWorkspaceId = isGlobal 
+      ? userData.user.id 
+      : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) : userData.user.id)
 
     const { data, error } = await supabase
       .from("cloud_sync")
@@ -134,8 +136,9 @@ export const syncManager = {
     const wid = await getWorkspaceContext()
 
     for (const key of ALL_STORE_KEYS) {
-      const localDirtyKey = `dirty_${key}_${wid}`
-      const localDataKey = `${key}_${wid}`
+      const isGlobal = key === "cleanbuild_projects_list"
+      const localDirtyKey = isGlobal ? `dirty_${key}` : `dirty_${key}_${wid}`
+      const localDataKey = isGlobal ? key : `${key}_${wid}`
 
       const isDirty = await get(localDirtyKey)
       if (isDirty) {

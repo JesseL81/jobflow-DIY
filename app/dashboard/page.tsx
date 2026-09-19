@@ -21,7 +21,6 @@ interface Expense {
   labor: number
 }
 
-// 🔥 New Interface for managing Multiple Projects
 interface ProjectWorkspace {
   id: string
   name: string
@@ -123,7 +122,6 @@ export default function DashboardPage() {
   const [calendarTasks, , calendarLoaded] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
   const [projectDates, , datesLoaded] = useOfflineSync<{startDate: string, endDate: string}>("cleanbuild_project_dates", { startDate: "2026-06-29", endDate: "2026-07-30" })
   
-  // 🔥 New: Multi-Project Core
   const [projectsList, setProjectsList] = useOfflineSync<ProjectWorkspace[]>("cleanbuild_projects_list", [])
   
   const isAppLoaded = expensesLoaded && budgetLoaded && nonWorkdaysLoaded && punchLoaded && calendarLoaded && datesLoaded
@@ -137,7 +135,6 @@ export default function DashboardPage() {
   const [activeProject, setActiveProject] = useState("")
   const [isOptionsOpen, setIsOptionsOpen] = useState(false)
   
-  // Create Project Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState("")
   
@@ -147,7 +144,6 @@ export default function DashboardPage() {
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
-  // 🔥 OFFLINE-FIRST AUTH & PROJECT ENGINE
   useEffect(() => {
     const cachedWorkspace = localStorage.getItem("cleanbuild_active_workspace")
     const cachedUserId = localStorage.getItem("cleanbuild_user_id")
@@ -175,10 +171,13 @@ export default function DashboardPage() {
         setCurrentUserEmail(user.email)
         localStorage.setItem("cleanbuild_user_id", user.id)
         
-        // Auto-seed the primary project if the list is empty
-        if (projectsList.length === 0) {
-          setProjectsList([{ id: user.id, name: "My Primary Project", role: "owner" }])
-        }
+        // 🔥 The Fix: Safely auto-seed the primary project only if the array is genuinely empty
+        setProjectsList((prev) => {
+          if (!prev || prev.length === 0) {
+            return [{ id: user.id, name: "My Primary Project", role: "owner" }]
+          }
+          return prev
+        })
         
         const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
         if (profile) {
@@ -211,7 +210,7 @@ export default function DashboardPage() {
     }
     
     backgroundAuthSync()
-  }, [projectsList.length, setProjectsList])
+  }, [setProjectsList])
 
   const handleProjectSwitch = (selectedId: string) => {
     if (selectedId === "CREATE_NEW") {
@@ -221,8 +220,6 @@ export default function DashboardPage() {
     
     setActiveProject(selectedId)
     localStorage.setItem("cleanbuild_active_workspace", selectedId)
-    
-    // Broadcast the event so ALL hooks on the page switch to the new namespace instantly
     window.dispatchEvent(new Event("workspace-changed"))
   }
 
@@ -236,11 +233,9 @@ export default function DashboardPage() {
       role: "owner"
     }
     
-    // Add to list and save
     const updatedList = [...projectsList, newProject]
     await setProjectsList(updatedList)
     
-    // Instantly switch into the new blank canvas
     localStorage.setItem("cleanbuild_active_workspace", newProjectId)
     setActiveProject(newProjectId)
     window.dispatchEvent(new Event("workspace-changed"))
@@ -406,7 +401,6 @@ export default function DashboardPage() {
       
       <PageTour steps={DASHBOARD_TOUR_STEPS} tourKey="dashboard_tour" />
 
-      {/* THE GLASS WALL OVERLAY */}
       {showPaywall && (
         <div className="absolute inset-0 z-50 bg-slate-300/70 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden text-center relative z-50 mt-[-10vh]">
@@ -442,7 +436,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Target: tour-dashboard-header with Minimalist Dropdown */}
       <div className="tour-dashboard-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -453,7 +446,6 @@ export default function DashboardPage() {
           </p>
         </div>
         
-        {/* 🔥 Action Area: Live Project Dropdown + Options Menu */}
         <div className="flex items-center justify-start md:justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           <div className="relative flex-1 md:flex-none">
@@ -511,7 +503,6 @@ export default function DashboardPage() {
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         <div className="p-6 space-y-6">
           
-          {/* Target: tour-budget-cards */}
           <div className="tour-budget-cards grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-2">
@@ -550,7 +541,6 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Target: tour-progress-bars */}
           <div className="tour-progress-bars grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="bg-white border shadow-2xs">
               <CardHeader className="pb-3">
@@ -593,7 +583,6 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* Target: tour-punch-list */}
             <Card className="tour-punch-list bg-white border shadow-2xs md:col-span-2">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-center">
@@ -633,7 +622,6 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Target: tour-add-task */}
                     <div className="tour-add-task flex gap-2">
                       <Input
                         placeholder="Add quick task (e.g. Call inspector)..."
@@ -818,7 +806,6 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* 🔥 Create New Project Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent className="sm:max-w-[400px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -860,7 +847,6 @@ export default function DashboardPage() {
               onClick={() => {
                 setIsCreateModalOpen(false)
                 setNewProjectName("")
-                // If they cancel out, ensure the dropdown snaps back to the active visual state
                 setActiveProject(localStorage.getItem("cleanbuild_active_workspace") || "default")
               }} 
               className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"

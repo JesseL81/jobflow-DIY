@@ -10,7 +10,6 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
   const [isLoaded, setIsLoaded] = useState(false)
   
   const currentDataRef = useRef<T>(fallbackData)
-  // Track the dynamically namespaced key
   const localKeyRef = useRef<string>(storeKey)
 
   useEffect(() => {
@@ -18,7 +17,6 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
 
     async function initialize() {
       try {
-        // 1. Resolve Active Workspace ID dynamically
         let wid = typeof window !== 'undefined' ? localStorage.getItem("cleanbuild_active_workspace") : null
         if (!wid) {
            const { data: authData } = await supabase.auth.getUser()
@@ -28,18 +26,18 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
            }
         }
         
-        // 2. Dynamically namespace the local IndexedDB key
-        const localKey = wid ? `${storeKey}_${wid}` : storeKey
+        // 🔥 The Fix: Global keys bypass the project namespace
+        const isGlobal = storeKey === "cleanbuild_projects_list"
+        const localKey = (wid && !isGlobal) ? `${storeKey}_${wid}` : storeKey
         localKeyRef.current = localKey
 
         let localData = await get<T>(localKey)
         
-        // 3. ZERO DATA LOSS MIGRATION: If namespaced key is empty, pull from legacy key
         if (localData === undefined && localKey !== storeKey) {
           const legacyData = await get<T>(storeKey)
           if (legacyData !== undefined) {
             localData = legacyData
-            await set(localKey, legacyData) // Migrate it to the isolated project key safely
+            await set(localKey, legacyData) 
           }
         }
         
@@ -54,7 +52,6 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
           setIsLoaded(true)
         }
 
-        // 4. Silent background pull from Supabase Cloud
         const cloudData = await syncManager.pullFromCloud(storeKey)
         if (isMounted && cloudData !== null && cloudData !== undefined) {
           setData(cloudData as T)
@@ -72,12 +69,13 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
 
     initialize()
 
-    // 5. Real-Time Cross-Project Listener
-    // When the Dashboard Dropdown fires this event, the hook instantly pivots to the new project DB
     const handleWorkspaceChange = () => {
       if (isMounted) {
-        setIsLoaded(false)
-        initialize() 
+        // 🔥 The Fix: Don't force global keys to wipe/reload on workspace switch
+        if (storeKey !== "cleanbuild_projects_list") {
+          setIsLoaded(false)
+          initialize() 
+        }
       }
     }
     
@@ -91,7 +89,7 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
         window.removeEventListener("workspace-changed", handleWorkspaceChange)
       }
     }
-  }, [storeKey]) // Intentionally omitting fallbackData to prevent infinite loops
+  }, [storeKey]) 
 
   const saveAndSync = useCallback(
     async (updater: T | ((prev: T) => T)) => {
