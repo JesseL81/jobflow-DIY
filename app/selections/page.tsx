@@ -1,12 +1,15 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
+import { get, set } from "idb-keyval"
+import { syncManager } from "@/lib/syncManager"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { PageTour } from "@/components/page-tour"
@@ -29,6 +32,7 @@ export interface SelectionItem {
   checked: boolean
   syncToExpenses?: boolean
   photoUrl?: string 
+  // 🔥 Bi-directional sync fields
   syncToVisionBoard?: boolean
   linkTitle?: string
   linkDescription?: string
@@ -36,6 +40,7 @@ export interface SelectionItem {
   linkImage?: string
 }
 
+// Ensure the structure perfectly matches the Vision Board data
 interface VisionBoardItem {
   id: number
   date: string 
@@ -139,11 +144,12 @@ const SELECTIONS_TOUR_STEPS = [
 export default function SelectionsPage() {
   const [isMounted, setIsMounted] = useState(false)
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
+  
+  // 🔥 Import Vision Board list to enable bi-directional saves
   const [visionBoardItems, setVisionBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", [])
   
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
   const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
-  const [expenses, setExpenses] = useOfflineSync<ExpenseItem[]>("cleanbuild_expenses", [])
   
   const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
     "Plumbing Fixtures": 500,
@@ -202,6 +208,7 @@ export default function SelectionsPage() {
   const [formStatus, setFormStatus] = useState<SelectionItem["status"]>("Idea / Saved")
   const [formSyncToExpenses, setFormSyncToExpenses] = useState<boolean>(false)
   
+  // 🔥 New Unfurl / Autofetch State
   const [linkTitle, setLinkTitle] = useState("")
   const [linkDescription, setLinkDescription] = useState("")
   const [linkDomain, setLinkDomain] = useState("")
@@ -211,22 +218,24 @@ export default function SelectionsPage() {
   const [formPhotoUrl, setFormPhotoUrl] = useState<string>("")
   const [formSyncToVisionBoard, setFormSyncToVisionBoard] = useState<boolean>(false)
 
+  // Smart Merge Engine
   useEffect(() => {
-    const performSmartMerge = () => {
+    const performSmartMerge = async () => {
       const hasMerged = localStorage.getItem("cleanbuild_rooms_merged_selections")
       if (!hasMerged) {
-        const oldRooms = JSON.parse(localStorage.getItem("cleanbuild_selections_rooms_list") || "[]")
-        const currentShared = rooms || DEFAULT_ROOMS
+        const oldRooms = await get<string[]>("cleanbuild_selections_rooms_list") || []
+        const currentShared = await get<string[]>("cleanbuild_shared_rooms") || DEFAULT_ROOMS
         
         const combined = Array.from(new Set([...oldRooms, ...currentShared]))
         const fixed = ["All Rooms", ...combined.filter(r => r !== "All Rooms" && r !== "All Categories")]
         
+        await set("cleanbuild_shared_rooms", fixed)
         setRooms(fixed)
         localStorage.setItem("cleanbuild_rooms_merged_selections", "true")
       }
     }
-    if (isMounted) performSmartMerge()
-  }, [isMounted, rooms, setRooms])
+    performSmartMerge()
+  }, [setRooms])
 
   useEffect(() => {
     setIsMounted(true)
@@ -235,11 +244,11 @@ export default function SelectionsPage() {
   useEffect(() => {
     if (isMounted) {
       if (rooms && rooms[0] !== "All Rooms") {
-        const fixed = ["All Rooms", ...(rooms || []).filter(r => r !== "All Rooms")]
+        const fixed = ["All Rooms", ...rooms.filter(r => r !== "All Rooms")]
         setRooms(fixed)
       }
       if (categories && categories[0] !== "All Categories") {
-        const fixed = ["All Categories", ...(categories || []).filter(c => c !== "All Categories")]
+        const fixed = ["All Categories", ...categories.filter(c => c !== "All Categories")]
         setCategories(fixed)
       }
     }
@@ -283,6 +292,7 @@ export default function SelectionsPage() {
     fetchUserAndPermissions()
   }, [])
 
+  // 🔥 Auto-Fetch Link Previews engine
   useEffect(() => {
     if (!formUrl.trim()) {
       setLinkTitle("")
@@ -317,7 +327,7 @@ export default function SelectionsPage() {
         setLinkDescription(json.description || "")
         setLinkDomain(json.domain || fallbackDomain)
         setLinkImage(json.image || "")
-        if (json.title && !formTitle) setFormTitle(json.title) 
+        if (json.title && !formTitle) setFormTitle(json.title) // Auto-fill title if empty
       } else {
         setFetchError(true)
         setLinkDomain(fallbackDomain)
@@ -340,12 +350,12 @@ export default function SelectionsPage() {
   }
 
   const totalCost = useMemo(() => {
-    return (items || []).reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
+    return items.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
   }, [items])
 
   const activeCategoryCost = useMemo(() => {
     if (selectedCategory === "All Categories") return totalCost
-    return (items || []).reduce((sum, item) => {
+    return items.reduce((sum, item) => {
       if (item.category !== selectedCategory || !item.checked) return sum
       return sum + extractPrice(item.price)
     }, 0)
@@ -353,12 +363,12 @@ export default function SelectionsPage() {
 
   const handleToggleCheck = async (id: string) => {
     if (isReadOnly) return
-    const updatedItems = (items || []).map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
-    setItems(updatedItems)
+    const updatedItems = items.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
+    await setItems(updatedItems)
   }
 
   const filteredItems = useMemo(() => {
-    return (items || []).filter((item) => {
+    return items.filter((item) => {
       const matchesCategory = selectedCategory === "All Categories" || item.category === selectedCategory
       const matchesRoom = selectedRoom === "All Rooms" || (item.room || "Other") === selectedRoom
       const matchesSearch =
@@ -372,8 +382,8 @@ export default function SelectionsPage() {
   const handleAddRoom = async () => {
     if (isReadOnly || !newRoomName.trim()) return
     const trimmed = newRoomName.trim()
-    if (!(rooms || []).includes(trimmed)) {
-      setRooms([...(rooms || []), trimmed])
+    if (!rooms.includes(trimmed)) {
+      await setRooms([...rooms, trimmed])
     }
     setNewRoomName("")
     setIsAddingRoom(false)
@@ -383,8 +393,8 @@ export default function SelectionsPage() {
   const handleAddCategory = async () => {
     if (isReadOnly || !newCategoryName.trim()) return
     const trimmed = newCategoryName.trim()
-    if (!(categories || []).includes(trimmed)) {
-      setCategories([...(categories || []), trimmed])
+    if (!categories.includes(trimmed)) {
+      await setCategories([...categories, trimmed])
     }
     setNewCategoryName("")
     setIsAddingCategory(false)
@@ -393,7 +403,7 @@ export default function SelectionsPage() {
 
   const handleOpenDeleteRoom = (room: string) => {
     setRoomToDelete(room)
-    const availableFallbacks = (rooms || []).filter(r => r !== "All Rooms" && r !== room)
+    const availableFallbacks = rooms.filter(r => r !== "All Rooms" && r !== room)
     setRoomMoveTarget(availableFallbacks.includes("Kitchen") ? "Kitchen" : availableFallbacks[0] || "")
     setRoomDeleteMode("move")
     setIsRoomDeleteModalOpen(true)
@@ -402,7 +412,7 @@ export default function SelectionsPage() {
   const handleConfirmRoomDelete = async () => {
     if (isReadOnly || !roomToDelete) return
 
-    let updatedItems = [...(items || [])]
+    let updatedItems = [...items]
     const itemsInRoom = updatedItems.filter(item => (item.room || "Other") === roomToDelete)
 
     if (itemsInRoom.length > 0) {
@@ -410,18 +420,21 @@ export default function SelectionsPage() {
         const idsToDelete = new Set(itemsInRoom.map(i => i.id))
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
         
-        const filteredExpenses = (expenses || []).filter(e => !idsToDelete.has(e.id.toString()))
-        setExpenses(filteredExpenses)
-        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
-
+        try {
+           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+           const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
+           await set("cleanbuild_expenses", filteredExpenses)
+           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
+           window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {}
       } else if (roomDeleteMode === "move" && roomMoveTarget) {
         updatedItems = updatedItems.map(item => 
           (item.room || "Other") === roomToDelete ? { ...item, room: roomMoveTarget } : item
         )
       }
     }
-    setItems(updatedItems)
-    setRooms((rooms || []).filter(r => r !== roomToDelete))
+    await setItems(updatedItems)
+    await setRooms(rooms.filter(r => r !== roomToDelete))
     if (selectedRoom === roomToDelete) setSelectedRoom("All Rooms")
     setIsRoomDeleteModalOpen(false)
     setRoomToDelete(null)
@@ -429,7 +442,7 @@ export default function SelectionsPage() {
 
   const handleOpenDeleteCategory = (cat: string) => {
     setCategoryToDelete(cat)
-    const availableFallbacks = (categories || []).filter(c => c !== "All Categories" && c !== cat)
+    const availableFallbacks = categories.filter(c => c !== "All Categories" && c !== cat)
     setCategoryMoveTarget(availableFallbacks.includes("Plumbing Fixtures") ? "Plumbing Fixtures" : availableFallbacks[0] || "")
     setCategoryDeleteMode("move")
     setIsCategoryDeleteModalOpen(true)
@@ -438,7 +451,7 @@ export default function SelectionsPage() {
   const handleConfirmCategoryDelete = async () => {
     if (isReadOnly || !categoryToDelete) return
 
-    let updatedItems = [...(items || [])]
+    let updatedItems = [...items]
     const itemsInCat = updatedItems.filter(item => item.category === categoryToDelete)
 
     if (itemsInCat.length > 0) {
@@ -446,18 +459,21 @@ export default function SelectionsPage() {
         const idsToDelete = new Set(itemsInCat.map(i => i.id))
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
 
-        const filteredExpenses = (expenses || []).filter(e => !idsToDelete.has(e.id.toString()))
-        setExpenses(filteredExpenses)
-        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
-
+        try {
+           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+           const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
+           await set("cleanbuild_expenses", filteredExpenses)
+           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
+           window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {}
       } else if (categoryDeleteMode === "move" && categoryMoveTarget) {
         updatedItems = updatedItems.map(item => 
           item.category === categoryToDelete ? { ...item, category: categoryMoveTarget } : item
         )
       }
     }
-    setItems(updatedItems)
-    setCategories((categories || []).filter(c => c !== categoryToDelete))
+    await setItems(updatedItems)
+    await setCategories(categories.filter(c => c !== categoryToDelete))
     if (selectedCategory === categoryToDelete) setSelectedCategory("All Categories")
     setIsCategoryDeleteModalOpen(false)
     setCategoryToDelete(null)
@@ -467,7 +483,7 @@ export default function SelectionsPage() {
     if (isReadOnly) return
     const num = parseFloat(tempBudgetVal) || 0
     const updatedBudgets = { ...categoryBudgets, [selectedCategory]: num }
-    setCategoryBudgets(updatedBudgets)
+    await setCategoryBudgets(updatedBudgets)
     setIsBudgetModalOpen(false)
   }
 
@@ -485,6 +501,7 @@ export default function SelectionsPage() {
     setFormStatus("Idea / Saved")
     setFormSyncToExpenses(false)
     
+    // Clear autofurl state
     setFormPhotoUrl("")
     setLinkTitle("")
     setLinkDescription("")
@@ -509,6 +526,7 @@ export default function SelectionsPage() {
     setFormStatus(item.status || "Idea / Saved")
     setFormSyncToExpenses(!!item.syncToExpenses)
     
+    // Pre-load autofurl state
     setFormPhotoUrl(item.photoUrl || "")
     setLinkTitle(item.linkTitle || "")
     setLinkDescription(item.linkDescription || "")
@@ -520,6 +538,7 @@ export default function SelectionsPage() {
     setIsModalOpen(true)
   }
 
+  // 🔥 3-Way Sync Engine (Mirroring the Vision Board process)
   const handleSaveItem = async () => {
     if (isReadOnly || !formTitle.trim() || isSubmitting) return
     setIsSubmitting(true)
@@ -542,6 +561,8 @@ export default function SelectionsPage() {
         status: formStatus,
         checked: formSyncToExpenses ? true : (editingItem ? editingItem.checked : true),
         syncToExpenses: formSyncToExpenses,
+        
+        // Auto-fetch data
         photoUrl: finalLinkImage,
         syncToVisionBoard: formSyncToVisionBoard,
         linkTitle: linkTitle || formTitle.trim(),
@@ -550,12 +571,14 @@ export default function SelectionsPage() {
         linkImage: finalLinkImage
       }
 
+      // 1. Save to Selections Local Storage
       const updatedItemsList = editingItem 
-        ? (items || []).map((i) => (i.id === editingItem.id ? updatedItem : i))
-        : [updatedItem, ...(items || [])]
+        ? items.map((i) => (i.id === editingItem.id ? updatedItem : i))
+        : [updatedItem, ...items]
       
-      setItems(updatedItemsList)
+      await setItems(updatedItemsList)
 
+      // 2. Sync to Vision Board
       const existingVbItem = (visionBoardItems || []).find(v => v.id === parsedId)
       
       if (formSyncToVisionBoard) {
@@ -582,28 +605,41 @@ export default function SelectionsPage() {
             ? (visionBoardItems || []).map(v => v.id === parsedId ? vbItem : v)
             : [vbItem, ...(visionBoardItems || [])]
             
-        setVisionBoardItems(newVbList)
+        await setVisionBoardItems(newVbList)
       } else if (editingItem?.syncToVisionBoard && !formSyncToVisionBoard) {
           const newVbList = (visionBoardItems || []).filter(v => v.id !== parsedId)
-          setVisionBoardItems(newVbList)
+          await setVisionBoardItems(newVbList)
       }
 
+      // 3. Sync to Expenses Ledger
       if (formSyncToExpenses) {
-        const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
-        const newExpenseRecord: ExpenseItem = {
-          id: parsedId,
-          description: `Selection: ${updatedItem.title} (${updatedItem.room} - ${updatedItem.category})`,
-          materials: itemPriceNumber,
-          labor: 0,
-          date: new Date().toISOString().split("T")[0],
-        }
-        const newExpenseList = [newExpenseRecord, ...filteredExpenses]
-        setExpenses(newExpenseList)
-        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
+        try {
+          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+          const filteredExpenses = editingItem
+            ? existingExpenses.filter((e) => e.id !== parsedId)
+            : existingExpenses
+
+          const newExpenseRecord: ExpenseItem = {
+            id: parsedId,
+            description: `Selection: ${updatedItem.title} (${updatedItem.room} - ${updatedItem.category})`,
+            materials: itemPriceNumber,
+            labor: 0,
+            date: new Date().toISOString().split("T")[0],
+          }
+
+          const newExpenseList = [newExpenseRecord, ...filteredExpenses]
+          await set("cleanbuild_expenses", newExpenseList)
+          await syncManager.pushToCloud("cleanbuild_expenses", newExpenseList)
+          window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {}
       } else if (editingItem && editingItem.syncToExpenses && !formSyncToExpenses) {
-        const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
-        setExpenses(filteredExpenses)
-        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
+        try {
+          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+          const filteredExpenses = existingExpenses.filter((e) => e.id !== parsedId)
+          await set("cleanbuild_expenses", filteredExpenses)
+          await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
+          window.dispatchEvent(new Event("expenses-updated"))
+        } catch (err) {}
       }
 
       setIsModalOpen(false)
@@ -616,15 +652,22 @@ export default function SelectionsPage() {
     if (isReadOnly || !editingItem) return
     const parsedId = parseInt(editingItem.id)
 
-    const updatedItems = (items || []).filter((i) => i.id !== editingItem.id)
-    setItems(updatedItems)
+    // Remove from Selections
+    const updatedItems = items.filter((i) => i.id !== editingItem.id)
+    await setItems(updatedItems)
     
+    // Remove from Vision Board
     const updatedVB = (visionBoardItems || []).filter(v => v.id !== parsedId)
-    setVisionBoardItems(updatedVB)
+    await setVisionBoardItems(updatedVB)
 
-    const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
-    setExpenses(filteredExpenses)
-    if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
+    // Remove from Expenses
+    try {
+      const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
+      const filteredExpenses = existingExpenses.filter((e) => e.id !== parsedId)
+      await set("cleanbuild_expenses", filteredExpenses)
+      await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
+      window.dispatchEvent(new Event("expenses-updated"))
+    } catch (err) {}
 
     setIsModalOpen(false)
   }
@@ -712,6 +755,7 @@ export default function SelectionsPage() {
       <PaywallOverlay show={showPaywall} />
       <PageTour steps={SELECTIONS_TOUR_STEPS} tourKey="selections_tour" />
 
+      {/* Target: tour-selections-header with Minimalist Dropdown */}
       <div className="tour-selections-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -794,13 +838,14 @@ export default function SelectionsPage() {
             
             <div className="tour-selections-filters md:col-span-1 space-y-4">
               
+              {/* --- ROOMS FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2">
                   Filter by Room
                 </span>
                 
-                {(rooms || []).map((rm) => {
-                  const rmItems = rm === "All Rooms" ? (items || []) : (items || []).filter((i) => (i.room || "Other") === rm)
+                {rooms.map((rm) => {
+                  const rmItems = rm === "All Rooms" ? items : items.filter((i) => (i.room || "Other") === rm)
                   const rmCount = rmItems.length
                   const rmCheckedCost = rmItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedRoom === rm
@@ -901,13 +946,14 @@ export default function SelectionsPage() {
                 )}
               </div>
 
+              {/* --- CATEGORIES FILTER --- */}
               <div className="bg-white p-3 rounded-xl border shadow-xs space-y-1">
                 <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider px-2 block mb-2 mt-2">
                   Filter by Category
                 </span>
                 
-                {(categories || []).map((cat) => {
-                  const catItems = cat === "All Categories" ? (items || []) : (items || []).filter((i) => i.category === cat)
+                {categories.map((cat) => {
+                  const catItems = cat === "All Categories" ? items : items.filter((i) => i.category === cat)
                   const catCount = catItems.length
                   const catCheckedCost = catItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedCategory === cat
@@ -1085,6 +1131,7 @@ export default function SelectionsPage() {
                               className={`mt-1 h-4 w-4 rounded accent-indigo-600 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                             />
                             
+                            {/* 🔥 Display Thumbnail Photo if pushed from Vision Board or Autofurled */}
                             {(item.photoUrl || item.linkImage) && (
                               <div className="h-14 w-14 shrink-0 rounded-md border border-slate-200 overflow-hidden bg-white flex items-center justify-center shadow-xs">
                                 <img src={item.photoUrl || item.linkImage} alt="Selection thumbnail" className="max-h-full max-w-full object-cover" />
@@ -1193,6 +1240,7 @@ export default function SelectionsPage() {
         </div>
       </Card>
 
+      {/* DELETE ROOM MODAL */}
       <Dialog open={isRoomDeleteModalOpen} onOpenChange={setIsRoomDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1206,7 +1254,7 @@ export default function SelectionsPage() {
 
           <div className="px-6 py-5 bg-white space-y-4">
             {(() => {
-              const itemsInFolder = (items || []).filter(i => (i.room || "Other") === roomToDelete).length;
+              const itemsInFolder = items.filter(i => (i.room || "Other") === roomToDelete).length;
               
               if (itemsInFolder === 0) {
                 return (
@@ -1240,9 +1288,9 @@ export default function SelectionsPage() {
                           <select
                             value={roomMoveTarget}
                             onChange={(e) => setRoomMoveTarget(e.target.value)}
-                            className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
                           >
-                            {(rooms || []).filter(r => r !== "All Rooms" && r !== roomToDelete).map(r => (
+                            {rooms.filter(r => r !== "All Rooms" && r !== roomToDelete).map(r => (
                               <option key={r} value={r}>{r}</option>
                             ))}
                           </select>
@@ -1286,6 +1334,7 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* DELETE CATEGORY MODAL */}
       <Dialog open={isCategoryDeleteModalOpen} onOpenChange={setIsCategoryDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1299,7 +1348,7 @@ export default function SelectionsPage() {
 
           <div className="px-6 py-5 bg-white space-y-4">
             {(() => {
-              const itemsInFolder = (items || []).filter(i => i.category === categoryToDelete).length;
+              const itemsInFolder = items.filter(i => i.category === categoryToDelete).length;
               
               if (itemsInFolder === 0) {
                 return (
@@ -1333,9 +1382,9 @@ export default function SelectionsPage() {
                           <select
                             value={categoryMoveTarget}
                             onChange={(e) => setCategoryMoveTarget(e.target.value)}
-                            className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
                           >
-                            {(categories || []).filter(c => c !== "All Categories" && c !== categoryToDelete).map(c => (
+                            {categories.filter(c => c !== "All Categories" && c !== categoryToDelete).map(c => (
                               <option key={c} value={c}>{c}</option>
                             ))}
                           </select>
@@ -1386,7 +1435,7 @@ export default function SelectionsPage() {
             <DialogTitle className="text-orange-400 font-bold">Set Budget Target</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 px-6 py-4 bg-white">
-            <label htmlFor="budget-input" className="block text-xs font-semibold text-slate-700 mb-1">Estimated Allowance / Budget ($)</label>
+            <Label htmlFor="budget-input" className="text-xs font-semibold text-slate-700">Estimated Allowance / Budget ($)</Label>
             <Input
               id="budget-input"
               type="number"
@@ -1419,37 +1468,37 @@ export default function SelectionsPage() {
 
       {/* Main Item Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] relative z-10">
-          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0 relative z-10">
+        <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-orange-400 font-bold">
               {isReadOnly ? "View Material Selection" : editingItem ? "Edit Material Selection" : "Add New Material Selection"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-white">
+          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
             <div>
-              <label htmlFor="item-title" className="block text-xs font-bold text-slate-700 mb-1">Item Name / Title {isReadOnly ? "" : "*"}</label>
+              <Label htmlFor="item-title" className="text-xs font-semibold text-slate-700">Item Name / Title {isReadOnly ? "" : "*"}</Label>
               <Input 
                 id="item-title" 
                 placeholder="e.g. Kohler Pull-Down Kitchen Faucet" 
                 value={formTitle} 
                 disabled={isReadOnly}
                 onChange={(e) => setFormTitle(e.target.value)} 
-                className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="item-room" className="block text-xs font-bold text-slate-700 mb-1">Room / Location</label>
+                <Label htmlFor="item-room" className="text-xs font-semibold text-slate-700">Room / Location</Label>
                 <select
                   id="item-room"
                   value={formRoom}
                   disabled={isReadOnly}
                   onChange={(e) => setFormRoom(e.target.value)}
-                  className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
-                  {(rooms || []).filter((r) => r !== "All Rooms").map((r) => (
+                  {rooms.filter((r) => r !== "All Rooms").map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
@@ -1458,15 +1507,15 @@ export default function SelectionsPage() {
               </div>
 
               <div>
-                <label htmlFor="item-cat" className="block text-xs font-bold text-slate-700 mb-1">Material Category</label>
+                <Label htmlFor="item-cat" className="text-xs font-semibold text-slate-700">Material Category</Label>
                 <select
                   id="item-cat"
                   value={formCategory}
                   disabled={isReadOnly}
                   onChange={(e) => setFormCategory(e.target.value)}
-                  className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
-                  {(categories || []).filter((c) => c !== "All Categories").map((c) => (
+                  {categories.filter((c) => c !== "All Categories").map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -1476,13 +1525,13 @@ export default function SelectionsPage() {
             </div>
 
             <div>
-              <label htmlFor="item-status" className="block text-xs font-bold text-slate-700 mb-1">Status</label>
+              <Label htmlFor="item-status" className="text-xs font-semibold text-slate-700">Status</Label>
               <select
                 id="item-status"
                 value={formStatus}
                 disabled={isReadOnly}
                 onChange={(e) => setFormStatus(e.target.value as SelectionItem["status"])}
-                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               >
                 <option value="Idea / Saved">Idea / Saved</option>
                 <option value="Selected">Selected</option>
@@ -1493,8 +1542,8 @@ export default function SelectionsPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="item-url" className="block text-xs font-bold text-slate-700">Product Link / URL</label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="item-url" className="text-xs font-semibold text-slate-700">Product Link / URL</Label>
                 {isFetchingPreview && <span className="text-[10px] text-blue-600 font-bold animate-pulse">Fetching link preview...</span>}
               </div>
               <Input 
@@ -1510,7 +1559,7 @@ export default function SelectionsPage() {
                     setLinkDomain("")
                     setLinkDescription("")
                 }} 
-                className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
 
               {/* 🔥 Auto-Fetch Link Preview Block */}
@@ -1559,8 +1608,8 @@ export default function SelectionsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="item-price" className="block text-xs font-bold text-slate-700 mb-1">Est. Price</label>
-                <div className="relative">
+                <Label htmlFor="item-price" className="text-xs font-semibold text-slate-700">Est. Price</Label>
+                <div className="relative mt-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-medium">$</span>
                   <Input 
                     id="item-price" 
@@ -1573,37 +1622,37 @@ export default function SelectionsPage() {
                 </div>
               </div>
               <div>
-                <label htmlFor="item-model" className="block text-xs font-bold text-slate-700 mb-1">Model / SKU #</label>
+                <Label htmlFor="item-model" className="text-xs font-semibold text-slate-700">Model / SKU #</Label>
                 <Input 
                   id="item-model" 
                   placeholder="e.g. K-596-VS" 
                   value={formModel} 
                   disabled={isReadOnly}
                   onChange={(e) => setFormModel(e.target.value)} 
-                  className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="item-notes" className="block text-xs font-bold text-slate-700 mb-1">Notes / Requirements</label>
+              <Label htmlFor="item-notes" className="text-xs font-semibold text-slate-700">Notes / Requirements</Label>
               <Input 
                 id="item-notes" 
                 placeholder="e.g. Needs 3/8 valve connection, matte black finish" 
                 value={formNotes} 
                 disabled={isReadOnly}
                 onChange={(e) => setFormNotes(e.target.value)} 
-                className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`mt-1 h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
 
-            <div className="space-y-2 pt-2">
-              <label className={`flex items-center justify-between p-3 bg-indigo-50/80 border border-indigo-200 rounded-lg ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+            <div className="grid gap-3 pt-2">
+              <div className="flex items-center justify-between p-3 bg-indigo-50/80 border border-indigo-200 rounded-lg">
                 <div>
-                  <span className="font-semibold text-indigo-950 text-xs block">
+                  <Label htmlFor="sync-vision-toggle" className={`font-semibold text-indigo-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
                     📷 Sync to Vision Board
-                  </span>
-                  <p className="text-[11px] text-indigo-800 mt-1 pr-4">
+                  </Label>
+                  <p className="text-[11px] text-indigo-800 mt-1">
                     Copies this selection back to your Vision Board for visual reference.
                   </p>
                 </div>
@@ -1615,14 +1664,14 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormSyncToVisionBoard(e.target.checked)}
                   className={`h-5 w-5 accent-indigo-600 rounded shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                 />
-              </label>
+              </div>
 
-              <label className={`flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+              <div className="flex items-center justify-between p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg">
                 <div>
-                  <span className="font-semibold text-emerald-950 text-xs block">
+                  <Label htmlFor="sync-expenses-toggle" className={`font-semibold text-emerald-950 text-xs block ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
                     💰 Sync to Expenses Tab
-                  </span>
-                  <p className="text-[11px] text-emerald-800 mt-1 pr-4">
+                  </Label>
+                  <p className="text-[11px] text-emerald-800 mt-1">
                     Automatically logs material price under Project Expenses.
                   </p>
                 </div>
@@ -1634,12 +1683,12 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormSyncToExpenses(e.target.checked)}
                   className={`h-5 w-5 accent-emerald-600 rounded shrink-0 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                 />
-              </label>
+              </div>
             </div>
 
           </div>
 
-          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 bg-white items-center shrink-0">
+          <div className="flex flex-col gap-2 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white items-center">
             {isReadOnly ? (
               <Button 
                 variant="outline" 
