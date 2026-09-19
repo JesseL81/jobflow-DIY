@@ -472,10 +472,11 @@ export default function DashboardPage() {
         <div className="flex items-center justify-start md:justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           <div className="relative flex-1 md:flex-none">
+            {/* 🔥 Updated Dropdown Match Light Blue Buttons */}
             <select
               value={activeProject}
               onChange={(e) => handleProjectSwitch(e.target.value)}
-              className="w-full md:w-56 h-9 rounded-md border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-white shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer hover:bg-slate-700 transition-colors truncate"
+              className="w-full md:w-56 h-9 rounded-md border border-blue-500 bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 appearance-none cursor-pointer hover:bg-blue-500 transition-colors truncate"
             >
               {projectsList.length === 0 ? (
                 <option value="default">My Primary Project</option>
@@ -489,21 +490,21 @@ export default function DashboardPage() {
               <option disabled>──────────</option>
               <option value="CREATE_NEW">+ Create New Project</option>
             </select>
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none">▼</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-200 text-[10px] pointer-events-none">▼</span>
           </div>
 
           <div className="relative shrink-0">
+            {/* 🔥 Updated Hover State for 3 Dots Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsOptionsOpen(!isOptionsOpen)}
-              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-slate-700 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
+              className="text-slate-300 border-slate-700 bg-slate-800/80 hover:bg-blue-600 hover:border-blue-500 hover:text-white h-9 w-9 p-0 flex items-center justify-center shadow-sm transition-colors"
               title="More Options"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </Button>
 
-            {/* 🔥 Updated Dropdown UI to dark blue slate */}
             {isOptionsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
