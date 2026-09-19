@@ -21,6 +21,13 @@ interface Expense {
   labor: number
 }
 
+// 🔥 New Interface for managing Multiple Projects
+interface ProjectWorkspace {
+  id: string
+  name: string
+  role: "owner" | "guest"
+}
+
 const INITIAL_EXPENSES = [
   { id: 1, title: "Foundation Concrete", category: "Foundation", materials: 2770, labor: 750 },
   { id: 2, title: "👋 Welcome to Expenses! Log your costs here.", category: "General", materials: 0, labor: 0 },
@@ -116,6 +123,9 @@ export default function DashboardPage() {
   const [calendarTasks, , calendarLoaded] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", [])
   const [projectDates, , datesLoaded] = useOfflineSync<{startDate: string, endDate: string}>("cleanbuild_project_dates", { startDate: "2026-06-29", endDate: "2026-07-30" })
   
+  // 🔥 New: Multi-Project Core
+  const [projectsList, setProjectsList] = useOfflineSync<ProjectWorkspace[]>("cleanbuild_projects_list", [])
+  
   const isAppLoaded = expensesLoaded && budgetLoaded && nonWorkdaysLoaded && punchLoaded && calendarLoaded && datesLoaded
 
   const [newPunchText, setNewPunchText] = useState("")
@@ -124,8 +134,12 @@ export default function DashboardPage() {
   const [isLinked, setIsLinked] = useState<boolean>(false)
   const [emailInput, setEmailInput] = useState("")
   
-  const [activeProject, setActiveProject] = useState("default")
+  const [activeProject, setActiveProject] = useState("")
   const [isOptionsOpen, setIsOptionsOpen] = useState(false)
+  
+  // Create Project Modal States
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [newProjectName, setNewProjectName] = useState("")
   
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
@@ -133,13 +147,15 @@ export default function DashboardPage() {
   const [accountTier, setAccountTier] = useState<string>("free")
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
-  // 🔥 OFFLINE-FIRST AUTH ENGINE
+  // 🔥 OFFLINE-FIRST AUTH & PROJECT ENGINE
   useEffect(() => {
-    // 1. INSTANT LOCAL CACHE LOAD (Renders UI in 0ms)
     const cachedWorkspace = localStorage.getItem("cleanbuild_active_workspace")
     const cachedUserId = localStorage.getItem("cleanbuild_user_id")
     const cachedTier = localStorage.getItem("cleanbuild_account_tier") || "free"
     const cachedPerms = localStorage.getItem("cleanbuild_guest_permissions")
+
+    const initialWorkspace = cachedWorkspace || cachedUserId || "default"
+    setActiveProject(initialWorkspace)
 
     if (cachedWorkspace && cachedUserId && cachedWorkspace !== cachedUserId) {
       setIsGuest(true)
@@ -149,9 +165,8 @@ export default function DashboardPage() {
     }
 
     setAccountTier(cachedTier)
-    setIsCheckingAuth(false) // Unblock the UI instantly so the user can interact
+    setIsCheckingAuth(false)
 
-    // 2. SILENT BACKGROUND NETWORK SYNC
     const backgroundAuthSync = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
@@ -160,6 +175,11 @@ export default function DashboardPage() {
         setCurrentUserEmail(user.email)
         localStorage.setItem("cleanbuild_user_id", user.id)
         
+        // Auto-seed the primary project if the list is empty
+        if (projectsList.length === 0) {
+          setProjectsList([{ id: user.id, name: "My Primary Project", role: "owner" }])
+        }
+        
         const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
         if (profile) {
           setAccountTier(profile.tier)
@@ -167,6 +187,7 @@ export default function DashboardPage() {
         }
         
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
+        setActiveProject(activeWorkspaceId)
 
         if (activeWorkspaceId === user.id) {
           setIsGuest(false)
@@ -190,7 +211,43 @@ export default function DashboardPage() {
     }
     
     backgroundAuthSync()
-  }, [])
+  }, [projectsList.length, setProjectsList])
+
+  const handleProjectSwitch = (selectedId: string) => {
+    if (selectedId === "CREATE_NEW") {
+      setIsCreateModalOpen(true)
+      return
+    }
+    
+    setActiveProject(selectedId)
+    localStorage.setItem("cleanbuild_active_workspace", selectedId)
+    
+    // Broadcast the event so ALL hooks on the page switch to the new namespace instantly
+    window.dispatchEvent(new Event("workspace-changed"))
+  }
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return
+    
+    const newProjectId = `proj_${Date.now()}`
+    const newProject: ProjectWorkspace = {
+      id: newProjectId,
+      name: newProjectName.trim(),
+      role: "owner"
+    }
+    
+    // Add to list and save
+    const updatedList = [...projectsList, newProject]
+    await setProjectsList(updatedList)
+    
+    // Instantly switch into the new blank canvas
+    localStorage.setItem("cleanbuild_active_workspace", newProjectId)
+    setActiveProject(newProjectId)
+    window.dispatchEvent(new Event("workspace-changed"))
+    
+    setIsCreateModalOpen(false)
+    setNewProjectName("")
+  }
 
   const hideExpenses = isGuest && permissions?.expenses === "hidden"
   const hidePunchList = isGuest && permissions?.punch_list === "hidden"
@@ -396,18 +453,26 @@ export default function DashboardPage() {
           </p>
         </div>
         
-        {/* Action Area: Project Dropdown + Options Menu */}
+        {/* 🔥 Action Area: Live Project Dropdown + Options Menu */}
         <div className="flex items-center justify-start md:justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           <div className="relative flex-1 md:flex-none">
             <select
               value={activeProject}
-              onChange={(e) => setActiveProject(e.target.value)}
+              onChange={(e) => handleProjectSwitch(e.target.value)}
               className="w-full md:w-56 h-9 rounded-md border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-white shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer hover:bg-slate-700 transition-colors truncate"
             >
-              <option value="default">My Project (Active)</option>
-              <option value="proj_2">123 Main St Flip</option>
-              <option value="proj_3">Basement Remodel</option>
+              {projectsList.length === 0 ? (
+                <option value="default">My Primary Project</option>
+              ) : (
+                projectsList.map((proj) => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.name} {proj.role === "guest" ? "(Shared)" : ""}
+                  </option>
+                ))
+              )}
+              <option disabled>──────────</option>
+              <option value="CREATE_NEW">+ Create New Project</option>
             </select>
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none">▼</span>
           </div>
@@ -753,6 +818,60 @@ export default function DashboardPage() {
         </div>
       </Card>
 
+      {/* 🔥 Create New Project Modal */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="sm:max-w-[400px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
+            <DialogTitle className="text-lg font-bold text-orange-400">
+              Create New Project
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-300 mt-1">
+              Give your new project a name. You can manage multiple offline builds and switch between them at any time.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-6 bg-white">
+            <Label htmlFor="project-name" className="text-xs font-bold text-slate-700 block mb-2">Project Name</Label>
+            <Input
+              id="project-name"
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              placeholder="e.g. 123 Main St. Flip"
+              className="h-10 text-sm shadow-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreateProject()
+              }}
+            />
+          </div>
+
+          <div className="flex gap-2 p-6 pt-4 border-t border-slate-100 bg-white shrink-0">
+            <Button 
+              size="sm" 
+              onClick={handleCreateProject}
+              disabled={!newProjectName.trim()}
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-sm h-9" 
+            >
+              Create Project
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                setIsCreateModalOpen(false)
+                setNewProjectName("")
+                // If they cancel out, ensure the dropdown snaps back to the active visual state
+                setActiveProject(localStorage.getItem("cleanbuild_active_workspace") || "default")
+              }} 
+              className="flex-1 shadow-sm font-semibold text-slate-700 hover:bg-slate-100 h-9"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Task Modal */}
       <Dialog open={!!editingPunch} onOpenChange={(open) => !open && setEditingPunch(null)}>
         <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white">
           <DialogHeader className="-mx-6 -mt-6 px-6 py-5 bg-slate-900 rounded-t-[10px] border-b border-slate-800 mb-2">
