@@ -5,6 +5,26 @@ import { get, set } from "idb-keyval"
 import { syncManager } from "@/lib/syncManager"
 import { supabase } from "@/lib/supabase"
 
+// 🔥 Blank Slate Engine: Wipes example data for secondary projects while keeping structural defaults
+function getBlankSlate<T>(key: string, fallback: T): T {
+  // We want to keep standard folders/rooms/dates so the UI doesn't break
+  if (
+    key === "cleanbuild_shared_rooms" || 
+    key === "cleanbuild_selections_categories_list" || 
+    key === "cleanbuild_vision_board_categories" ||
+    key === "cleanbuild_project_dates" ||
+    key === "cleanbuild_projects_list"
+  ) {
+    return fallback
+  }
+  
+  // Dynamically wipe out the tutorial data
+  if (Array.isArray(fallback)) return [] as unknown as T
+  if (typeof fallback === "number") return 0 as unknown as T
+  if (typeof fallback === "object" && fallback !== null) return {} as unknown as T
+  return fallback
+}
+
 export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
   const [data, setData] = useState<T>(fallbackData)
   const [isLoaded, setIsLoaded] = useState(false)
@@ -32,9 +52,9 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
 
         let localData = await get<T>(localKey)
         
-        // 🔥 FIX 1: Only migrate legacy data into the PRIMARY workspace. 
-        // Brand new projects (which start with 'proj_') get a strict blank slate.
-        if (localData === undefined && localKey !== storeKey && wid && !wid.startsWith("proj_")) {
+        const isSecondaryProject = wid && wid.startsWith("proj_")
+        
+        if (localData === undefined && localKey !== storeKey && !isSecondaryProject) {
           const legacyData = await get<T>(storeKey)
           if (legacyData !== undefined) {
             localData = legacyData
@@ -42,13 +62,16 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
           }
         }
         
+        // 🔥 Determine if this project gets the Tutorial Data or a Blank Slate
+        const targetFallback = isSecondaryProject ? getBlankSlate(storeKey, fallbackData) : fallbackData
+
         if (isMounted) {
           if (localData !== undefined) {
             setData(localData)
             currentDataRef.current = localData
           } else {
-            setData(fallbackData)
-            currentDataRef.current = fallbackData
+            setData(targetFallback)
+            currentDataRef.current = targetFallback
           }
           setIsLoaded(true)
         }
@@ -74,10 +97,15 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
       if (isMounted) {
         if (storeKey !== "cleanbuild_projects_list") {
           setIsLoaded(false)
-          // 🔥 FIX 2: Instantly wipe the UI screen clean the millisecond the project switches!
-          setData(fallbackData)
-          currentDataRef.current = fallbackData
-          // Then fetch the new project's data
+          
+          // 🔥 The UI Wipe: Instantly clears the screen to a Blank Slate on project switch
+          const newWid = localStorage.getItem("cleanbuild_active_workspace")
+          const isSecondary = newWid && newWid.startsWith("proj_")
+          const targetFallback = isSecondary ? getBlankSlate(storeKey, fallbackData) : fallbackData
+          
+          setData(targetFallback)
+          currentDataRef.current = targetFallback
+          
           initialize() 
         }
       }
