@@ -20,16 +20,18 @@ const urlBase64ToUint8Array = (base64String: string) => {
   return outputArray
 }
 
-type PermissionLevel = "edit" | "read-only" | "hidden"
+// 🔥 Added "upload-only" tier
+type PermissionLevel = "edit" | "upload-only" | "read-only" | "hidden"
 
+// 🔥 Changed defaults to "upload-only"
 const DEFAULT_PERMISSIONS: Record<string, PermissionLevel> = {
-  schedule: "edit",
-  punch_list: "edit",
-  vision_board: "edit",
-  documents: "edit",
+  schedule: "upload-only",
+  punch_list: "upload-only",
+  vision_board: "upload-only",
+  documents: "upload-only",
   expenses: "hidden", 
-  selections: "edit",
-  contacts: "edit",
+  selections: "upload-only",
+  contacts: "upload-only",
 }
 
 export default function SettingsPage() {
@@ -82,7 +84,6 @@ export default function SettingsPage() {
                 setActivePartner({ email: partner.invite_email, status: partner.status || "Pending" })
                 
                 if (partner.permissions) {
-                  // Merge with defaults so legacy guests automatically get the new Documents permission key
                   setPermissions({ ...DEFAULT_PERMISSIONS, ...partner.permissions })
                 }
 
@@ -234,7 +235,7 @@ export default function SettingsPage() {
         "cleanbuild_custom_nonworkdays", "cleanbuild_vision_board", "cleanbuild_vision_board_categories",
         "cleanbuild_documents_items", "cleanbuild_documents_folders",
         "cleanbuild_selections_items", "cleanbuild_contacts", "cleanbuild_non_workdays_map",
-        "cleanbuild_explicit_working_days", "cleanbuild_project_dates"
+        "cleanbuild_explicit_working_days", "cleanbuild_project_dates", "cleanbuild_shared_rooms"
       ]
 
       for (const key of keysToClear) {
@@ -375,7 +376,7 @@ export default function SettingsPage() {
                           <div key={key} className="flex items-center justify-between gap-4">
                             <span className="text-sm font-semibold text-slate-700 w-1/3">{label}</span>
                             <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
-                              {permValue === "edit" ? "Full Access" : permValue === "read-only" ? "Read-Only" : "Hidden"}
+                              {permValue === "edit" ? "Full Access" : permValue === "upload-only" ? "Upload Only" : permValue === "read-only" ? "Read-Only" : "Hidden"}
                             </span>
                           </div>
                         )
@@ -421,7 +422,8 @@ export default function SettingsPage() {
                               onChange={(e) => handlePermissionChange(typedKey, e.target.value as PermissionLevel)}
                               className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
                             >
-                              <option value="edit">Full Access (Edit)</option>
+                              <option value="edit">Full Access (Add/Edit/Delete)</option>
+                              <option value="upload-only">Upload Only (Add/Edit)</option>
                               <option value="read-only">Read-Only (View)</option>
                               <option value="hidden">Hidden</option>
                             </select>
@@ -453,7 +455,8 @@ export default function SettingsPage() {
                               onChange={(e) => handlePermissionChange(typedKey, e.target.value as PermissionLevel)}
                               className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium text-slate-900"
                             >
-                              <option value="edit">Full Access (Edit)</option>
+                              <option value="edit">Full Access (Add/Edit/Delete)</option>
+                              <option value="upload-only">Upload Only (Add/Edit)</option>
                               <option value="read-only">Read-Only (View)</option>
                               <option value="hidden">Hidden</option>
                             </select>
