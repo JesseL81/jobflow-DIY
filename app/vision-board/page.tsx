@@ -1,8 +1,6 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { supabase } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
@@ -10,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { PageTour } from "@/components/page-tour"
 
@@ -50,7 +49,7 @@ interface SelectionItem {
   photoUrl?: string
 }
 
-interface ExpenseItem {
+interface Expense {
   id: number
   date: string
   description: string
@@ -130,7 +129,7 @@ export default function VisionBoardPage() {
   const [boardItems, setBoardItems] = useOfflineSync<VisionBoardItem[]>("cleanbuild_vision_board", INITIAL_BOARD)
   const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
   const [selections, setSelections] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", [])
-  const [expenses, setExpenses] = useOfflineSync<ExpenseItem[]>("cleanbuild_expenses", [])
+  const [expenses, setExpenses] = useOfflineSync<Expense[]>("cleanbuild_expenses", [])
 
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("")
   const [isGuest, setIsGuest] = useState(false)
@@ -360,7 +359,6 @@ export default function VisionBoardPage() {
     setCategoryToDelete(null)
   }
 
-  // 🔥 Dynamically merge Selections into the Vision Board List
   const combinedItems = useMemo(() => {
     const boardItemIds = new Set((boardItems || []).map(b => b.id.toString()))
     const standaloneSelections = (selections || []).filter(s => !boardItemIds.has(s.id))
@@ -684,42 +682,29 @@ export default function VisionBoardPage() {
         if (syncToExpenses && estimatedPrice) {
           const cost = parseFloat(estimatedPrice.replace(/[^0-9.]/g, '')) || 0
           if (cost > 0) {
-            const newExpense: ExpenseItem = {
+            const newExpense: Expense = {
               id: finalId,
               date: itemDate,
               description: `Selection: ${selectionTitle} (${itemCategory})`,
               materials: cost,
               labor: 0
             }
-            try {
-              const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-              const expExists = existingExpenses.some(e => e.id === finalId)
-              const updatedExpensesList = expExists
-                ? existingExpenses.map(e => e.id === finalId ? newExpense : e)
-                : [newExpense, ...existingExpenses]
+            const existingExpenses = expenses || []
+            const expExists = existingExpenses.some(e => e.id === finalId)
+            const updatedExpensesList = expExists
+              ? existingExpenses.map(e => e.id === finalId ? newExpense : e)
+              : [newExpense, ...existingExpenses]
 
-              await set("cleanbuild_expenses", updatedExpensesList)
-              setExpenses(updatedExpensesList)
-              await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(new Event("expenses-updated"))
-              }
-            } catch (err) {
-              console.error("Failed to sync expense:", err)
-            }
-          }
-        } else if (!syncToExpenses) {
-          try {
-            const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-            const updatedExpensesList = existingExpenses.filter(e => e.id !== finalId)
-            await set("cleanbuild_expenses", updatedExpensesList)
-            setExpenses(updatedExpensesList)
-            await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
+            await setExpenses(updatedExpensesList)
             if (typeof window !== "undefined") {
               window.dispatchEvent(new Event("expenses-updated"))
             }
-          } catch (err) {
-            console.error("Failed to unsync expense:", err)
+          }
+        } else if (!syncToExpenses) {
+          const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
+          await setExpenses(updatedExpensesList)
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("expenses-updated"))
           }
         }
 
@@ -727,17 +712,10 @@ export default function VisionBoardPage() {
         const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
         await setSelections(updatedSelectionsList)
 
-        try {
-          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-          const updatedExpensesList = existingExpenses.filter(e => e.id !== finalId)
-          await set("cleanbuild_expenses", updatedExpensesList)
-          setExpenses(updatedExpensesList)
-          await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new Event("expenses-updated"))
-          }
-        } catch (err) {
-          console.error("Failed to remove expense:", err)
+        const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
+        await setExpenses(updatedExpensesList)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("expenses-updated"))
         }
       }
 
@@ -759,23 +737,16 @@ export default function VisionBoardPage() {
     const updatedSelectionsList = (selections || []).filter(s => s.id !== finalIdStr)
     await setSelections(updatedSelectionsList)
     
-    try {
-      const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-      const updatedExpensesList = existingExpenses.filter(e => e.id !== finalId)
-      await set("cleanbuild_expenses", updatedExpensesList)
-      setExpenses(updatedExpensesList)
-      await syncManager.pushToCloud("cleanbuild_expenses", updatedExpensesList)
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("expenses-updated"))
-      }
-    } catch (err) {
-      console.error("Failed to delete expense:", err)
+    const updatedExpensesList = (expenses || []).filter(e => e.id !== finalId)
+    await setExpenses(updatedExpensesList)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("expenses-updated"))
     }
     
     setIsModalOpen(false) 
   }
 
-  if (!isMounted) return null
+  if (!isMounted) return null;
 
   return (
     <main className={`p-6 bg-slate-100 flex flex-col text-slate-950 relative ${showPaywall ? 'h-screen overflow-hidden' : 'min-h-screen space-y-6'}`}>
@@ -783,7 +754,6 @@ export default function VisionBoardPage() {
       <PaywallOverlay show={showPaywall} />
       <PageTour steps={VISION_BOARD_TOUR_STEPS} tourKey="vision_board_tour" />
 
-      {/* Target: tour-vision-header with Minimalist Dropdown */}
       <div className="tour-vision-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
@@ -796,7 +766,6 @@ export default function VisionBoardPage() {
           </p>
         </div>
 
-        {/* Minimalist Action Layout */}
         <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           {!isReadOnly && (
@@ -1110,7 +1079,6 @@ export default function VisionBoardPage() {
         </div>
       </Card>
 
-      {/* DELETE CATEGORY MODAL */}
       <Dialog open={isCategoryDeleteModalOpen} onOpenChange={setIsCategoryDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1204,7 +1172,6 @@ export default function VisionBoardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Main Edit Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">

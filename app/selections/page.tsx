@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { get, set } from "idb-keyval"
-import { syncManager } from "@/lib/syncManager"
+import { get } from "idb-keyval"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -145,6 +144,7 @@ export default function SelectionsPage() {
   
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
   const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
+  const [expenses, setExpenses] = useOfflineSync<ExpenseItem[]>("cleanbuild_expenses", [])
   
   const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
     "Plumbing Fixtures": 500,
@@ -223,7 +223,6 @@ export default function SelectionsPage() {
         const combined = Array.from(new Set([...oldRooms, ...currentShared]))
         const fixed = ["All Rooms", ...combined.filter(r => r !== "All Rooms" && r !== "All Categories")]
         
-        await set("cleanbuild_shared_rooms", fixed)
         setRooms(fixed)
         localStorage.setItem("cleanbuild_rooms_merged_selections", "true")
       }
@@ -238,11 +237,11 @@ export default function SelectionsPage() {
   useEffect(() => {
     if (isMounted) {
       if (rooms && rooms[0] !== "All Rooms") {
-        const fixed = ["All Rooms", ...rooms.filter(r => r !== "All Rooms")]
+        const fixed = ["All Rooms", ...(rooms || []).filter(r => r !== "All Rooms")]
         setRooms(fixed)
       }
       if (categories && categories[0] !== "All Categories") {
-        const fixed = ["All Categories", ...categories.filter(c => c !== "All Categories")]
+        const fixed = ["All Categories", ...(categories || []).filter(c => c !== "All Categories")]
         setCategories(fixed)
       }
     }
@@ -343,12 +342,12 @@ export default function SelectionsPage() {
   }
 
   const totalCost = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
+    return (items || []).reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
   }, [items])
 
   const activeCategoryCost = useMemo(() => {
     if (selectedCategory === "All Categories") return totalCost
-    return items.reduce((sum, item) => {
+    return (items || []).reduce((sum, item) => {
       if (item.category !== selectedCategory || !item.checked) return sum
       return sum + extractPrice(item.price)
     }, 0)
@@ -356,12 +355,12 @@ export default function SelectionsPage() {
 
   const handleToggleCheck = async (id: string) => {
     if (isReadOnly) return
-    const updatedItems = items.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
+    const updatedItems = (items || []).map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
     await setItems(updatedItems)
   }
 
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    return (items || []).filter((item) => {
       const matchesCategory = selectedCategory === "All Categories" || item.category === selectedCategory
       const matchesRoom = selectedRoom === "All Rooms" || (item.room || "Other") === selectedRoom
       const matchesSearch =
@@ -375,8 +374,8 @@ export default function SelectionsPage() {
   const handleAddRoom = async () => {
     if (isReadOnly || !newRoomName.trim()) return
     const trimmed = newRoomName.trim()
-    if (!rooms.includes(trimmed)) {
-      await setRooms([...rooms, trimmed])
+    if (!(rooms || []).includes(trimmed)) {
+      await setRooms([...(rooms || []), trimmed])
     }
     setNewRoomName("")
     setIsAddingRoom(false)
@@ -386,8 +385,8 @@ export default function SelectionsPage() {
   const handleAddCategory = async () => {
     if (isReadOnly || !newCategoryName.trim()) return
     const trimmed = newCategoryName.trim()
-    if (!categories.includes(trimmed)) {
-      await setCategories([...categories, trimmed])
+    if (!(categories || []).includes(trimmed)) {
+      await setCategories([...(categories || []), trimmed])
     }
     setNewCategoryName("")
     setIsAddingCategory(false)
@@ -396,7 +395,7 @@ export default function SelectionsPage() {
 
   const handleOpenDeleteRoom = (room: string) => {
     setRoomToDelete(room)
-    const availableFallbacks = rooms.filter(r => r !== "All Rooms" && r !== room)
+    const availableFallbacks = (rooms || []).filter(r => r !== "All Rooms" && r !== room)
     setRoomMoveTarget(availableFallbacks.includes("Kitchen") ? "Kitchen" : availableFallbacks[0] || "")
     setRoomDeleteMode("move")
     setIsRoomDeleteModalOpen(true)
@@ -405,7 +404,7 @@ export default function SelectionsPage() {
   const handleConfirmRoomDelete = async () => {
     if (isReadOnly || !roomToDelete) return
 
-    let updatedItems = [...items]
+    let updatedItems = [...(items || [])]
     const itemsInRoom = updatedItems.filter(item => (item.room || "Other") === roomToDelete)
 
     if (itemsInRoom.length > 0) {
@@ -413,13 +412,10 @@ export default function SelectionsPage() {
         const idsToDelete = new Set(itemsInRoom.map(i => i.id))
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
         
-        try {
-           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-           const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
-           await set("cleanbuild_expenses", filteredExpenses)
-           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
-           window.dispatchEvent(new Event("expenses-updated"))
-        } catch (err) {}
+        const filteredExpenses = (expenses || []).filter(e => !idsToDelete.has(e.id.toString()))
+        await setExpenses(filteredExpenses)
+        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
+
       } else if (roomDeleteMode === "move" && roomMoveTarget) {
         updatedItems = updatedItems.map(item => 
           (item.room || "Other") === roomToDelete ? { ...item, room: roomMoveTarget } : item
@@ -427,7 +423,7 @@ export default function SelectionsPage() {
       }
     }
     await setItems(updatedItems)
-    await setRooms(rooms.filter(r => r !== roomToDelete))
+    await setRooms((rooms || []).filter(r => r !== roomToDelete))
     if (selectedRoom === roomToDelete) setSelectedRoom("All Rooms")
     setIsRoomDeleteModalOpen(false)
     setRoomToDelete(null)
@@ -435,7 +431,7 @@ export default function SelectionsPage() {
 
   const handleOpenDeleteCategory = (cat: string) => {
     setCategoryToDelete(cat)
-    const availableFallbacks = categories.filter(c => c !== "All Categories" && c !== cat)
+    const availableFallbacks = (categories || []).filter(c => c !== "All Categories" && c !== cat)
     setCategoryMoveTarget(availableFallbacks.includes("Plumbing Fixtures") ? "Plumbing Fixtures" : availableFallbacks[0] || "")
     setCategoryDeleteMode("move")
     setIsCategoryDeleteModalOpen(true)
@@ -444,7 +440,7 @@ export default function SelectionsPage() {
   const handleConfirmCategoryDelete = async () => {
     if (isReadOnly || !categoryToDelete) return
 
-    let updatedItems = [...items]
+    let updatedItems = [...(items || [])]
     const itemsInCat = updatedItems.filter(item => item.category === categoryToDelete)
 
     if (itemsInCat.length > 0) {
@@ -452,13 +448,10 @@ export default function SelectionsPage() {
         const idsToDelete = new Set(itemsInCat.map(i => i.id))
         updatedItems = updatedItems.filter(item => !idsToDelete.has(item.id))
 
-        try {
-           const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-           const filteredExpenses = existingExpenses.filter(e => !idsToDelete.has(e.id.toString()))
-           await set("cleanbuild_expenses", filteredExpenses)
-           await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
-           window.dispatchEvent(new Event("expenses-updated"))
-        } catch (err) {}
+        const filteredExpenses = (expenses || []).filter(e => !idsToDelete.has(e.id.toString()))
+        await setExpenses(filteredExpenses)
+        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
+
       } else if (categoryDeleteMode === "move" && categoryMoveTarget) {
         updatedItems = updatedItems.map(item => 
           item.category === categoryToDelete ? { ...item, category: categoryMoveTarget } : item
@@ -466,7 +459,7 @@ export default function SelectionsPage() {
       }
     }
     await setItems(updatedItems)
-    await setCategories(categories.filter(c => c !== categoryToDelete))
+    await setCategories((categories || []).filter(c => c !== categoryToDelete))
     if (selectedCategory === categoryToDelete) setSelectedCategory("All Categories")
     setIsCategoryDeleteModalOpen(false)
     setCategoryToDelete(null)
@@ -560,8 +553,8 @@ export default function SelectionsPage() {
       }
 
       const updatedItemsList = editingItem 
-        ? items.map((i) => (i.id === editingItem.id ? updatedItem : i))
-        : [updatedItem, ...items]
+        ? (items || []).map((i) => (i.id === editingItem.id ? updatedItem : i))
+        : [updatedItem, ...(items || [])]
       
       await setItems(updatedItemsList)
 
@@ -598,33 +591,21 @@ export default function SelectionsPage() {
       }
 
       if (formSyncToExpenses) {
-        try {
-          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-          const filteredExpenses = editingItem
-            ? existingExpenses.filter((e) => e.id !== parsedId)
-            : existingExpenses
-
-          const newExpenseRecord: ExpenseItem = {
-            id: parsedId,
-            description: `Selection: ${updatedItem.title} (${updatedItem.room} - ${updatedItem.category})`,
-            materials: itemPriceNumber,
-            labor: 0,
-            date: new Date().toISOString().split("T")[0],
-          }
-
-          const newExpenseList = [newExpenseRecord, ...filteredExpenses]
-          await set("cleanbuild_expenses", newExpenseList)
-          await syncManager.pushToCloud("cleanbuild_expenses", newExpenseList)
-          window.dispatchEvent(new Event("expenses-updated"))
-        } catch (err) {}
+        const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
+        const newExpenseRecord: ExpenseItem = {
+          id: parsedId,
+          description: `Selection: ${updatedItem.title} (${updatedItem.room} - ${updatedItem.category})`,
+          materials: itemPriceNumber,
+          labor: 0,
+          date: new Date().toISOString().split("T")[0],
+        }
+        const newExpenseList = [newExpenseRecord, ...filteredExpenses]
+        await setExpenses(newExpenseList)
+        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
       } else if (editingItem && editingItem.syncToExpenses && !formSyncToExpenses) {
-        try {
-          const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-          const filteredExpenses = existingExpenses.filter((e) => e.id !== parsedId)
-          await set("cleanbuild_expenses", filteredExpenses)
-          await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
-          window.dispatchEvent(new Event("expenses-updated"))
-        } catch (err) {}
+        const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
+        await setExpenses(filteredExpenses)
+        if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
       }
 
       setIsModalOpen(false)
@@ -637,19 +618,15 @@ export default function SelectionsPage() {
     if (isReadOnly || !editingItem) return
     const parsedId = parseInt(editingItem.id)
 
-    const updatedItems = items.filter((i) => i.id !== editingItem.id)
+    const updatedItems = (items || []).filter((i) => i.id !== editingItem.id)
     await setItems(updatedItems)
     
     const updatedVB = (visionBoardItems || []).filter(v => v.id !== parsedId)
     await setVisionBoardItems(updatedVB)
 
-    try {
-      const existingExpenses = (await get<ExpenseItem[]>("cleanbuild_expenses")) || []
-      const filteredExpenses = existingExpenses.filter((e) => e.id !== parsedId)
-      await set("cleanbuild_expenses", filteredExpenses)
-      await syncManager.pushToCloud("cleanbuild_expenses", filteredExpenses)
-      window.dispatchEvent(new Event("expenses-updated"))
-    } catch (err) {}
+    const filteredExpenses = (expenses || []).filter((e) => e.id !== parsedId)
+    await setExpenses(filteredExpenses)
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("expenses-updated"))
 
     setIsModalOpen(false)
   }
@@ -826,8 +803,8 @@ export default function SelectionsPage() {
                   Filter by Room
                 </span>
                 
-                {rooms.map((rm) => {
-                  const rmItems = rm === "All Rooms" ? items : items.filter((i) => (i.room || "Other") === rm)
+                {(rooms || []).map((rm) => {
+                  const rmItems = rm === "All Rooms" ? (items || []) : (items || []).filter((i) => (i.room || "Other") === rm)
                   const rmCount = rmItems.length
                   const rmCheckedCost = rmItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedRoom === rm
@@ -896,7 +873,6 @@ export default function SelectionsPage() {
                   )
                 })}
 
-                {/* Add Custom Room */}
                 {isAddingRoom ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -935,8 +911,8 @@ export default function SelectionsPage() {
                   Filter by Category
                 </span>
                 
-                {categories.map((cat) => {
-                  const catItems = cat === "All Categories" ? items : items.filter((i) => i.category === cat)
+                {(categories || []).map((cat) => {
+                  const catItems = cat === "All Categories" ? (items || []) : (items || []).filter((i) => i.category === cat)
                   const catCount = catItems.length
                   const catCheckedCost = catItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedCategory === cat
@@ -1005,7 +981,6 @@ export default function SelectionsPage() {
                   )
                 })}
 
-                {/* Add Custom Category */}
                 {isAddingCategory ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -1115,7 +1090,6 @@ export default function SelectionsPage() {
                               className={`mt-1 h-4 w-4 rounded accent-indigo-600 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
                             />
                             
-                            {/* 🔥 Display Thumbnail Photo if pushed from Vision Board or Autofurled */}
                             {(item.photoUrl || item.linkImage) && (
                               <div className="h-14 w-14 shrink-0 rounded-md border border-slate-200 overflow-hidden bg-white flex items-center justify-center shadow-xs">
                                 <img src={item.photoUrl || item.linkImage} alt="Selection thumbnail" className="max-h-full max-w-full object-cover" />
@@ -1224,7 +1198,6 @@ export default function SelectionsPage() {
         </div>
       </Card>
 
-      {/* DELETE ROOM MODAL */}
       <Dialog open={isRoomDeleteModalOpen} onOpenChange={setIsRoomDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1238,7 +1211,7 @@ export default function SelectionsPage() {
 
           <div className="px-6 py-5 bg-white space-y-4">
             {(() => {
-              const itemsInFolder = items.filter(i => (i.room || "Other") === roomToDelete).length;
+              const itemsInFolder = (items || []).filter(i => (i.room || "Other") === roomToDelete).length;
               
               if (itemsInFolder === 0) {
                 return (
@@ -1274,7 +1247,7 @@ export default function SelectionsPage() {
                             onChange={(e) => setRoomMoveTarget(e.target.value)}
                             className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            {rooms.filter(r => r !== "All Rooms" && r !== roomToDelete).map(r => (
+                            {(rooms || []).filter(r => r !== "All Rooms" && r !== roomToDelete).map(r => (
                               <option key={r} value={r}>{r}</option>
                             ))}
                           </select>
@@ -1318,7 +1291,6 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DELETE CATEGORY MODAL */}
       <Dialog open={isCategoryDeleteModalOpen} onOpenChange={setIsCategoryDeleteModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1332,7 +1304,7 @@ export default function SelectionsPage() {
 
           <div className="px-6 py-5 bg-white space-y-4">
             {(() => {
-              const itemsInFolder = items.filter(i => i.category === categoryToDelete).length;
+              const itemsInFolder = (items || []).filter(i => i.category === categoryToDelete).length;
               
               if (itemsInFolder === 0) {
                 return (
@@ -1368,7 +1340,7 @@ export default function SelectionsPage() {
                             onChange={(e) => setCategoryMoveTarget(e.target.value)}
                             className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            {categories.filter(c => c !== "All Categories" && c !== categoryToDelete).map(c => (
+                            {(categories || []).filter(c => c !== "All Categories" && c !== categoryToDelete).map(c => (
                               <option key={c} value={c}>{c}</option>
                             ))}
                           </select>
@@ -1412,7 +1384,6 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Budget Dialog */}
       <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
         <DialogContent className="sm:max-w-[360px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1450,7 +1421,6 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Main Item Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[500px] border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] relative z-10">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0 relative z-10">
@@ -1482,7 +1452,7 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormRoom(e.target.value)}
                   className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
-                  {rooms.filter((r) => r !== "All Rooms").map((r) => (
+                  {(rooms || []).filter((r) => r !== "All Rooms").map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
@@ -1499,7 +1469,7 @@ export default function SelectionsPage() {
                   onChange={(e) => setFormCategory(e.target.value)}
                   className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
-                  {categories.filter((c) => c !== "All Categories").map((c) => (
+                  {(categories || []).filter((c) => c !== "All Categories").map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -1546,7 +1516,6 @@ export default function SelectionsPage() {
                 className={`h-9 shadow-sm text-sm ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
 
-              {/* 🔥 Auto-Fetch Link Preview Block */}
               {fetchError && !isReadOnly && (
                 <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3 shadow-sm">
                   <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
@@ -1720,7 +1689,6 @@ export default function SelectionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 🔥 HIDDEN EXPORT RENDER DIV */}
       <div className="absolute top-[-9999px] left-[-9999px]">
         {exportTarget && (
           <div
