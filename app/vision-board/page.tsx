@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { PaywallOverlay } from "@/components/paywall-overlay"
 import { PageTour } from "@/components/page-tour"
 
@@ -662,8 +661,8 @@ export default function VisionBoardPage() {
           room: itemCategory,
           category: materialCategory,
           status: "Selected",
-          vendorUrl: itemUrl,
-          price: estimatedPrice,
+          vendorUrl: itemUrl || "",
+          price: estimatedPrice || "",
           modelNumber: "",
           notes: itemNotes,
           photoUrl: selectionPhoto,
@@ -1130,7 +1129,7 @@ export default function VisionBoardPage() {
                           <select
                             value={categoryMoveTarget}
                             onChange={(e) => setCategoryMoveTarget(e.target.value)}
-                            className="w-full h-9 rounded-md border border-slate-300 px-3 py-1 text-sm bg-white shadow-sm"
+                            className="flex w-full h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             {(rooms || []).filter(c => c !== "All Rooms" && c !== categoryToDelete).map(c => (
                               <option key={c} value={c}>{c}</option>
@@ -1178,7 +1177,7 @@ export default function VisionBoardPage() {
 
       {/* Main Edit Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="sm:max-w-[550px] bg-white text-slate-900 border-2 border-slate-900 rounded-xl [&>button]:text-slate-400 hover:[&>button]:text-white p-0 gap-0 overflow-hidden flex flex-col max-h-[90dvh]">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
             <DialogTitle className="text-lg font-bold text-orange-400">
               {isReadOnly ? "View Board Entry" : editingItem ? "Edit Board Entry" : "Add Photos / Idea"}
@@ -1190,10 +1189,11 @@ export default function VisionBoardPage() {
             )}
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 bg-white">
+          {/* 🔥 Fix: Added min-h-0 and overscroll-contain for flawless nested scrolling */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4 space-y-4 bg-white">
             <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="item-date" className="font-semibold text-slate-700 text-xs">Date Added</Label>
+              <div>
+                <label htmlFor="item-date" className="block mb-1 font-semibold text-slate-700 text-xs">Date Added</label>
                 <Input
                   id="item-date"
                   type="date"
@@ -1204,14 +1204,14 @@ export default function VisionBoardPage() {
                 />
               </div>
 
-              <div className="grid gap-1.5">
-                <Label htmlFor="item-category" className="font-semibold text-slate-700 text-xs">Room / Area</Label>
+              <div>
+                <label htmlFor="item-category" className="block mb-1 font-semibold text-slate-700 text-xs">Room / Area</label>
                 <select
                   id="item-category"
                   value={itemCategory}
                   disabled={isReadOnly}
                   onChange={(e) => setItemCategory(e.target.value)}
-                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                  className={`flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
                 >
                   {(rooms || []).filter(c => c !== "All Rooms").map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -1220,9 +1220,9 @@ export default function VisionBoardPage() {
               </div>
             </div>
 
-            <div className="grid gap-1.5 border-t border-slate-100 pt-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL</Label>
+            <div className="border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="item-url" className="font-semibold text-slate-700 text-xs">Reference Link / URL</label>
                 {isFetchingPreview && <span className="text-[10px] text-blue-600 font-bold animate-pulse">Fetching link preview...</span>}
               </div>
               <Input
@@ -1290,8 +1290,8 @@ export default function VisionBoardPage() {
               )}
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="item-notes" className="font-semibold text-slate-700 text-xs">Idea Summary & Notes</Label>
+            <div>
+              <label htmlFor="item-notes" className="block mb-1 font-semibold text-slate-700 text-xs">Idea Summary & Notes</label>
               <textarea
                 id="item-notes"
                 rows={3}
@@ -1299,12 +1299,12 @@ export default function VisionBoardPage() {
                 value={itemNotes}
                 disabled={isReadOnly}
                 onChange={(e) => setItemNotes(e.target.value)}
-                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
+                className={`flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadOnly ? "opacity-80 font-medium text-slate-900" : ""}`}
               />
             </div>
             
-            <div className="grid gap-1.5 border-t border-slate-100 pt-3 mt-1">
-              <Label className="font-semibold text-slate-700 text-xs">Attached Board Photos</Label>
+            <div className="border-t border-slate-100 pt-3 mt-1">
+              <label className="block mb-1 font-semibold text-slate-700 text-xs">Attached Board Photos</label>
               
               {!isReadOnly && (
                 <div className="flex gap-2 mt-1">
@@ -1349,7 +1349,7 @@ export default function VisionBoardPage() {
             </div>
 
             {!isReadOnly && (
-              <div className="border border-emerald-200 bg-emerald-50/50 rounded-xl overflow-hidden mt-2">
+              <div className="border border-emerald-200 bg-emerald-50/50 rounded-xl overflow-hidden mt-2 shrink-0">
                 <label className="flex items-center gap-3 p-3.5 cursor-pointer hover:bg-emerald-50 transition-colors">
                   <input 
                     type="checkbox" 
@@ -1367,18 +1367,18 @@ export default function VisionBoardPage() {
                   <div className="p-4 pt-0 space-y-4 border-t border-emerald-100 bg-white">
                     <div className="grid grid-cols-2 gap-3 mt-3">
                       <div>
-                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Material Category</Label>
+                        <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Material Category</label>
                         <select
                           value={materialCategory}
                           onChange={(e) => setMaterialCategory(e.target.value)}
-                          className="mt-1 w-full h-9 border border-slate-200 shadow-sm rounded-md px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           {MATERIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Estimated Price</Label>
-                        <div className="relative mt-1">
+                        <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Estimated Price</label>
+                        <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">$</span>
                           <Input
                             placeholder="0.00"
