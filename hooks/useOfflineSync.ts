@@ -5,9 +5,7 @@ import { get, set } from "idb-keyval"
 import { syncManager } from "@/lib/syncManager"
 import { supabase } from "@/lib/supabase"
 
-// 🔥 Blank Slate Engine: Wipes example data for secondary projects while keeping structural defaults
 function getBlankSlate<T>(key: string, fallback: T): T {
-  // We want to keep standard folders/rooms so the UI doesn't break
   if (
     key === "cleanbuild_shared_rooms" || 
     key === "cleanbuild_selections_categories_list" || 
@@ -17,7 +15,6 @@ function getBlankSlate<T>(key: string, fallback: T): T {
     return fallback
   }
 
-  // 🔥 FIX: Give new projects a fresh timeline starting today and ending in 30 days
   if (key === "cleanbuild_project_dates") {
     const today = new Date()
     const nextMonth = new Date(today)
@@ -33,7 +30,6 @@ function getBlankSlate<T>(key: string, fallback: T): T {
     return { startDate: formatDate(today), endDate: formatDate(nextMonth) } as unknown as T
   }
   
-  // Dynamically wipe out the tutorial data
   if (Array.isArray(fallback)) return [] as unknown as T
   if (typeof fallback === "number") return 0 as unknown as T
   if (typeof fallback === "object" && fallback !== null) return {} as unknown as T
@@ -77,7 +73,6 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
           }
         }
         
-        // Determine if this project gets the Tutorial Data or a Blank Slate
         const targetFallback = isSecondaryProject ? getBlankSlate(storeKey, fallbackData) : fallbackData
 
         if (isMounted) {
@@ -113,7 +108,6 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
         if (storeKey !== "cleanbuild_projects_list") {
           setIsLoaded(false)
           
-          // Instantly clear the screen to a Blank Slate on project switch
           const newWid = localStorage.getItem("cleanbuild_active_workspace")
           const isSecondary = newWid && newWid.startsWith("proj_")
           const targetFallback = isSecondary ? getBlankSlate(storeKey, fallbackData) : fallbackData
@@ -126,14 +120,27 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
       }
     }
     
+    // 🔥 Force a silent cloud pull when the app comes back to the foreground on mobile
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isMounted) {
+         const cloudData = await syncManager.pullFromCloud(storeKey)
+         if (isMounted && cloudData !== null && cloudData !== undefined) {
+           setData(cloudData as T)
+           currentDataRef.current = cloudData as T
+         }
+      }
+    }
+    
     if (typeof window !== "undefined") {
       window.addEventListener("workspace-changed", handleWorkspaceChange)
+      document.addEventListener("visibilitychange", handleVisibilityChange)
     }
 
     return () => {
       isMounted = false
       if (typeof window !== "undefined") {
         window.removeEventListener("workspace-changed", handleWorkspaceChange)
+        document.removeEventListener("visibilitychange", handleVisibilityChange)
       }
     }
   }, [storeKey]) 
