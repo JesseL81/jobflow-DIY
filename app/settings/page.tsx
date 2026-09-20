@@ -20,10 +20,8 @@ const urlBase64ToUint8Array = (base64String: string) => {
   return outputArray
 }
 
-// 🔥 Added "upload-only" tier
 type PermissionLevel = "edit" | "upload-only" | "read-only" | "hidden"
 
-// 🔥 Changed defaults to "upload-only"
 const DEFAULT_PERMISSIONS: Record<string, PermissionLevel> = {
   schedule: "upload-only",
   punch_list: "upload-only",
@@ -53,6 +51,7 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false)
 
   const [isGuest, setIsGuest] = useState(false)
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("")
   const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>(DEFAULT_PERMISSIONS)
 
   useEffect(() => {
@@ -62,9 +61,13 @@ export default function SettingsPage() {
         if (user?.email) {
           setUserEmail(user.email)
           
-          const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
+          const wid = localStorage.getItem("cleanbuild_active_workspace") || user.id
+          setActiveWorkspaceId(wid)
 
-          if (activeWorkspaceId === user.id) {
+          // 🔥 FIX: Check if workspace is owned by the user
+          const isOwnedProject = wid === user.id || wid.startsWith("proj_")
+
+          if (isOwnedProject) {
             setIsGuest(false)
             
             const { data: project } = await supabase
@@ -383,6 +386,13 @@ export default function SettingsPage() {
                       })}
                     </div>
                   </div>
+                </div>
+              ) : activeWorkspaceId?.startsWith("proj_") ? (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg shadow-sm">
+                  <p className="text-sm font-bold text-slate-900">Collaboration Restricted</p>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Inviting partners is currently only supported on your Primary Project. Switch back to your primary workspace to manage project members.
+                  </p>
                 </div>
               ) : activePartner ? (
                 <div className="space-y-5">

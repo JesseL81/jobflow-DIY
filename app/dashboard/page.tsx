@@ -153,11 +153,14 @@ export default function DashboardPage() {
     const initialWorkspace = cachedWorkspace || cachedUserId || "default"
     setActiveProject(initialWorkspace)
 
-    if (cachedWorkspace && cachedUserId && cachedWorkspace !== cachedUserId) {
+    // 🔥 FIX: Guest Logic. You are NOT a guest if the workspace is your ID or a secondary project you created.
+    const isOwnedProject = initialWorkspace === cachedUserId || initialWorkspace.startsWith("proj_")
+
+    if (isOwnedProject) {
+      setIsGuest(false)
+    } else {
       setIsGuest(true)
       if (cachedPerms) setPermissions(JSON.parse(cachedPerms))
-    } else {
-      setIsGuest(false)
     }
 
     setAccountTier(cachedTier)
@@ -187,7 +190,9 @@ export default function DashboardPage() {
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || user.id
         setActiveProject(activeWorkspaceId)
 
-        if (activeWorkspaceId === user.id) {
+        const isCurrentlyOwned = activeWorkspaceId === user.id || activeWorkspaceId.startsWith("proj_")
+
+        if (isCurrentlyOwned) {
           setIsGuest(false)
         } else {
           setIsGuest(true)
@@ -472,20 +477,30 @@ export default function DashboardPage() {
         <div className="flex items-center justify-start md:justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           <div className="relative flex-1 md:flex-none">
-            {/* 🔥 Updated Dropdown Match Light Blue Buttons */}
             <select
               value={activeProject}
               onChange={(e) => handleProjectSwitch(e.target.value)}
               className="w-full md:w-56 h-9 rounded-md border border-blue-500 bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 appearance-none cursor-pointer hover:bg-blue-500 transition-colors truncate"
             >
               {projectsList.length === 0 ? (
-                <option value="default">My Primary Project</option>
+                <>
+                  <option value="default">My Primary Project</option>
+                  {activeProject && activeProject !== "default" && activeProject !== currentUserEmail && (
+                    <option value={activeProject}>Syncing Project...</option>
+                  )}
+                </>
               ) : (
-                projectsList.map((proj) => (
-                  <option key={proj.id} value={proj.id}>
-                    {proj.name} {proj.role === "guest" ? "(Shared)" : ""}
-                  </option>
-                ))
+                <>
+                  {projectsList.map((proj) => (
+                    <option key={proj.id} value={proj.id}>
+                      {proj.name} {proj.role === "guest" ? "(Shared)" : ""}
+                    </option>
+                  ))}
+                  {/* 🔥 FIX: Visual Fallback Catch-all for cloud lag */}
+                  {!projectsList.some(p => p.id === activeProject) && activeProject.startsWith("proj_") && (
+                    <option value={activeProject}>Syncing Project...</option>
+                  )}
+                </>
               )}
               <option disabled>──────────</option>
               <option value="CREATE_NEW">+ Create New Project</option>
@@ -494,7 +509,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="relative shrink-0">
-            {/* 🔥 Updated Hover State for 3 Dots Button */}
             <Button
               variant="outline"
               size="sm"
