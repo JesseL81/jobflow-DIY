@@ -28,8 +28,8 @@ export interface SelectionItem {
   price: string
   modelNumber: string
   notes: string
-  status: "Idea / Saved" | "Selected" | "Under Review" | "Ordered" | "Delivered"
-  checked: boolean
+  status: "Idea / Saved" | "Selected" | "Ordered" | "Delivered"
+  checked: boolean // Preserved for legacy database compatibility
   syncToExpenses?: boolean
 }
 
@@ -103,7 +103,7 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     modelNumber: "WF-VAN-60-NV",
     notes: "Includes quartz countertop & undermount sinks.",
     status: "Delivered",
-    checked: false,
+    checked: true,
     syncToExpenses: false,
   },
   {
@@ -115,17 +115,20 @@ const INITIAL_SELECTIONS: SelectionItem[] = [
     price: "145.00",
     modelNumber: "B08X3P912",
     notes: "Checking warm white 3000K LED compatibility.",
-    status: "Under Review",
+    status: "Ordered",
     checked: false,
     syncToExpenses: false,
   },
 ]
 
-// 🔥 Define the Tour Steps for Selections
 const SELECTIONS_TOUR_STEPS = [
   {
     target: ".tour-selections-header",
     content: "Welcome to Selections! This is where you track all your materials, fixtures, and finishes.",
+  },
+  {
+    target: ".tour-sandbox-banner",
+    content: "This page acts as a Sandbox. Change an item's status to 'Selected' and watch your budget calculate!",
   },
   {
     target: ".tour-selections-filters",
@@ -146,8 +149,6 @@ export default function SelectionsPage() {
   const [items, setItems] = useOfflineSync<SelectionItem[]>("cleanbuild_selections_items", INITIAL_SELECTIONS)
   
   const [categories, setCategories] = useOfflineSync<string[]>("cleanbuild_selections_categories_list", DEFAULT_CATEGORIES)
-  
-  // 🔥 Step 1: Bind this directly to the Shared Vision Board Room key
   const [rooms, setRooms] = useOfflineSync<string[]>("cleanbuild_shared_rooms", DEFAULT_ROOMS)
   
   const [categoryBudgets, setCategoryBudgets] = useOfflineSync<Record<string, number>>("cleanbuild_selections_budgets", {
@@ -169,10 +170,8 @@ export default function SelectionsPage() {
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // 🔥 State for Minimalist Dropdown Menu
   const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
-  // Export States
   const [isExporting, setIsExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState("")
   const exportCardRef = useRef<HTMLDivElement>(null)
@@ -213,7 +212,6 @@ export default function SelectionsPage() {
     setIsMounted(true)
   }, [])
 
-  // 🔥 Smart Migration: Grabs any custom rooms you previously added to Selections and moves them to the new Shared list safely
   useEffect(() => {
     const performSmartMerge = async () => {
       const hasMerged = localStorage.getItem("cleanbuild_rooms_merged_v2")
@@ -297,21 +295,27 @@ export default function SelectionsPage() {
     return isNaN(rawNum) ? 0 : rawNum
   }
 
+  // 🔥 Budget Logic Engine Update: Costs only calculate if the status is active
+  const isItemActiveInBudget = (status: string) => {
+    return status === "Selected" || status === "Ordered" || status === "Delivered"
+  }
+
   const totalCost = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
+    return items.reduce((sum, item) => sum + (isItemActiveInBudget(item.status) ? extractPrice(item.price) : 0), 0)
   }, [items])
 
   const activeCategoryCost = useMemo(() => {
     if (selectedCategory === "All Categories") return totalCost
     return items.reduce((sum, item) => {
-      if (item.category !== selectedCategory || !item.checked) return sum
+      if (item.category !== selectedCategory || !isItemActiveInBudget(item.status)) return sum
       return sum + extractPrice(item.price)
     }, 0)
   }, [items, selectedCategory, totalCost])
 
-  const handleToggleCheck = async (id: string) => {
+  // 🔥 Live Status Update Handler
+  const handleStatusChange = async (id: string, newStatus: SelectionItem["status"]) => {
     if (isReadOnly) return
-    const updatedItems = items.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
+    const updatedItems = items.map((i) => (i.id === id ? { ...i, status: newStatus } : i))
     await setItems(updatedItems)
   }
 
@@ -558,10 +562,9 @@ export default function SelectionsPage() {
     setIsModalOpen(false)
   }
 
-  // 🔥 Export Engine (Matching Vision Board)
   const renderItemToCanvas = async (item: SelectionItem): Promise<HTMLCanvasElement | null> => {
     setExportTarget(item)
-    await new Promise((r) => setTimeout(r, 150)) // allow React to render the hidden card
+    await new Promise((r) => setTimeout(r, 150))
     if (!exportCardRef.current) return null
 
     return await html2canvas(exportCardRef.current, {
@@ -586,7 +589,6 @@ export default function SelectionsPage() {
         const item = safeItems[index]
         setExportProgress(`Processing item ${index + 1} of ${safeItems.length}...`)
 
-        // Create a unique folder inside the ZIP based on the room name
         const roomName = item.room || "Uncategorized"
         const roomFolder = zip.folder(roomName)
 
@@ -602,7 +604,6 @@ export default function SelectionsPage() {
         const singlePdf = new jsPDF("p", "mm", "a4")
         singlePdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
         
-        // Clean the filename to prevent saving issues
         const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 30)
         roomFolder?.file(`Selection_${safeTitle}_${item.id}.pdf`, singlePdf.output("blob"))
       }
@@ -622,17 +623,6 @@ export default function SelectionsPage() {
     }
   }
 
-  const getStatusBadge = (status: SelectionItem["status"]) => {
-    switch (status) {
-      case "Idea / Saved": return <Badge className="bg-slate-100 text-slate-600 border-slate-200">Idea / Saved</Badge>
-      case "Selected": return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Selected</Badge>
-      case "Under Review": return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Under Review</Badge>
-      case "Ordered": return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Ordered</Badge>
-      case "Delivered": return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Delivered</Badge>
-      default: return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
   const currentCategoryAllowance = categoryBudgets[selectedCategory] || 0
   const allowanceDiff = currentCategoryAllowance - activeCategoryCost
 
@@ -644,8 +634,7 @@ export default function SelectionsPage() {
       <PaywallOverlay show={showPaywall} />
       <PageTour steps={SELECTIONS_TOUR_STEPS} tourKey="selections_tour" />
 
-      {/* Target: tour-selections-header with Minimalist Dropdown */}
-      <div className="tour-selections-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
+      <div className="tour-selections-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -657,7 +646,6 @@ export default function SelectionsPage() {
           </p>
         </div>
 
-        {/* Minimalist Action Layout */}
         <div className="flex items-center justify-end w-full md:w-auto gap-2 shrink-0 mt-2 md:mt-0">
           
           {!isReadOnly && (
@@ -670,7 +658,6 @@ export default function SelectionsPage() {
             </Button>
           )}
 
-          {/* Clean, Icon-Only Dropdown Trigger */}
           <div className="relative">
             <Button
               variant="outline"
@@ -682,7 +669,6 @@ export default function SelectionsPage() {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </Button>
 
-            {/* The Dropdown Menu Box */}
             {isOptionsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
@@ -717,6 +703,17 @@ export default function SelectionsPage() {
         </div>
       </div>
 
+      {/* 🔥 THE NEW SANDBOX BANNER */}
+      <div className="tour-sandbox-banner bg-slate-800 text-slate-300 px-6 py-4 rounded-xl shadow-sm flex items-start gap-4 border border-slate-700">
+        <span className="text-xl mt-0.5">💡</span>
+        <div>
+          <h3 className="text-white font-bold text-sm tracking-wide">Budget Sandbox Active</h3>
+          <p className="text-xs leading-relaxed mt-1">
+            Compare options, toggle your favorite items to <strong>"Selected"</strong>, and play with your choices to ensure you stay under budget before making a purchase.
+          </p>
+        </div>
+      </div>
+
       <Card className="overflow-hidden border shadow-sm bg-white flex-1">
         {isExporting && exportProgress && (
           <div className="bg-indigo-50 border-b border-indigo-200 text-indigo-900 text-xs px-6 py-2.5 flex items-center justify-between animate-pulse">
@@ -740,7 +737,7 @@ export default function SelectionsPage() {
                 {rooms.map((rm) => {
                   const rmItems = rm === "All Rooms" ? items : items.filter((i) => (i.room || "Other") === rm)
                   const rmCount = rmItems.length
-                  const rmCheckedCost = rmItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
+                  const rmCheckedCost = rmItems.reduce((sum, item) => sum + (isItemActiveInBudget(item.status) ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedRoom === rm
                   const isProtectedFolder = rm === "All Rooms"
 
@@ -770,10 +767,8 @@ export default function SelectionsPage() {
                         </span>
                       </button>
                       
-                      {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && !isProtectedFolder && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
-                          {/* Quick Add Plus */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -789,7 +784,6 @@ export default function SelectionsPage() {
                             +
                           </button>
 
-                          {/* Trash Can */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -810,7 +804,6 @@ export default function SelectionsPage() {
                   )
                 })}
 
-                {/* Add Custom Room */}
                 {isAddingRoom ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -852,7 +845,7 @@ export default function SelectionsPage() {
                 {categories.map((cat) => {
                   const catItems = cat === "All Categories" ? items : items.filter((i) => i.category === cat)
                   const catCount = catItems.length
-                  const catCheckedCost = catItems.reduce((sum, item) => sum + (item.checked ? extractPrice(item.price) : 0), 0)
+                  const catCheckedCost = catItems.reduce((sum, item) => sum + (isItemActiveInBudget(item.status) ? extractPrice(item.price) : 0), 0)
                   const isActive = selectedCategory === cat
                   const isProtectedFolder = cat === "All Categories"
 
@@ -882,7 +875,6 @@ export default function SelectionsPage() {
                         </span>
                       </button>
                       
-                      {/* 🔥 FOLDER ACTIONS GROUP */}
                       {!isReadOnly && !isProtectedFolder && (
                         <div className="flex items-center gap-0.5 pr-1.5 shrink-0">
                           <button
@@ -920,7 +912,6 @@ export default function SelectionsPage() {
                   )
                 })}
 
-                {/* Add Custom Category */}
                 {isAddingCategory ? (
                   <div className="flex flex-col gap-2 mt-2 px-1 py-1">
                     <Input
@@ -1010,42 +1001,62 @@ export default function SelectionsPage() {
 
               <div className="space-y-3">
                 {filteredItems.map((item) => {
+                  
+                  // 🔥 Sandbox Style Engine
+                  const isItemActive = isItemActiveInBudget(item.status)
                   let cardStyle = "border-slate-200 hover:border-slate-300 shadow-xs bg-white"
+                  
                   if (item.syncToExpenses) {
                     cardStyle = "bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-500 shadow-xs"
-                  } else if (item.checked) {
-                    cardStyle = "bg-indigo-50/80 border-indigo-500 ring-1 ring-indigo-500 shadow-xs"
+                  } else if (isItemActive) {
+                    cardStyle = "bg-blue-50/80 border-blue-500 ring-1 ring-blue-500 shadow-xs"
                   }
 
                   return (
                     <Card key={item.id} className={`transition-all ${cardStyle}`}>
                       <CardHeader className="p-4 pb-2">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <input
-                              type="checkbox"
-                              checked={item.checked}
-                              disabled={isReadOnly}
-                              onChange={() => handleToggleCheck(item.id)}
-                              className={`mt-1 h-4 w-4 rounded accent-indigo-600 ${isReadOnly ? "cursor-default opacity-70" : "cursor-pointer"}`}
-                            />
-
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <Badge variant="outline" className={`text-[10px] font-semibold bg-slate-900 text-white hover:bg-slate-800`}>
-                                  🏠 {item.room || "Other"}
-                                </Badge>
-                                <Badge variant="outline" className={`text-[10px] font-semibold ${item.syncToExpenses ? "bg-white text-emerald-800 border-emerald-300" : item.checked ? "bg-white text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-500"}`}>
-                                  📁 {item.category}
-                                </Badge>
-                                {getStatusBadge(item.status)}
-                                {item.syncToExpenses && (
-                                  <Badge className="bg-emerald-600 text-white border-emerald-700 text-[10px] font-bold">
-                                    Synced to Expenses 💰
+                          <div className="flex items-start gap-3 w-full">
+                            
+                            <div className="flex flex-col w-full">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline" className={`text-[10px] font-semibold bg-slate-900 text-white hover:bg-slate-800`}>
+                                    🏠 {item.room || "Other"}
                                   </Badge>
-                                )}
+                                  <Badge variant="outline" className={`text-[10px] font-semibold ${item.syncToExpenses ? "bg-white text-emerald-800 border-emerald-300" : isItemActive ? "bg-white text-blue-700 border-blue-200" : "bg-slate-50 text-slate-500"}`}>
+                                    📁 {item.category}
+                                  </Badge>
+                                  {item.syncToExpenses && (
+                                    <Badge className="bg-emerald-600 text-white border-emerald-700 text-[10px] font-bold">
+                                      Synced to Expenses 💰
+                                    </Badge>
+                                  )}
+                                </div>
+                                
+                                {/* 🔥 Live Status Dropdown Component */}
+                                <div>
+                                  <select
+                                    value={item.status}
+                                    disabled={isReadOnly}
+                                    onChange={(e) => handleStatusChange(item.id, e.target.value as SelectionItem["status"])}
+                                    className={`h-7 px-2.5 rounded-full text-[10px] font-bold border outline-none cursor-pointer appearance-none ${
+                                      item.status === "Idea / Saved" ? "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200" :
+                                      item.status === "Selected" ? "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200" :
+                                      item.status === "Ordered" ? "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200" :
+                                      item.status === "Delivered" ? "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200" :
+                                      "bg-white"
+                                    } ${isReadOnly ? "cursor-default opacity-80" : ""}`}
+                                    title="Update Status"
+                                  >
+                                    <option value="Idea / Saved">Idea / Saved</option>
+                                    <option value="Selected">Selected</option>
+                                    <option value="Ordered">Ordered</option>
+                                    <option value="Delivered">Delivered</option>
+                                  </select>
+                                </div>
                               </div>
-                              <CardTitle className="text-base font-bold text-slate-900 leading-tight">
+                              <CardTitle className="text-base font-bold text-slate-900 leading-tight pr-4">
                                 {item.title}
                               </CardTitle>
                             </div>
@@ -1062,7 +1073,7 @@ export default function SelectionsPage() {
                       </CardHeader>
 
                       <CardContent className="p-4 pt-1 space-y-3 text-xs text-slate-600">
-                        <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-lg border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : item.checked ? "bg-white/80 border-indigo-100" : "bg-slate-50 border-slate-100"}`}>
+                        <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-lg border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : isItemActive ? "bg-white/80 border-blue-100" : "bg-slate-50 border-slate-100"}`}>
                           <div>
                             <span className="text-slate-400 font-medium block text-[10px] uppercase">Price</span>
                             <span className="font-bold text-slate-900">
@@ -1076,7 +1087,7 @@ export default function SelectionsPage() {
                         </div>
 
                         {item.notes && (
-                          <p className={`leading-relaxed text-slate-600 p-2 rounded text-[11px] border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : item.checked ? "bg-white/80 border-indigo-100" : "bg-amber-50/60 border-amber-100"}`}>
+                          <p className={`leading-relaxed text-slate-600 p-2 rounded text-[11px] border ${item.syncToExpenses ? "bg-white/90 border-emerald-200" : isItemActive ? "bg-white/80 border-blue-100" : "bg-amber-50/60 border-amber-100"}`}>
                             {item.notes}
                           </p>
                         )}
@@ -1087,7 +1098,7 @@ export default function SelectionsPage() {
                               href={item.vendorUrl.startsWith("http") ? item.vendorUrl : `https://${item.vendorUrl}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 text-xs"
+                              className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 text-xs"
                             >
                               🔗 Open Vendor Link ↗
                             </a>
@@ -1095,8 +1106,8 @@ export default function SelectionsPage() {
                             <span className="text-slate-400 italic text-[11px]">No link attached</span>
                           )}
 
-                          <span className={`text-[11px] font-bold ${item.syncToExpenses ? "text-emerald-700" : item.checked ? "text-indigo-700" : "text-slate-400"}`}>
-                            {item.syncToExpenses ? "Synced & Checked ✓" : item.checked ? "Added to Total ✓" : "Unchecked"}
+                          <span className={`text-[11px] font-bold ${item.syncToExpenses ? "text-emerald-700" : isItemActive ? "text-blue-700" : "text-slate-400"}`}>
+                            {item.syncToExpenses ? "Synced & Calculating ✓" : isItemActive ? "Calculating in Total ✓" : "Excluded from Budget"}
                           </span>
                         </div>
                       </CardContent>
@@ -1422,7 +1433,6 @@ export default function SelectionsPage() {
               >
                 <option value="Idea / Saved">Idea / Saved</option>
                 <option value="Selected">Selected</option>
-                <option value="Under Review">Under Review</option>
                 <option value="Ordered">Ordered</option>
                 <option value="Delivered">Delivered</option>
               </select>
