@@ -5,12 +5,18 @@ import { get, set } from "idb-keyval"
 import { syncManager } from "@/lib/syncManager"
 import { supabase } from "@/lib/supabase"
 
+// 🔥 Centralized Global Keys Array
+const GLOBAL_KEYS = [
+  "cleanbuild_projects_list",
+  "cleanbuild_contacts" // Contacts now carry over everywhere!
+]
+
 function getBlankSlate<T>(key: string, fallback: T): T {
   if (
     key === "cleanbuild_shared_rooms" || 
     key === "cleanbuild_selections_categories_list" || 
     key === "cleanbuild_vision_board_categories" ||
-    key === "cleanbuild_projects_list"
+    GLOBAL_KEYS.includes(key)
   ) {
     return fallback
   }
@@ -57,7 +63,8 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
            }
         }
         
-        const isGlobal = storeKey === "cleanbuild_projects_list"
+        // Use the Global Keys array
+        const isGlobal = GLOBAL_KEYS.includes(storeKey)
         const localKey = (wid && !isGlobal) ? `${storeKey}_${wid}` : storeKey
         localKeyRef.current = localKey
 
@@ -105,7 +112,8 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
 
     const handleWorkspaceChange = () => {
       if (isMounted) {
-        if (storeKey !== "cleanbuild_projects_list") {
+        // Only wipe the UI if the key is NOT global
+        if (!GLOBAL_KEYS.includes(storeKey)) {
           setIsLoaded(false)
           
           const newWid = localStorage.getItem("cleanbuild_active_workspace")
@@ -120,7 +128,6 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
       }
     }
     
-    // 🔥 Force a silent cloud pull when the app comes back to the foreground on mobile
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && isMounted) {
          const cloudData = await syncManager.pullFromCloud(storeKey)

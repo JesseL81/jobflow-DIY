@@ -21,6 +21,12 @@ export const ALL_STORE_KEYS = [
   "cleanbuild_projects_list" 
 ] as const
 
+// 🔥 Same Global Keys array for the cloud push/pull engine
+const GLOBAL_KEYS = [
+  "cleanbuild_projects_list",
+  "cleanbuild_contacts"
+]
+
 const getWorkspaceContext = async () => {
   let wid = typeof window !== 'undefined' ? localStorage.getItem("cleanbuild_active_workspace") : null
   if (!wid) {
@@ -34,7 +40,7 @@ export const syncManager = {
   async pushToCloud(storeKey: string, data: any) {
     try {
       const wid = await getWorkspaceContext()
-      const isGlobal = storeKey === "cleanbuild_projects_list"
+      const isGlobal = GLOBAL_KEYS.includes(storeKey)
       const localDirtyKey = isGlobal ? `dirty_${storeKey}` : `dirty_${storeKey}_${wid}`
 
       if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -48,6 +54,7 @@ export const syncManager = {
          return
       }
 
+      // Global keys save directly to your User ID, avoiding project namespaces
       const targetWorkspaceId = isGlobal 
         ? userData.user.id 
         : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) : userData.user.id)
@@ -80,21 +87,20 @@ export const syncManager = {
     } catch (error) {
       console.warn(`Cloud push failed for ${storeKey}, marking dirty:`, error)
       const wid = await getWorkspaceContext()
-      const isGlobal = storeKey === "cleanbuild_projects_list"
+      const isGlobal = GLOBAL_KEYS.includes(storeKey)
       await set(isGlobal ? `dirty_${storeKey}` : `dirty_${storeKey}_${wid}`, true)
     }
   },
 
   async pullFromCloud(storeKey: string) {
     const wid = await getWorkspaceContext()
-    const isGlobal = storeKey === "cleanbuild_projects_list"
+    const isGlobal = GLOBAL_KEYS.includes(storeKey)
     
     const localDirtyKey = isGlobal ? `dirty_${storeKey}` : `dirty_${storeKey}_${wid}`
     const localDataKey = isGlobal ? storeKey : `${storeKey}_${wid}`
 
     const legacyDirty = await get(`dirty_${storeKey}`)
     
-    // 🔥 FIX: Prevent legacy dirty flags from cross-contaminating new blank projects
     if (legacyDirty && !isGlobal && wid && !wid.startsWith("proj_")) {
        await set(localDirtyKey, true)
        await set(`dirty_${storeKey}`, false)
@@ -137,7 +143,7 @@ export const syncManager = {
     const wid = await getWorkspaceContext()
 
     for (const key of ALL_STORE_KEYS) {
-      const isGlobal = key === "cleanbuild_projects_list"
+      const isGlobal = GLOBAL_KEYS.includes(key)
       const localDirtyKey = isGlobal ? `dirty_${key}` : `dirty_${key}_${wid}`
       const localDataKey = isGlobal ? key : `${key}_${wid}`
 
