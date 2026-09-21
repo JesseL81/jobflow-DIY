@@ -686,7 +686,7 @@ export default function SelectionsPage() {
             {isOptionsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200">
                   
                   {filteredItems.length > 0 && (
                     <button
@@ -695,7 +695,7 @@ export default function SelectionsPage() {
                         handleExportAll()
                       }}
                       disabled={isExporting}
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors disabled:opacity-50"
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-blue-600 hover:text-white flex items-center gap-2 transition-colors"
                     >
                       <span>📦</span> {isExporting ? "Exporting..." : "Download All"}
                     </button>
@@ -706,7 +706,7 @@ export default function SelectionsPage() {
                       setIsOptionsOpen(false)
                       window.dispatchEvent(new Event('restart-tour-selections_tour'))
                     }}
-                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-500 flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-blue-600 hover:text-white flex items-center gap-2 transition-colors"
                   >
                     <span>💡</span> Replay Tutorial
                   </button>

@@ -528,7 +528,7 @@ export default function DashboardPage() {
                       setIsOptionsOpen(false)
                       window.dispatchEvent(new Event('restart-tour-dashboard_tour'))
                     }}
-                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-blue-600 hover:text-white flex items-center gap-2 transition-colors"
                   >
                     <span>💡</span> Replay Tutorial
                   </button>
@@ -536,7 +536,7 @@ export default function DashboardPage() {
                   {activeProject.startsWith("proj_") && (
                     <button
                       onClick={handleDeleteProject}
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-400 hover:bg-slate-700 hover:text-rose-300 flex items-center gap-2 transition-colors border-t border-slate-700"
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-400 hover:bg-rose-600 hover:text-white flex items-center gap-2 transition-colors border-t border-slate-700"
                     >
                       <span>🗑️</span> Delete Project
                     </button>
