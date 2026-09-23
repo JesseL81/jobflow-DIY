@@ -5,10 +5,9 @@ import { get, set } from "idb-keyval"
 import { syncManager } from "@/lib/syncManager"
 import { supabase } from "@/lib/supabase"
 
-// 🔥 Centralized Global Keys Array
 const GLOBAL_KEYS = [
   "cleanbuild_projects_list",
-  "cleanbuild_contacts" // Contacts now carry over everywhere!
+  "cleanbuild_contacts"
 ]
 
 function getBlankSlate<T>(key: string, fallback: T): T {
@@ -56,14 +55,14 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
       try {
         let wid = typeof window !== 'undefined' ? localStorage.getItem("cleanbuild_active_workspace") : null
         if (!wid) {
-           const { data: authData } = await supabase.auth.getUser()
-           wid = authData?.user?.id || null
+           // 🔥 FIX: Use getSession() for instant local auth reading
+           const { data: authData } = await supabase.auth.getSession()
+           wid = authData?.session?.user?.id || null
            if (wid && typeof window !== 'undefined') {
               localStorage.setItem("cleanbuild_active_workspace", wid)
            }
         }
         
-        // Use the Global Keys array
         const isGlobal = GLOBAL_KEYS.includes(storeKey)
         const localKey = (wid && !isGlobal) ? `${storeKey}_${wid}` : storeKey
         localKeyRef.current = localKey
@@ -112,7 +111,6 @@ export function useOfflineSync<T>(storeKey: string, fallbackData: T) {
 
     const handleWorkspaceChange = () => {
       if (isMounted) {
-        // Only wipe the UI if the key is NOT global
         if (!GLOBAL_KEYS.includes(storeKey)) {
           setIsLoaded(false)
           

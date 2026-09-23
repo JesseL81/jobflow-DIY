@@ -21,7 +21,6 @@ export const ALL_STORE_KEYS = [
   "cleanbuild_projects_list" 
 ] as const
 
-// 🔥 Same Global Keys array for the cloud push/pull engine
 const GLOBAL_KEYS = [
   "cleanbuild_projects_list",
   "cleanbuild_contacts"
@@ -30,10 +29,22 @@ const GLOBAL_KEYS = [
 const getWorkspaceContext = async () => {
   let wid = typeof window !== 'undefined' ? localStorage.getItem("cleanbuild_active_workspace") : null
   if (!wid) {
-    const { data } = await supabase.auth.getUser()
-    wid = data?.user?.id || "default"
+    // 🔥 Read local storage instantly instead of network check
+    const { data } = await supabase.auth.getSession()
+    wid = data?.session?.user?.id || "default"
   }
   return wid
+}
+
+// Strict Timeout Engine: accepts Supabase Thenables (PromiseLike) and wraps with Promise.resolve
+const withTimeout = async <T = any>(promise: PromiseLike<T> | Promise<T> | any, ms: number = 3000): Promise<T> => {
+  let timeoutId: any
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("Network timeout")), ms)
+  })
+  return Promise.race([Promise.resolve(promise), timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId)
+  })
 }
 
 export const syncManager = {
@@ -48,44 +59,49 @@ export const syncManager = {
         return
       }
 
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData?.user?.id) {
+      const { data: authData } = await supabase.auth.getSession()
+      if (!authData?.session?.user?.id) {
          await set(localDirtyKey, true)
          return
       }
 
-      // Global keys save directly to your User ID, avoiding project namespaces
       const targetWorkspaceId = isGlobal 
-        ? userData.user.id 
-        : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) : userData.user.id)
+        ? authData.session.user.id 
+        : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || authData.session.user.id) : authData.session.user.id)
 
-      const { data: existingData, error: updateError } = await supabase
-        .from("cloud_sync")
-        .update({
-          data: data,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", targetWorkspaceId)
-        .eq("store_key", storeKey)
-        .select()
+      const { data: existingData, error: updateError } = await withTimeout(
+        supabase
+          .from("cloud_sync")
+          .update({
+            data: data,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", targetWorkspaceId)
+          .eq("store_key", storeKey)
+          .select(),
+        4000 // 4 seconds max to save
+      )
 
       if (updateError) throw updateError
 
       if (!existingData || existingData.length === 0) {
-        const { error: insertError } = await supabase
-          .from("cloud_sync")
-          .insert({
-            user_id: targetWorkspaceId,
-            store_key: storeKey,
-            data: data,
-          })
+        const { error: insertError } = await withTimeout(
+          supabase
+            .from("cloud_sync")
+            .insert({
+              user_id: targetWorkspaceId,
+              store_key: storeKey,
+              data: data,
+            }),
+          4000
+        )
 
         if (insertError) throw insertError
       }
 
       await set(localDirtyKey, false)
     } catch (error) {
-      console.warn(`Cloud push failed for ${storeKey}, marking dirty:`, error)
+      console.warn(`Cloud push failed or timed out for ${storeKey}. Saving locally instead.`)
       const wid = await getWorkspaceContext()
       const isGlobal = GLOBAL_KEYS.includes(storeKey)
       await set(isGlobal ? `dirty_${storeKey}` : `dirty_${storeKey}_${wid}`, true)
@@ -110,31 +126,40 @@ export const syncManager = {
     if (isDirty) {
       const localData = await get(localDataKey)
       if (localData !== undefined) {
-        await this.pushToCloud(storeKey, localData)
+        this.pushToCloud(storeKey, localData)
       }
       return localData
     }
 
     if (typeof navigator !== "undefined" && !navigator.onLine) return null
 
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData?.user?.id) return null
+    const { data: authData } = await supabase.auth.getSession()
+    if (!authData?.session?.user?.id) return null
 
     const targetWorkspaceId = isGlobal 
-      ? userData.user.id 
-      : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || userData.user.id) : userData.user.id)
+      ? authData.session.user.id 
+      : (typeof window !== 'undefined' ? (localStorage.getItem("cleanbuild_active_workspace") || authData.session.user.id) : authData.session.user.id)
 
-    const { data, error } = await supabase
-      .from("cloud_sync")
-      .select("data")
-      .eq("user_id", targetWorkspaceId)
-      .eq("store_key", storeKey)
-      .maybeSingle()
+    try {
+      // 🔥 Strict 3-second limit. If the network is stalling, abort instantly so UI doesn't hang.
+      const { data, error } = await withTimeout(
+        supabase
+          .from("cloud_sync")
+          .select("data")
+          .eq("user_id", targetWorkspaceId)
+          .eq("store_key", storeKey)
+          .maybeSingle(),
+        3000
+      )
 
-    if (error || !data) return null
+      if (error || !data) return null
 
-    await set(localDataKey, data.data)
-    return data.data
+      await set(localDataKey, data.data)
+      return data.data
+    } catch (err) {
+      console.warn(`Pull from cloud timed out for ${storeKey}. Yielding to local data cache.`)
+      return null
+    }
   },
 
   async flushAllDirty() {
