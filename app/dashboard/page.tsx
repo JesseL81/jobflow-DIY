@@ -153,7 +153,6 @@ export default function DashboardPage() {
     const initialWorkspace = cachedWorkspace || cachedUserId || "default"
     setActiveProject(initialWorkspace)
 
-    // 🔥 FIX: Guest Logic. You are NOT a guest if the workspace is your ID or a secondary project you created.
     const isOwnedProject = initialWorkspace === cachedUserId || initialWorkspace.startsWith("proj_")
 
     if (isOwnedProject) {
@@ -174,11 +173,32 @@ export default function DashboardPage() {
         setCurrentUserEmail(user.email)
         localStorage.setItem("cleanbuild_user_id", user.id)
         
+        // 🔥 THE FIX: Fetch shared workspaces from the cloud
+        const { data: workspaceData } = await supabase.rpc("get_workspace_list", {
+          current_user_id: user.id,
+          current_email: user.email
+        })
+        
         setProjectsList((prev) => {
-          if (!prev || prev.length === 0) {
-            return [{ id: user.id, name: "My Primary Project", role: "owner" }]
+          const currentList = prev || []
+          
+          // 1. Keep local offline projects and primary account
+          const localProjects = currentList.filter(p => p.id.startsWith("proj_") || p.id === user.id)
+          if (!localProjects.some(p => p.id === user.id)) {
+            localProjects.unshift({ id: user.id, name: "My Primary Project", role: "owner" })
           }
-          return prev
+          
+          // 2. Inject active shared invites from the cloud
+          const sharedProjects: ProjectWorkspace[] = []
+          if (workspaceData) {
+            workspaceData.forEach((w: any) => {
+              if (!w.is_owner) {
+                sharedProjects.push({ id: w.id, name: w.name || "Shared Project", role: "guest" })
+              }
+            })
+          }
+          
+          return [...localProjects, ...sharedProjects]
         })
         
         const { data: profile } = await supabase.from("profiles").select("tier").eq("id", user.id).maybeSingle()
@@ -496,7 +516,6 @@ export default function DashboardPage() {
                       {proj.name} {proj.role === "guest" ? "(Shared)" : ""}
                     </option>
                   ))}
-                  {/* 🔥 FIX: Visual Fallback Catch-all for cloud lag */}
                   {!projectsList.some(p => p.id === activeProject) && activeProject.startsWith("proj_") && (
                     <option value={activeProject}>Syncing Project...</option>
                   )}
