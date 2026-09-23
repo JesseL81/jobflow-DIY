@@ -182,7 +182,8 @@ export default function SettingsPage() {
         const subscription = await registration.pushManager.getSubscription()
         if (subscription) {
           await subscription.unsubscribe()
-          const { data: userData } = await supabase.auth.getUser()
+          const { data: { session } } = await supabase.auth.getSession()
+          const userData = { user: session?.user }
           if (userData?.user?.id) {
             await supabase.from("cloud_sync")
               .delete()
@@ -203,7 +204,8 @@ export default function SettingsPage() {
           applicationServerKey: convertedVapidKey,
         })
 
-        const { data: userData } = await supabase.auth.getUser()
+        const { data: { session } } = await supabase.auth.getSession()
+        const userData = { user: session?.user }
         if (userData?.user?.id) {
           await supabase.from("cloud_sync").upsert({
             user_id: userData.user.id,
@@ -222,7 +224,8 @@ export default function SettingsPage() {
     if (!window.confirm("This will replace your current data with the tutorial examples. Continue?")) return
     try {
       await clear()
-      const { data: userData } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const userData = { user: session?.user }
       if (userData?.user?.id) {
         const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || userData.user.id
         await supabase.from("cloud_sync").delete().eq("user_id", activeWorkspaceId)
