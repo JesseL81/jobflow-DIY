@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { get } from "idb-keyval"
 import { useOfflineSync } from "@/hooks/useOfflineSync"
 import { supabase } from "@/lib/supabase"
@@ -32,6 +32,9 @@ interface CalendarTask {
   startDate: string
   endDate: string
   assignedContactId?: string 
+  startTime?: string
+  endTime?: string
+  reminderOffset?: number
 }
 
 interface CustomNonWorkday {
@@ -46,6 +49,15 @@ const getLocalTodayStr = () => {
   const month = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
   return `${year}-${month}-${day}`
+}
+
+const formatTime = (timeStr?: string) => {
+  if (!timeStr) return ""
+  const [hourStr, minStr] = timeStr.split(":")
+  const hour = parseInt(hourStr, 10)
+  const ampm = hour >= 12 ? "PM" : "AM"
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minStr} ${ampm}`
 }
 
 const COLOR_PALETTE = [
@@ -69,7 +81,7 @@ const COLOR_PALETTE = [
 
 const INITIAL_TASKS: CalendarTask[] = [
   { id: 1, title: "👋 Drag me to another date!", color: "bg-blue-600", textColor: "text-white", startDate: "2026-08-28", endDate: "2026-08-29" },
-  { id: 2, title: "Click me to edit colors & dates", color: "bg-amber-400", textColor: "text-slate-900", startDate: "2026-08-30", endDate: "2026-08-30" },
+  { id: 2, title: "Plumbing Rough-in Inspection", color: "bg-amber-400", textColor: "text-slate-900", startDate: "2026-08-30", endDate: "2026-08-30", startTime: "10:00", reminderOffset: 60 },
 ]
 
 const SCHEDULE_TOUR_STEPS = [
@@ -108,6 +120,11 @@ export default function SchedulePage() {
   
   const [taskStartDate, setTaskStartDate] = useState<string>(getLocalTodayStr())
   const [taskEndDate, setTaskEndDate] = useState<string>(getLocalTodayStr())
+  
+  // 🔥 Time & Reminder State
+  const [taskStartTime, setTaskStartTime] = useState<string>("")
+  const [taskEndTime, setTaskEndTime] = useState<string>("")
+  const [reminderOffset, setReminderOffset] = useState<number>(-1)
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState("")
@@ -122,7 +139,6 @@ export default function SchedulePage() {
   const [nonWorkdayTitle, setNonWorkdayTitle] = useState("")
   const [isNonWorkdayToggle, setIsNonWorkdayToggle] = useState<boolean>(false)
 
-  // 🔥 State for the Minimalist Dropdown Menu
   const [isOptionsOpen, setIsOptionsOpen] = useState(false)
 
   const [tasks, setTasks] = useOfflineSync<CalendarTask[]>("cleanbuild_calendar_tasks", INITIAL_TASKS)
@@ -139,6 +155,8 @@ export default function SchedulePage() {
   const [isDatesModalOpen, setIsDatesModalOpen] = useState(false)
   const [tempStartDate, setTempStartDate] = useState("")
   const [tempEndDate, setTempEndDate] = useState("")
+
+  const notifiedTasksRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     const fetchUserAndPermissions = async () => {
@@ -180,6 +198,48 @@ export default function SchedulePage() {
     }
     fetchUserAndPermissions()
   }, [])
+
+  // 🔥 Background Notification Engine
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!("Notification" in window) || Notification.permission !== "granted") return
+
+    const checkReminders = () => {
+      const now = new Date()
+      tasks.forEach((task) => {
+        if (task.startTime && task.reminderOffset !== undefined && task.reminderOffset >= 0) {
+          const taskDate = new Date(`${task.startDate}T${task.startTime}:00`)
+          const reminderTime = new Date(taskDate.getTime() - task.reminderOffset * 60000)
+          
+          const diffMs = now.getTime() - reminderTime.getTime()
+          const reminderKey = `${task.id}-${task.startDate}`
+
+          // Fire notification if we are within 5 minutes past the reminder time (prevents stale loads)
+          if (diffMs >= 0 && diffMs < 5 * 60000 && !notifiedTasksRef.current.has(reminderKey)) {
+            notifiedTasksRef.current.add(reminderKey)
+            
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.ready.then(reg => {
+                reg.showNotification(`Upcoming: ${task.title}`, {
+                  body: `Starts at ${formatTime(task.startTime)}`,
+                  icon: '/icon.png'
+                })
+              })
+            } else {
+              new Notification(`Upcoming: ${task.title}`, {
+                body: `Starts at ${formatTime(task.startTime)}`,
+                icon: '/icon.png',
+              })
+            }
+          }
+        }
+      })
+    }
+
+    const interval = setInterval(checkReminders, 60000)
+    checkReminders() // Run once on mount
+    return () => clearInterval(interval)
+  }, [tasks])
 
   const showPaywall = !isCheckingAuth && !isGuest && accountTier === "free"
 
@@ -302,6 +362,9 @@ export default function SchedulePage() {
     setModalEndDate(defaultDateStr)
     setTaskStartDate(defaultDateStr)
     setTaskEndDate(defaultDateStr)
+    setTaskStartTime("")
+    setTaskEndTime("")
+    setReminderOffset(-1)
     setEditingTask(null)
     setNewTaskTitle("")
     setAssignedContactId("")
@@ -458,6 +521,9 @@ export default function SchedulePage() {
     setModalEndDate(dateStr)
     setTaskStartDate(dateStr)
     setTaskEndDate(dateStr)
+    setTaskStartTime("")
+    setTaskEndTime("")
+    setReminderOffset(-1)
     setEditingTask(null)
     setNewTaskTitle("")
     setAssignedContactId("")
@@ -476,6 +542,9 @@ export default function SchedulePage() {
     setModalEndDate(task.startDate)
     setTaskStartDate(task.startDate)
     setTaskEndDate(task.endDate)
+    setTaskStartTime(task.startTime || "")
+    setTaskEndTime(task.endTime || "")
+    setReminderOffset(task.reminderOffset ?? -1)
     setNewTaskTitle(task.title)
     setAssignedContactId(task.assignedContactId || "")
     setSelectedColor(COLOR_PALETTE.find((c) => c.bg === task.color) || COLOR_PALETTE[0])
@@ -558,6 +627,9 @@ export default function SchedulePage() {
               startDate: finalStart,
               endDate: finalEnd,
               assignedContactId: assignedContactId || undefined,
+              startTime: taskStartTime || undefined,
+              endTime: taskEndTime || undefined,
+              reminderOffset: taskStartTime && reminderOffset >= 0 ? reminderOffset : undefined
             }
           : t
       )
@@ -573,6 +645,9 @@ export default function SchedulePage() {
         startDate: finalStart,
         endDate: finalEnd,
         assignedContactId: assignedContactId || undefined,
+        startTime: taskStartTime || undefined,
+        endTime: taskEndTime || undefined,
+        reminderOffset: taskStartTime && reminderOffset >= 0 ? reminderOffset : undefined
       })
     }
 
@@ -581,6 +656,9 @@ export default function SchedulePage() {
     setNewTaskTitle("")
     setNonWorkdayTitle("")
     setAssignedContactId("")
+    setTaskStartTime("")
+    setTaskEndTime("")
+    setReminderOffset(-1)
     setIsDialogOpen(false)
   }
 
@@ -599,10 +677,8 @@ export default function SchedulePage() {
       <PaywallOverlay show={showPaywall} />
       <PageTour steps={SCHEDULE_TOUR_STEPS} tourKey="schedule_tour" />
 
-      {/* Target: tour-schedule-header */}
       <div className="tour-schedule-header bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 items-center gap-6 md:gap-4 mb-6 md:min-h-[140px] shrink-0">
         
-        {/* Left Column */}
         <div className="flex flex-col justify-center items-center md:items-start text-center md:text-left">
           <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center justify-center md:justify-start gap-3">
             📅 Schedule {isReadOnly && <span className="text-sm bg-slate-700 px-2 py-1 rounded-md text-slate-300 font-semibold ml-2">Read-Only</span>}
@@ -612,7 +688,6 @@ export default function SchedulePage() {
           </p>
         </div>
 
-        {/* Middle Column */}
         <div className="flex items-center justify-center gap-2">
           <Button
             variant="ghost"
@@ -650,7 +725,6 @@ export default function SchedulePage() {
           </Button>
         </div>
 
-        {/* Right Column: Minimalist Action Layout */}
         <div className="flex items-center justify-center md:justify-end w-full md:w-auto md:justify-self-end gap-2 shrink-0">
           
           <Button
@@ -672,7 +746,6 @@ export default function SchedulePage() {
             </Button>
           )}
 
-          {/* Clean, Icon-Only Dropdown Trigger */}
           <div className="tour-project-dates relative">
             <Button
               variant="outline"
@@ -684,7 +757,6 @@ export default function SchedulePage() {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </Button>
 
-            {/* The Dropdown Menu Box */}
             {isOptionsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsOptionsOpen(false)} />
@@ -871,7 +943,7 @@ export default function SchedulePage() {
                         draggable={!isReadOnly}
                         onDragStart={(e) => handleDragStart(e, task.id)}
                         onClick={(e) => handleTaskClick(e, task)}
-                        className={`pointer-events-auto h-6 ${task.color} ${task.textColor || "text-white"} text-[11px] font-medium px-2 shadow-xs flex items-center overflow-visible transition-all ${
+                        className={`pointer-events-auto h-6 ${task.color} ${task.textColor || "text-white"} text-[11px] font-medium px-2 shadow-xs flex items-center overflow-hidden transition-all ${
                           isReadOnly ? "cursor-pointer" : "cursor-grab active:cursor-grabbing hover:brightness-110"
                         } ${
                           seg.startCol === 1 ? "ml-1.5" : "mx-0.5"
@@ -889,7 +961,12 @@ export default function SchedulePage() {
                         }}
                         title={isReadOnly ? `View Details (${task.title})` : `Drag to reschedule • Click to edit (${task.title})`}
                       >
-                        <span className="truncate leading-none">{task.title}</span>
+                        <div className="truncate leading-none flex items-center gap-1.5 w-full">
+                          {seg.isTrueStart && task.startTime && (
+                            <span className="shrink-0 text-[10px] font-bold opacity-90">⏰ {formatTime(task.startTime)}</span>
+                          )}
+                          <span className="truncate">{task.title}</span>
+                        </div>
                       </div>
                     )
                   })}
@@ -900,7 +977,6 @@ export default function SchedulePage() {
         </div>
       </Card>
 
-      {/* MODAL: DATE SETTINGS & STATUS */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[480px] border-2 border-slate-900 rounded-xl p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="px-6 py-5 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -1058,6 +1134,165 @@ export default function SchedulePage() {
                   />
                 </div>
               </div>
+              
+              {/* 🔥 SPLIT TIME PICKER (Bulletproof UX) */}
+              <div className="grid grid-cols-2 gap-3">
+                
+                {/* START TIME */}
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-slate-700">Start Time</Label>
+                    {taskStartTime && !isReadOnly && (
+                      <button type="button" onClick={() => { setTaskStartTime(""); setTaskEndTime(""); setReminderOffset(-1); }} className="text-[10px] text-rose-500 font-bold hover:underline pr-1">Clear</button>
+                    )}
+                  </div>
+                  {!taskStartTime ? (
+                    isReadOnly ? (
+                      <div className="h-9 bg-slate-50 border border-slate-200 rounded-md flex items-center px-3 opacity-70">
+                        <span className="text-xs text-slate-400 font-medium">Not set</span>
+                      </div>
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setTaskStartTime("08:00")} className="h-9 text-xs border-dashed border-slate-300 text-slate-500 shadow-none hover:bg-slate-50">
+                        + Add Time
+                      </Button>
+                    )
+                  ) : (
+                    <div className={`flex items-center gap-0.5 bg-white border border-slate-200 shadow-sm rounded-md h-9 px-1.5 ${isReadOnly ? 'opacity-70 bg-slate-50 pointer-events-none' : ''}`}>
+                      <select
+                        value={(parseInt(taskStartTime.split(":")[0]) % 12 || 12).toString()}
+                        onChange={(e) => {
+                          const ampm = parseInt(taskStartTime.split(":")[0]) >= 12 ? "PM" : "AM"
+                          const m = taskStartTime.split(":")[1]
+                          let h = parseInt(e.target.value)
+                          if (ampm === "PM" && h !== 12) h += 12
+                          if (ampm === "AM" && h === 12) h = 0
+                          setTaskStartTime(`${h.toString().padStart(2, "0")}:${m}`)
+                        }}
+                        className="bg-transparent text-sm font-bold focus:outline-none appearance-none cursor-pointer pl-1 text-center text-slate-900"
+                      >
+                        {Array.from({length: 12}).map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
+                      </select>
+                      <span className="text-slate-400 font-bold -mt-0.5">:</span>
+                      <select
+                        value={taskStartTime.split(":")[1]}
+                        onChange={(e) => {
+                          const h = taskStartTime.split(":")[0]
+                          setTaskStartTime(`${h}:${e.target.value}`)
+                        }}
+                        className="bg-transparent text-sm font-bold focus:outline-none appearance-none cursor-pointer px-1 text-center text-slate-900"
+                      >
+                        {["00", "10", "20", "30", "40", "50"].map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <select
+                        value={parseInt(taskStartTime.split(":")[0]) >= 12 ? "PM" : "AM"}
+                        onChange={(e) => {
+                          let h = parseInt(taskStartTime.split(":")[0])
+                          const m = taskStartTime.split(":")[1]
+                          if (e.target.value === "PM" && h < 12) h += 12
+                          if (e.target.value === "AM" && h >= 12) h -= 12
+                          setTaskStartTime(`${h.toString().padStart(2, "0")}:${m}`)
+                        }}
+                        className="bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700 px-1.5 py-0.5 rounded cursor-pointer appearance-none ml-auto"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* END TIME */}
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-slate-700">End Time</Label>
+                    {taskEndTime && !isReadOnly && (
+                      <button type="button" onClick={() => setTaskEndTime("")} className="text-[10px] text-rose-500 font-bold hover:underline pr-1">Clear</button>
+                    )}
+                  </div>
+                  {!taskEndTime ? (
+                    isReadOnly ? (
+                      <div className="h-9 bg-slate-50 border border-slate-200 rounded-md flex items-center px-3 opacity-70">
+                        <span className="text-xs text-slate-400 font-medium">Not set</span>
+                      </div>
+                    ) : !taskStartTime ? (
+                      <div className="h-9 bg-slate-50 border border-slate-200 border-dashed rounded-md flex items-center px-3 opacity-50 cursor-not-allowed">
+                        <span className="text-xs text-slate-400 font-medium">Requires start time</span>
+                      </div>
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setTaskEndTime("17:00")} className="h-9 text-xs border-dashed border-slate-300 text-slate-500 shadow-none hover:bg-slate-50">
+                        + Add End Time
+                      </Button>
+                    )
+                  ) : (
+                    <div className={`flex items-center gap-0.5 bg-white border border-slate-200 shadow-sm rounded-md h-9 px-1.5 ${isReadOnly ? 'opacity-70 bg-slate-50 pointer-events-none' : ''}`}>
+                      <select
+                        value={(parseInt(taskEndTime.split(":")[0]) % 12 || 12).toString()}
+                        onChange={(e) => {
+                          const ampm = parseInt(taskEndTime.split(":")[0]) >= 12 ? "PM" : "AM"
+                          const m = taskEndTime.split(":")[1]
+                          let h = parseInt(e.target.value)
+                          if (ampm === "PM" && h !== 12) h += 12
+                          if (ampm === "AM" && h === 12) h = 0
+                          setTaskEndTime(`${h.toString().padStart(2, "0")}:${m}`)
+                        }}
+                        className="bg-transparent text-sm font-bold focus:outline-none appearance-none cursor-pointer pl-1 text-center text-slate-900"
+                      >
+                        {Array.from({length: 12}).map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
+                      </select>
+                      <span className="text-slate-400 font-bold -mt-0.5">:</span>
+                      <select
+                        value={taskEndTime.split(":")[1]}
+                        onChange={(e) => {
+                          const h = taskEndTime.split(":")[0]
+                          setTaskEndTime(`${h}:${e.target.value}`)
+                        }}
+                        className="bg-transparent text-sm font-bold focus:outline-none appearance-none cursor-pointer px-1 text-center text-slate-900"
+                      >
+                        {["00", "10", "20", "30", "40", "50"].map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <select
+                        value={parseInt(taskEndTime.split(":")[0]) >= 12 ? "PM" : "AM"}
+                        onChange={(e) => {
+                          let h = parseInt(taskEndTime.split(":")[0])
+                          const m = taskEndTime.split(":")[1]
+                          if (e.target.value === "PM" && h < 12) h += 12
+                          if (e.target.value === "AM" && h >= 12) h -= 12
+                          setTaskEndTime(`${h.toString().padStart(2, "0")}:${m}`)
+                        }}
+                        className="bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700 px-1.5 py-0.5 rounded cursor-pointer appearance-none ml-auto"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+                </div>
+                
+                
+
+              {taskStartTime && (
+                <div className="grid gap-1.5 p-3 mt-1 bg-amber-50 border border-amber-200 rounded-lg">
+                  <Label htmlFor="reminder-offset" className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    🔔 Device Push Reminder
+                  </Label>
+                  <select
+                    id="reminder-offset"
+                    value={reminderOffset}
+                    disabled={isReadOnly}
+                    onChange={(e) => setReminderOffset(Number(e.target.value))}
+                    className={`w-full h-9 mt-1 border border-amber-200 shadow-sm rounded-md px-3 text-sm bg-white appearance-none ${isReadOnly ? "opacity-80 font-medium text-slate-900" : "text-slate-900"}`}
+                  >
+                    <option value="-1">No Reminder</option>
+                    <option value="0">At time of event</option>
+                    <option value="15">15 minutes before</option>
+                    <option value="30">30 minutes before</option>
+                    <option value="60">1 hour before</option>
+                    <option value="120">2 hours before</option>
+                    <option value="1440">1 day before</option>
+                  </select>
+                </div>
+              )}
 
               <div className="grid gap-2 border-t border-slate-100 pt-3 mt-1">
                 <Label htmlFor="vendor-select" className="text-xs font-semibold text-slate-700">Assign Vendor / Subcontractor</Label>

@@ -65,7 +65,6 @@ export default function SettingsPage() {
           const wid = localStorage.getItem("cleanbuild_active_workspace") || user.id
           setActiveWorkspaceId(wid)
 
-          // 🔥 FIX: Check if workspace is owned by the user
           const isOwnedProject = wid === user.id || wid.startsWith("proj_")
 
           if (isOwnedProject) {
@@ -220,43 +219,6 @@ export default function SettingsPage() {
     }
   }
 
-  const handleRestoreTutorial = async () => {
-    if (!window.confirm("This will replace your current data with the tutorial examples. Continue?")) return
-    try {
-      await clear()
-      const { data: { session } } = await supabase.auth.getSession()
-      const userData = { user: session?.user }
-      if (userData?.user?.id) {
-        const activeWorkspaceId = localStorage.getItem("cleanbuild_active_workspace") || userData.user.id
-        await supabase.from("cloud_sync").delete().eq("user_id", activeWorkspaceId)
-      }
-      window.location.href = "/"
-    } catch (error) {}
-  }
-
-  const handleClearAllData = async () => {
-    if (!window.confirm("🚨 WARNING: Are you sure you want to completely wipe all project data? This cannot be undone.")) return
-    try {
-      const keysToClear = [
-        "cleanbuild_expenses", "cleanbuild_punch_list", "cleanbuild_calendar_tasks",
-        "cleanbuild_custom_nonworkdays", "cleanbuild_vision_board", "cleanbuild_vision_board_categories",
-        "cleanbuild_documents_items", "cleanbuild_documents_folders",
-        "cleanbuild_selections_items", "cleanbuild_contacts", "cleanbuild_non_workdays_map",
-        "cleanbuild_explicit_working_days", "cleanbuild_project_dates", "cleanbuild_shared_rooms"
-      ]
-
-      for (const key of keysToClear) {
-        await set(key, [])
-        await syncManager.pushToCloud(key, [])
-      }
-      await set("cleanbuild_total_budget", 0)
-      await syncManager.pushToCloud("cleanbuild_total_budget", 0)
-      await set("cleanbuild_selections_budgets", {})
-      await syncManager.pushToCloud("cleanbuild_selections_budgets", {})
-      window.location.href = "/"
-    } catch (error) {}
-  }
-
   const handleDeleteAccount = async () => {
     if (!window.confirm("🚨 WARNING: Are you sure you want to permanently delete your account and all associated project data? This cannot be undone.")) return
     const typeConfirm = window.prompt("Type 'DELETE' to confirm account deletion:")
@@ -331,7 +293,7 @@ export default function SettingsPage() {
   return (
     <main className="p-6 bg-slate-100 min-h-screen space-y-6 flex flex-col text-slate-950">
       
-      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2 shrink-0">
+      <div className="bg-slate-900 text-white p-6 md:px-8 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:min-h-[140px] shrink-0">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">⚙️ App Settings</h1>
@@ -538,6 +500,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* 🔥 DANGER ZONE: Nuke buttons removed to enforce limits */}
           <Card className={`bg-white border shadow-sm rounded-xl overflow-hidden ${isLoadingData || isGuest ? 'border-slate-200' : 'border-rose-200'}`}>
             <CardHeader className={`pb-4 border-b ${isLoadingData || isGuest ? 'border-slate-200 bg-slate-50' : 'border-rose-200 bg-rose-100'}`}>
               <CardTitle className={`text-lg font-bold flex items-center gap-2 ${isLoadingData || isGuest ? 'text-slate-500' : 'text-rose-900'}`}>⚠️ Danger Zone</CardTitle>
@@ -546,27 +509,6 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className={`pt-6 space-y-6 ${isLoadingData ? 'opacity-50 pointer-events-none' : ''}`}>
-              
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
-                <div className={isGuest ? "opacity-50" : ""}>
-                  <h3 className="text-slate-900 font-bold text-sm">Load Tutorial Data</h3>
-                  <p className="text-slate-500 text-xs mt-1">Reset this account to see example project data.</p>
-                </div>
-                <Button onClick={handleRestoreTutorial} disabled={isGuest} className="shrink-0 shadow-sm font-bold bg-rose-600 hover:bg-rose-500 text-white w-full sm:w-auto">
-                  👋 Load Examples
-                </Button>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
-                <div className={isGuest ? "opacity-50" : ""}>
-                  <h3 className="text-rose-900 font-bold text-sm">Start Real Project</h3>
-                  <p className="text-rose-700 text-xs mt-1">Permanently delete all data to start a blank slate.</p>
-                </div>
-                <Button onClick={handleClearAllData} disabled={isGuest} className="shrink-0 shadow-sm font-bold bg-rose-600 hover:bg-rose-500 text-white w-full sm:w-auto">
-                  🗑️ Clear All Data
-                </Button>
-              </div>
-
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                   <h3 className="text-red-900 font-bold text-sm">Delete Account</h3>
@@ -576,7 +518,6 @@ export default function SettingsPage() {
                   🧨 Delete Account
                 </Button>
               </div>
-
             </CardContent>
           </Card>
         </div>

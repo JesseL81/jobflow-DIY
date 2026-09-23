@@ -251,6 +251,15 @@ export default function DashboardPage() {
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return
     
+    // 🔥 The 2-Project Limit Engine
+    const ownedProjects = projectsList.filter(p => p.role === "owner").length
+    if (ownedProjects >= 2) {
+      alert("Project limit reached. You can only have 2 active builds on the free tier. Pro upgrades are coming soon!")
+      setIsCreateModalOpen(false)
+      setNewProjectName("")
+      return
+    }
+    
     const newProjectId = `proj_${Date.now()}`
     const newProject: ProjectWorkspace = {
       id: newProjectId,
