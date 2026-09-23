@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "CleanBuild Construction Management",
     short_name: "CleanBuild",
     description: "Real-time construction management tool for job sites.",
-    start_url: "/",
+    start_url: "/dashboard",
     display: "standalone",
     background_color: "#0f172a",
     theme_color: "#0f172a",
